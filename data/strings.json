@@ -255,7 +255,6 @@
   "bad_save_text": "A new game has started. The old save is kept in this browser, and Export saves the new one.",
   "bad_save_title": "Your save could not be read",
   "bank_empty": "The bank is empty. Gather something to fill it.",
-  "bonfire_on": "Bonfire: +{pct}% gathering XP for {left}",
   "buy_for": "{tool}: {cost} gold, {pct}% faster",
   "cancel": "Cancel",
   "capped": "Away longer than {cap}: the last {lost} did not count.",

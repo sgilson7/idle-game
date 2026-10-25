@@ -655,8 +655,6 @@ fn tuning() -> serde_json::Value {
     serde_json::json!({
         "away_cap_ms": c::AWAY_CAP_MS,
         "return_after_ms": c::RETURN_AFTER_MS,
-        "bonfire_ms_per_log": c::BONFIRE_MS_PER_LOG,
-        "bonfire_xp_pct": c::BONFIRE_XP_PCT,
         "prestige_base": c::PRESTIGE_BASE,
         "prestige_rise": c::PRESTIGE_RISE,
         "prestige_step_bp": c::PRESTIGE_STEP_BP,

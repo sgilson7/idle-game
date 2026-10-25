@@ -73,7 +73,6 @@ pub struct State {
     pub kills: BTreeMap<String, u64>,
     pub prestige: u32,
     pub sim_ms: u64,
-    pub bonfire_until: u64,
     pub last_wall: u64,
     pub first_wall: u64,
     pub exported_wall: u64,
@@ -139,7 +138,6 @@ impl State {
             kills: BTreeMap::new(),
             prestige: 0,
             sim_ms: 0,
-            bonfire_until: 0,
             last_wall: now,
             first_wall: now,
             exported_wall: 0,
@@ -185,10 +183,6 @@ impl State {
         c::PRESTIGE_BASE + c::PRESTIGE_RISE * self.prestige
     }
 
-    pub fn bonfire_left(&self) -> u64 {
-        self.bonfire_until.saturating_sub(self.sim_ms)
-    }
-
     /// How long one action takes now, after mastery and tools.
     pub fn duration(&self, id: &str) -> u64 {
         if c::enemy_index(id).is_some() {
@@ -232,14 +226,11 @@ impl State {
         }
     }
 
-    /// Experience one action gives its skill, after prestige, the bonfire
-    /// (gathering only) and the mastery-10 bonus (making only).
+    /// Experience one action gives its skill, after prestige and the
+    /// mastery-10 bonus (making only). Firemaking gives XP only (T4, IG-Q14 A).
     pub fn xp_for(&self, a: &c::Action) -> u64 {
         let kind = c::SKILLS[a.skill].kind;
         let mut pct = 100;
-        if kind == Kind::Gather && self.bonfire_left() > 0 {
-            pct += c::BONFIRE_XP_PCT;
-        }
         if kind == Kind::Make && self.mastery(a.id) >= c::CHECKPOINTS[0] {
             pct += c::MAKE_XP_AT_10;
         }
@@ -482,10 +473,6 @@ impl State {
         self.put(a.makes.0, n, r, false);
         if a.skill == c::WOODCUTTING && self.rng.one_in(c::NEST_ONE_IN) {
             self.put("bird_nest", 1, r, true);
-        }
-        if a.skill == c::FIREMAKING {
-            let from = self.bonfire_until.max(self.sim_ms);
-            self.bonfire_until = (from + c::BONFIRE_MS_PER_LOG).min(self.sim_ms + c::BONFIRE_MAX_MS);
         }
         Ok(())
     }
@@ -748,31 +735,16 @@ mod tests {
     }
 
     #[test]
-    fn the_bonfire_adds_ten_percent_to_gathering_while_it_burns() {
+    fn burning_logs_gives_firemaking_xp_and_nothing_else() {
+        // T4: a log burned is 2 s and 40 XP; the tree after it still gives 10.
         let mut s = State::new(4);
         s.bank.insert("logs".into(), 1);
         s.start("burn_logs", 0);
         run(&mut s, 2_000);
-        assert_eq!(s.bonfire_left(), 30_000);
+        assert_eq!(s.xp[c::FIREMAKING], 40);
         s.start("tree", 0);
         run(&mut s, 3_000);
-        assert_eq!(s.xp[0], 11);
-        run(&mut s, 30_000);
-        assert_eq!(s.bonfire_left(), 0);
-        let before = s.xp[0];
-        run(&mut s, 3_000);
-        assert_eq!(s.xp[0] - before, 10);
-    }
-
-    #[test]
-    fn the_bonfire_is_capped_an_hour_ahead() {
-        let mut s = State::new(4);
-        s.bank.insert("logs".into(), 500);
-        s.start("burn_logs", 0);
-        run(&mut s, 2_000 * 400);
-        // Mastery 25 arrives at burn 393, so the last burns take 1.8 s and the
-        // run ends 1.4 s into a burn: the fire is an hour ahead of the last one.
-        assert_eq!(s.bonfire_left(), 3_600_000 - 1_400);
+        assert_eq!(s.xp[0], 10);
     }
 
     #[test]

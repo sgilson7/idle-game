@@ -10,10 +10,6 @@ Where everything you gather and make is kept, with no limit on space. Tap a stac
 
 Not: inventory, stash
 
-### Bonfire
-
-Burning logs in Firemaking feeds a fire that adds to the XP of gathering skills while it burns.
-
 ### Flag
 
 A playtest note: how a moment felt, the pace, and anything you want to say, saved with what you were doing.

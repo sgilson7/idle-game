@@ -497,21 +497,6 @@ impl View<'_> {
                 ..block("progress")
             });
         }
-        if sk.kind == Kind::Gather && self.s.bonfire_left() > 0 {
-            out.push(Block {
-                chips: vec![chip(
-                    "fire",
-                    self.t.t(
-                        "bonfire_on",
-                        &[
-                            ("pct", c::BONFIRE_XP_PCT.to_string()),
-                            ("left", dur(self.s.bonfire_left())),
-                        ],
-                    ),
-                )],
-                ..block("chips")
-            });
-        }
         if let Some(a) = active {
             out.push(self.forecast(&c::ACTIONS[a]));
         }

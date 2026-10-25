@@ -14,13 +14,6 @@
     "test": "coming_back_after_ten_minutes_shows_the_return_screen"
   },
   {
-    "name": "the bonfire adds gathering XP",
-    "file": "crates/core/src/game.rs",
-    "find": "pct += c::BONFIRE_XP_PCT;",
-    "replace": "pct += 0;",
-    "test": "the_bonfire_adds_ten_percent_to_gathering_while_it_burns"
-  },
-  {
     "name": "mastery 25 is faster",
     "file": "crates/core/src/game.rs",
     "find": "ms -= c::MASTERY_FASTER_MS;",

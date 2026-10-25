@@ -157,7 +157,7 @@ pub const ACTIONS: &[Action] = &[
     gather("swordfish_spot", 2, 50, 7_500, 70, "raw_swordfish"),
     gather("monkfish_spot", 2, 62, 8_500, 90, "raw_monkfish"),
     gather("shark_spot", 2, 76, 10_000, 115, "raw_shark"),
-    // Firemaking: each log burned feeds the bonfire (P7)
+    // Firemaking: XP only (T4)
     make("burn_logs", 3, 1, 2_000, 40, &[("logs", 1)], ("ashes", 1)),
     make("burn_oak", 3, 15, 2_500, 60, &[("oak_logs", 1)], ("ashes", 1)),
     make("burn_willow", 3, 30, 3_000, 90, &[("willow_logs", 1)], ("ashes", 1)),
@@ -335,11 +335,6 @@ pub const DOUBLE_AT_50: u64 = 15;
 pub const MAKE_XP_AT_10: u64 = 5;
 pub const KEEP_AT_50: u64 = 10;
 pub const KEEP_AT_99: u64 = 20;
-
-/// The bonfire (P7).
-pub const BONFIRE_MS_PER_LOG: u64 = 30_000;
-pub const BONFIRE_MAX_MS: u64 = 3_600_000;
-pub const BONFIRE_XP_PCT: u64 = 10;
 
 /// A bird nest falls once in this many woodcutting actions.
 pub const NEST_ONE_IN: u64 = 256;
