@@ -67,6 +67,8 @@ pub struct Game {
     search: String,
     /// Skill screens show every row, not only the newest (T15); not saved.
     all: bool,
+    /// The plan step whose sheet is open (T18); not saved.
+    editing: Option<usize>,
 }
 
 /// A save as it is written to a file: a little about where it came from, then
@@ -143,6 +145,7 @@ impl Game {
             stash: false,
             search: String::new(),
             all: false,
+            editing: None,
         };
         g.seal();
         if saved.trim().is_empty() {
@@ -489,6 +492,9 @@ impl Game {
     fn toasts_for(&self, r: &Report) -> Vec<String> {
         let t = &self.text;
         let mut out = Vec::new();
+        if let Some(k) = r.plan_stuck {
+            out.push(t.t("toast_plan_stuck", &[("k", (k + 1).to_string())]));
+        }
         for (i, sk) in c::SKILLS.iter().enumerate() {
             let l = self.s.level(i);
             if l > r.lv0[i] {
@@ -582,20 +588,45 @@ impl Game {
             }
             "plan.count" => {
                 if let Some((k, n)) = value.split_once(':') {
-                    if let (Ok(k), Ok(n)) = (k.parse::<usize>(), n.parse::<u64>()) {
-                        if c::PLAN_COUNTS.contains(&n) {
-                            self.s.plan_count(k, n);
-                        }
+                    if let Ok(k) = k.parse::<usize>() {
+                        self.s.plan_edit(k, "count", n);
                     }
+                }
+            }
+            // "k:what:value", from the step sheet (T18, IG-Q53 A).
+            "plan.edit" => {
+                let mut parts = value.splitn(3, ':');
+                if let (Some(k), Some(what), Some(v)) = (parts.next(), parts.next(), parts.next()) {
+                    if let Ok(k) = k.parse::<usize>() {
+                        self.s.plan_edit(k, what, v);
+                    }
+                }
+            }
+            "plan.control" => {
+                if self.s.plan_add_control(value) {
+                    self.editing = Some(self.s.plan.len() - 1);
+                }
+            }
+            "plan.open" => {
+                self.editing = value.parse::<usize>().ok().filter(|&k| k < self.s.plan.len());
+            }
+            "plan.advanced" => {
+                if !self.s.plan_set_advanced(value == "1") {
+                    self.toasts = vec![self.text.s("toast_plan_advanced_used")];
                 }
             }
             "plan.remove" => {
                 if let Ok(k) = value.parse::<usize>() {
                     self.s.plan_remove(k);
+                    self.editing = None;
                 }
             }
             "plan.start" => {
-                self.s.plan_start();
+                let mut r = Report::default();
+                self.s.plan_start_with(&mut r);
+                if let Some(k) = r.plan_stuck {
+                    self.toasts = vec![self.text.t("toast_plan_stuck", &[("k", (k + 1).to_string())])];
+                }
                 self.s.note(
                     now,
                     "plan",
@@ -609,7 +640,10 @@ impl Game {
                     0,
                 );
             }
-            "plan.clear" => self.s.plan.clear(),
+            "plan.clear" => {
+                self.s.plan_clear();
+                self.editing = None;
+            }
             "sell" => {
                 let got = self.s.sell(value);
                 if got > 0 {
@@ -658,7 +692,10 @@ impl Game {
             }
             "bank.search" => self.search = value.chars().take(40).collect(),
             "list.all" => self.all = !self.all,
-            "sheet.close" => self.sheet = None,
+            "sheet.close" => {
+                self.sheet = None;
+                self.editing = None;
+            }
             "help.home" => self.sheet = Some(self.home_help()),
             "reset.ask" => {
                 self.sheet = Some(Sheet {
@@ -885,7 +922,11 @@ impl Game {
             groups: v.groups(),
             screen: self.s.screen.clone(),
             blocks: v.screen(),
-            sheet: self.sheet.clone(),
+            sheet: self
+                .editing
+                .filter(|&k| k < self.s.plan.len())
+                .map(|k| v.plan_sheet(k))
+                .or_else(|| self.sheet.clone()),
             toasts: std::mem::take(&mut self.toasts),
             next_ms,
             autosave_ms: c::AUTOSAVE_MS,
@@ -1615,5 +1656,50 @@ mod tests {
         assert_eq!(v["alerts"][0]["id"], 4);
         let mut web = game(1_000);
         assert_eq!(ui(&web.tick(1_000))["alerts"].as_array().unwrap().len(), 0);
+    }
+
+    // ---------- advanced plans and the now panel (T18) ----------
+
+    #[test]
+    fn the_plan_tab_shows_what_runs_now_and_edits_advanced_steps_in_a_sheet() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        let v = ui(&g.act("tab", "plan", 0));
+        assert_eq!(v["blocks"][1]["title"], "Now");
+        assert_eq!(
+            v["blocks"][1]["text"],
+            "Nothing is running. Start the plan, or pick an action on a skill's tab."
+        );
+        g.act("plan.add", "tree", 0);
+        g.act("plan.advanced", "1", 0);
+        let v = ui(&g.act("plan.control", "repeat", 0));
+        assert_eq!(v["sheet"]["title"], "2. Repeat from step 1");
+        g.act("plan.edit", "1:times:3", 0);
+        let v = ui(&g.act("sheet.close", "", 0));
+        assert!(v.get("sheet").is_none());
+        let v = ui(&g.act("plan.start", "", 0));
+        let now = &v["blocks"][1]["rows"][0];
+        assert_eq!(now["title"], "Chop: Tree");
+        assert_eq!(
+            now["sub"],
+            "Step 1 of 2: until the inputs run out, or until you come back. Then: 2. Repeat from step 1"
+        );
+        assert_eq!(v["blocks"][2]["kind"], "scene");
+        assert_eq!(v["blocks"][3]["kind"], "progress");
+        // Advanced cannot turn off while a step uses it.
+        let v = ui(&g.act("plan.advanced", "0", 0));
+        assert_eq!(v["toasts"][0], "Remove the repeat, if and until steps first");
+        assert!(g.state().plan_advanced);
+    }
+
+    #[test]
+    fn a_card_shows_how_many_of_what_it_makes_you_have() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        g.state_mut().bank.insert("logs".into(), 1_240);
+        let v = ui(&g.act("tab", "woodcutting", 0));
+        let mut t = Vec::new();
+        all_text(&v["blocks"], &mut t);
+        assert!(t.iter().any(|s| s == "Logs · 1,240"), "{t:?}");
     }
 }

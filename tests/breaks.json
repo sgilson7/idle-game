@@ -21,11 +21,11 @@
     "test": "mastery_25_takes_two_tenths_of_a_second_off"
   },
   {
-    "name": "picking by hand clears the plan",
+    "name": "picking by hand stops the plan",
     "file": "crates/core/src/game.rs",
-    "find": "self.plan.clear();\n        self.begin(id);",
+    "find": "self.plan_on = false;\n        self.begin(id);",
     "replace": "self.begin(id);",
-    "test": "picking_an_action_by_hand_clears_the_plan"
+    "test": "picking_an_action_by_hand_stops_the_plan_and_keeps_its_steps"
   },
   {
     "name": "out of food is a retreat, not a loss",
@@ -642,5 +642,54 @@
     "find": "left.filter(|&l| l <= cap)",
     "replace": "left.filter(|&l| l <= cap * 2)",
     "test": "the_app_lists_one_alert_of_each_kind_within_time_away"
+  },
+  {
+    "name": "an until step stops at its amount",
+    "file": "crates/core/src/game.rs",
+    "find": "if counted || until.is_some_and(|u| self.holds(&u)) {",
+    "replace": "if counted {",
+    "test": "an_until_step_stops_at_its_amount"
+  },
+  {
+    "name": "a repeat goes back its number of times",
+    "file": "crates/core/src/game.rs",
+    "find": "(st.times == 0 || st.used < st.times)",
+    "replace": "(st.times == 0 || st.used <= st.times)",
+    "test": "a_repeat_goes_back_its_number_of_times_and_the_plan_then_ends"
+  },
+  {
+    "name": "an if jumps while its test holds",
+    "file": "crates/core/src/game.rs",
+    "find": "self.holds(cd) != st.below",
+    "replace": "self.holds(cd) == st.below",
+    "test": "an_if_jumps_while_its_test_holds"
+  },
+  {
+    "name": "a plan going round doing nothing stops",
+    "file": "crates/core/src/game.rs",
+    "find": "if self.plan_idle > 2 * self.plan.len() as u64 + 1 {",
+    "replace": "if self.plan_idle > 2_000_000 {",
+    "test": "a_plan_that_goes_round_doing_nothing_stops"
+  },
+  {
+    "name": "plan edits outside the choices are refused",
+    "file": "crates/core/src/game.rs",
+    "find": "(\"times\", \"repeat\") => number.filter(|n| c::PLAN_TIMES.contains(n))",
+    "replace": "(\"times\", \"repeat\") => number.filter(|_| true)",
+    "test": "plan_edits_outside_the_offered_choices_are_refused"
+  },
+  {
+    "name": "the plan tab shows what runs now",
+    "file": "crates/core/src/view.rs",
+    "find": "        out.extend(self.now_panel());\n",
+    "replace": "",
+    "test": "the_plan_tab_shows_what_runs_now_and_edits_advanced_steps_in_a_sheet"
+  },
+  {
+    "name": "a card shows how many of what it makes you have",
+    "file": "crates/core/src/view.rs",
+    "find": "&[(\"item\", self.t.item(a.makes.0)), (\"n\", num(self.s.have(a.makes.0)))],",
+    "replace": "&[(\"item\", self.t.item(a.makes.0)), (\"n\", num(0))],",
+    "test": "a_card_shows_how_many_of_what_it_makes_you_have"
   }
 ]

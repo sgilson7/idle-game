@@ -790,6 +790,19 @@ impl View<'_> {
             chip("t", secs(ms)),
             chip("x", self.t.t("plus_xp", &[("n", num(self.s.xp_for(a)))])),
         ];
+        // How many of what it makes you have (T18).
+        if open {
+            chips.push(chip(
+                "g",
+                self.t.t(
+                    "have_chip",
+                    &[
+                        ("item", self.t.item(a.makes.0)),
+                        ("n", num(self.s.have(a.makes.0))),
+                    ],
+                ),
+            ));
+        }
         if a.makes.1 > 1 {
             chips.push(chip("g", self.t.t("makes_n", &[("n", a.makes.1.to_string())])));
         }
@@ -1584,63 +1597,195 @@ impl View<'_> {
         out
     }
 
+    /// The verb a plan step's action takes.
+    fn step_verb(&self, id: &str) -> String {
+        if c::enemy_index(id).is_some() || c::dungeon_index(id).is_some() {
+            self.t.skill("combat").verb.clone()
+        } else {
+            self.t.skill(c::SKILLS[self.s.skill_of(id)].id).verb.clone()
+        }
+    }
+
+    /// What a condition tests, in words: "500 Oak logs", "Mining level 30",
+    /// "10,000 gold".
+    fn cond_text(&self, cd: &crate::game::Cond) -> String {
+        match cd.kind.as_str() {
+            "item" => self
+                .t
+                .t("n_item", &[("n", num(cd.n)), ("item", self.t.item(&cd.id))]),
+            "level" => self.t.t(
+                "skill_level_n",
+                &[
+                    ("skill", self.t.skill(&cd.id).name.clone()),
+                    ("n", cd.n.to_string()),
+                ],
+            ),
+            _ => self.t.t("n_gold", &[("n", num(cd.n))]),
+        }
+    }
+
+    /// A step's line on the plan screen.
+    fn step_title(&self, k: usize) -> String {
+        let st = &self.s.plan[k];
+        let n = (k + 1).to_string();
+        match st.kind.as_str() {
+            "repeat" => self
+                .t
+                .t("plan_repeat", &[("k", n), ("to", (st.to + 1).to_string())]),
+            "if" => {
+                let what = st.cond.as_ref().map(|cd| self.cond_text(cd)).unwrap_or_default();
+                let key = if st.below {
+                    "plan_if_below"
+                } else {
+                    "plan_if_at_least"
+                };
+                self.t
+                    .t(key, &[("k", n), ("what", what), ("to", (st.to + 1).to_string())])
+            }
+            _ => self.t.t(
+                "plan_step",
+                &[
+                    ("k", n),
+                    ("verb", self.step_verb(&st.id)),
+                    ("what", self.name(&st.id).to_lowercase()),
+                ],
+            ),
+        }
+    }
+
+    fn step_sub(&self, k: usize) -> String {
+        let st = &self.s.plan[k];
+        match st.kind.as_str() {
+            "repeat" => {
+                if st.times == 0 {
+                    self.t.s("plan_forever")
+                } else {
+                    self.t
+                        .t("done_of", &[("done", num(st.used)), ("n", num(st.times))])
+                }
+            }
+            "if" => self.t.s("plan_if_else"),
+            _ => {
+                let count = if st.n > 0 {
+                    self.t.t("done_of", &[("done", num(st.done)), ("n", num(st.n))])
+                } else {
+                    self.t.s("until_out_sub")
+                };
+                match &st.until {
+                    Some(u) => self
+                        .t
+                        .t("plan_until", &[("count", count), ("what", self.cond_text(u))]),
+                    None => count,
+                }
+            }
+        }
+    }
+
+    /// What runs now, at the top of the plan screen (T18): the scene, the
+    /// bar, and what comes next, so the screen can be left open.
+    fn now_panel(&self) -> Vec<Block> {
+        let Some(id) = self.s.active.clone() else {
+            return vec![Block {
+                title: self.t.s("now_title"),
+                text: self.t.s("now_idle"),
+                ..block("card")
+            }];
+        };
+        let ms = self.s.duration(&id);
+        let doing = self.t.t(
+            "doing",
+            &[("verb", self.step_verb(&id)), ("what", self.name(&id))],
+        );
+        let on = self.s.plan_on && self.s.plan_at < self.s.plan.len();
+        let sub = if on {
+            let next = self.s.plan_at + 1;
+            let then = if next < self.s.plan.len() {
+                self.step_title(next)
+            } else {
+                self.t.s("plan_then_end")
+            };
+            self.t.t(
+                "now_step",
+                &[
+                    ("k", (self.s.plan_at + 1).to_string()),
+                    ("n", self.s.plan.len().to_string()),
+                    ("sub", self.step_sub(self.s.plan_at)),
+                    ("then", then),
+                ],
+            )
+        } else {
+            self.t.s("now_by_hand")
+        };
+        vec![
+            Block {
+                title: self.t.s("now_title"),
+                rows: vec![Row {
+                    icon: id.clone(),
+                    title: doing.clone(),
+                    sub,
+                    chip: self.t.s("now"),
+                    ..Row::default()
+                }],
+                ..block("rows")
+            },
+            self.scene(&id, doing, true, ms),
+            Block {
+                dur: format!("{ms}ms"),
+                delay: format!("-{}ms", self.s.progress_ms),
+                ..block("progress")
+            },
+        ]
+    }
+
     fn plan(&self) -> Vec<Block> {
+        let max = self.s.plan_max();
+        let adv = self.s.plan_advanced;
         let mut out = vec![self.head(
             "plan",
             self.t.s("tab_plan"),
             self.t.t(
                 "steps_of",
-                &[
-                    ("n", self.s.plan.len().to_string()),
-                    ("max", c::PLAN_STEPS.to_string()),
-                ],
+                &[("n", self.s.plan.len().to_string()), ("max", max.to_string())],
             ),
             "",
         )];
+        out.extend(self.now_panel());
         out.push(Block {
-            text: self.t.t("plan_intro", &[("n", c::PLAN_STEPS.to_string())]),
+            text: if adv {
+                self.t.t("plan_intro_advanced", &[("n", max.to_string())])
+            } else {
+                self.t.t("plan_intro", &[("n", max.to_string())])
+            },
             ..block("note")
         });
-        let rows: Vec<Row> = self
-            .s
-            .plan
-            .iter()
-            .enumerate()
-            .map(|(k, st)| {
-                let skill = self.s.skill_of(&st.id);
-                let verb = if c::enemy_index(&st.id).is_some() {
-                    self.t.skill("combat").verb.clone()
+        let rows: Vec<Row> = (0..self.s.plan.len())
+            .map(|k| {
+                let st = &self.s.plan[k];
+                let mut buttons: Vec<Button> = if adv {
+                    vec![button(self.t.s("plan_edit"), "plan.open", &k.to_string())]
                 } else {
-                    self.t.skill(c::SKILLS[skill].id).verb.clone()
+                    c::PLAN_COUNTS
+                        .iter()
+                        .map(|&n| {
+                            let label = if n == 0 {
+                                self.t.s("until_out")
+                            } else {
+                                self.t.t("times_n", &[("n", num(n))])
+                            };
+                            button(label, "plan.count", &format!("{k}:{n}")).pressed(st.n == n)
+                        })
+                        .collect()
                 };
-                let mut buttons: Vec<Button> = c::PLAN_COUNTS
-                    .iter()
-                    .map(|&n| {
-                        let label = if n == 0 {
-                            self.t.s("until_out")
-                        } else {
-                            self.t.t("times_n", &[("n", num(n))])
-                        };
-                        button(label, "plan.count", &format!("{k}:{n}")).pressed(st.n == n)
-                    })
-                    .collect();
                 buttons.push(button(self.t.s("remove"), "plan.remove", &k.to_string()).tone("plain"));
-                let running = k == 0 && self.s.active.as_deref() == Some(st.id.as_str());
+                let running = self.s.plan_on && k == self.s.plan_at;
                 Row {
-                    icon: st.id.clone(),
-                    title: self.t.t(
-                        "plan_step",
-                        &[
-                            ("k", (k + 1).to_string()),
-                            ("verb", verb),
-                            ("what", self.name(&st.id).to_lowercase()),
-                        ],
-                    ),
-                    sub: if st.n > 0 {
-                        self.t.t("done_of", &[("done", num(st.done)), ("n", num(st.n))])
+                    icon: if st.kind.is_empty() {
+                        st.id.clone()
                     } else {
-                        self.t.s("until_out_sub")
+                        format!("plan_{}", st.kind)
                     },
+                    title: self.step_title(k),
+                    sub: self.step_sub(k),
                     chip: if running { self.t.s("now") } else { String::new() },
                     buttons,
                     ..Row::default()
@@ -1665,6 +1810,30 @@ impl View<'_> {
                 ..block("buttons")
             });
         }
+        if adv && self.s.plan.len() < max {
+            out.push(Block {
+                text: self.t.s("plan_add_control"),
+                buttons: vec![
+                    button(self.t.s("plan_add_repeat"), "plan.control", "repeat"),
+                    button(self.t.s("plan_add_if"), "plan.control", "if"),
+                ],
+                ..block("buttons")
+            });
+        }
+        out.push(Block {
+            text: self.t.s("plan_advanced_about"),
+            buttons: vec![button(
+                self.t.s(if adv {
+                    "plan_advanced_off"
+                } else {
+                    "plan_advanced_on"
+                }),
+                "plan.advanced",
+                if adv { "0" } else { "1" },
+            )
+            .pressed(adv)],
+            ..block("buttons")
+        });
         out.push(Block {
             title: self.t.s("away_title"),
             text: self.t.t(
@@ -1677,6 +1846,165 @@ impl View<'_> {
             ..block("card")
         });
         out
+    }
+
+    /// The sheet that edits plan step `k` in advanced mode (IG-Q53 A).
+    pub(crate) fn plan_sheet(&self, k: usize) -> Sheet {
+        let st = &self.s.plan[k];
+        let edit = |what: &str, v: &str| format!("{k}:{what}:{v}");
+        let pick = |text: String, buttons: Vec<Button>| Block {
+            text,
+            buttons,
+            ..block("buttons")
+        };
+        let mut blocks = Vec::new();
+        match st.kind.as_str() {
+            "repeat" => {
+                blocks.push(pick(
+                    self.t.s("plan_back_to"),
+                    (0..k)
+                        .map(|t| {
+                            button((t + 1).to_string(), "plan.edit", &edit("to", &t.to_string()))
+                                .pressed(st.to == t)
+                        })
+                        .collect(),
+                ));
+                blocks.push(pick(
+                    self.t.s("plan_how_often"),
+                    c::PLAN_TIMES
+                        .iter()
+                        .map(|&n| {
+                            let label = if n == 0 {
+                                self.t.s("plan_forever")
+                            } else {
+                                self.t.t("times_n", &[("n", n.to_string())])
+                            };
+                            button(label, "plan.edit", &edit("times", &n.to_string())).pressed(st.times == n)
+                        })
+                        .collect(),
+                ));
+            }
+            "if" => {
+                let on = st.cond.clone().unwrap_or_default();
+                let mut tests = vec![
+                    button(self.t.s("gold"), "plan.edit", &edit("on", "gold")).pressed(on.kind == "gold")
+                ];
+                for item in self.s.plan_items() {
+                    tests.push(
+                        button(self.t.item(&item), "plan.edit", &edit("on", &item))
+                            .pressed(on.kind == "item" && on.id == item),
+                    );
+                }
+                blocks.push(pick(self.t.s("plan_if_test"), tests));
+                blocks.push(pick(
+                    self.t.s("plan_if_when"),
+                    vec![
+                        button(self.t.s("plan_fewer"), "plan.edit", &edit("below", "1")).pressed(st.below),
+                        button(self.t.s("plan_at_least"), "plan.edit", &edit("below", "0"))
+                            .pressed(!st.below),
+                    ],
+                ));
+                blocks.push(pick(
+                    self.t.s("plan_amount"),
+                    c::PLAN_AMOUNTS
+                        .iter()
+                        .map(|&n| {
+                            button(num(n), "plan.edit", &edit("amount", &n.to_string())).pressed(on.n == n)
+                        })
+                        .collect(),
+                ));
+                blocks.push(pick(
+                    self.t.s("plan_go_to"),
+                    (0..self.s.plan.len())
+                        .filter(|&t| t != k)
+                        .map(|t| {
+                            button((t + 1).to_string(), "plan.edit", &edit("to", &t.to_string()))
+                                .pressed(st.to == t)
+                        })
+                        .collect(),
+                ));
+            }
+            _ => {
+                blocks.push(pick(
+                    self.t.s("plan_how_many"),
+                    c::PLAN_COUNTS
+                        .iter()
+                        .map(|&n| {
+                            let label = if n == 0 {
+                                self.t.s("until_out")
+                            } else {
+                                self.t.t("times_n", &[("n", num(n))])
+                            };
+                            button(label, "plan.edit", &edit("count", &n.to_string())).pressed(st.n == n)
+                        })
+                        .collect(),
+                ));
+                let u = st.until.clone().unwrap_or_default();
+                blocks.push(pick(
+                    self.t.s("plan_until_none_about"),
+                    vec![
+                        button(self.t.s("plan_until_none"), "plan.edit", &edit("until", "none"))
+                            .pressed(st.until.is_none()),
+                    ],
+                ));
+                if let Some(item) = self.s.makes_of(&st.id) {
+                    blocks.push(pick(
+                        self.t.t("plan_until_item", &[("item", self.t.item(&item))]),
+                        c::PLAN_AMOUNTS
+                            .iter()
+                            .map(|&n| {
+                                button(num(n), "plan.edit", &edit("until", &format!("item:{n}")))
+                                    .pressed(u.kind == "item" && u.n == n)
+                            })
+                            .collect(),
+                    ));
+                }
+                let skill = self.s.skill_of(&st.id);
+                let l = self.s.level(skill) as u64;
+                let mut levels: Vec<u64> = [1, 5, 10]
+                    .iter()
+                    .map(|d| (l + d).min(xp::MAX_LEVEL as u64))
+                    .filter(|&x| x > l)
+                    .collect();
+                levels.dedup();
+                if u.kind == "level" && !levels.contains(&u.n) {
+                    levels.insert(0, u.n);
+                }
+                if !levels.is_empty() {
+                    blocks.push(pick(
+                        self.t.t("plan_until_level", &[("skill", self.skill_name(skill))]),
+                        levels
+                            .iter()
+                            .map(|&n| {
+                                button(n.to_string(), "plan.edit", &edit("until", &format!("level:{n}")))
+                                    .pressed(u.kind == "level" && u.n == n)
+                            })
+                            .collect(),
+                    ));
+                }
+                blocks.push(pick(
+                    self.t.s("plan_until_gold"),
+                    c::PLAN_AMOUNTS
+                        .iter()
+                        .map(|&n| {
+                            button(num(n), "plan.edit", &edit("until", &format!("gold:{n}")))
+                                .pressed(u.kind == "gold" && u.n == n)
+                        })
+                        .collect(),
+                ));
+            }
+        }
+        Sheet {
+            kind: "notice".into(),
+            title: self.step_title(k),
+            lines: vec![self.step_sub(k)],
+            blocks,
+            buttons: vec![
+                button(self.t.s("remove"), "plan.remove", &k.to_string()).tone("stop"),
+                button(self.t.s("ok"), "sheet.close", "").tone("primary"),
+            ],
+            ..Sheet::default()
+        }
     }
 
     fn prestige(&self) -> Vec<Block> {

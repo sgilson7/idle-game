@@ -17,13 +17,46 @@ use crate::xp;
 /// rooms and dungeons (T15). An older save is brought up to it.
 pub const SAVE_VERSION: u32 = 4;
 
-/// What is running: an action id or an enemy id.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// One step of a plan. A plain step runs an action or an enemy id; in
+/// advanced mode (T18, IG-Q53 A) a step can also stop on a condition
+/// (`until`), go back (`repeat`) or jump on a condition (`if`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Step {
     pub id: String,
     /// How many to do; 0 means until the inputs run out, or until you come back.
     pub n: u64,
     pub done: u64,
+    /// "" runs `id`; "repeat" and "if" are advanced steps.
+    #[serde(default)]
+    pub kind: String,
+    /// A plain step ends early once this holds.
+    #[serde(default)]
+    pub until: Option<Cond>,
+    /// An "if" step's test.
+    #[serde(default)]
+    pub cond: Option<Cond>,
+    /// The "if" jumps when you have fewer than `cond`'s amount, not at least.
+    #[serde(default)]
+    pub below: bool,
+    /// Where a "repeat" or an "if" goes: a step's index.
+    #[serde(default)]
+    pub to: usize,
+    /// How many times a "repeat" goes back; 0 is forever.
+    #[serde(default)]
+    pub times: u64,
+    /// How many times it has gone back this time through.
+    #[serde(default)]
+    pub used: u64,
+}
+
+/// Something a plan can test: an item's count, a skill's level, or gold.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Cond {
+    /// "item", "level" or "gold".
+    pub kind: String,
+    /// The item or skill id; empty for gold.
+    pub id: String,
+    pub n: u64,
 }
 
 /// A farming patch: empty, or a crop and the game time it was planted (T5).
@@ -108,6 +141,18 @@ pub struct State {
     pub active: Option<String>,
     pub progress_ms: u64,
     pub plan: Vec<Step>,
+    /// The step running now, when the plan runs (T18: steps stay, a pointer moves).
+    #[serde(default)]
+    pub plan_at: usize,
+    #[serde(default)]
+    pub plan_on: bool,
+    /// Plan steps passed since an action last finished; a plan that goes
+    /// round without doing anything stops (IG-Q53 A).
+    #[serde(default)]
+    pub plan_idle: u64,
+    /// The plan screen's Advanced switch.
+    #[serde(default)]
+    pub plan_advanced: bool,
     pub style: usize,
     pub hp: u64,
     pub foe_hp: u64,
@@ -213,6 +258,8 @@ pub struct Report {
     pub chests: Vec<String>,
     /// Masterworks, sold as they were made, and the gold they brought.
     pub masterworks: u64,
+    /// The plan stopped at this step: it went round doing nothing.
+    pub plan_stuck: Option<usize>,
 }
 
 fn add(map: &mut BTreeMap<String, u64>, k: &str, n: u64) {
@@ -233,6 +280,10 @@ impl State {
             active: None,
             progress_ms: 0,
             plan: Vec::new(),
+            plan_at: 0,
+            plan_on: false,
+            plan_idle: 0,
+            plan_advanced: false,
             style: 0,
             hp: 0,
             foe_hp: 0,
@@ -689,9 +740,10 @@ impl State {
         }
     }
 
-    /// Starts an action or a fight by hand. A plan is cleared (P3).
+    /// Starts an action or a fight by hand. A running plan stops and keeps
+    /// its steps (P3; cleared before T18).
     pub fn start(&mut self, id: &str, wall: u64) {
-        self.plan.clear();
+        self.plan_on = false;
         self.begin(id);
         self.note(wall, "start", id, 0);
     }
@@ -844,33 +896,107 @@ impl State {
     }
 
     fn step_done(&mut self, id: &str, r: &mut Report) {
-        if let Some(step) = self.plan.first_mut() {
-            if step.id == id {
-                step.done += 1;
-                if step.n > 0 && step.done >= step.n {
-                    r.steps.push(id.to_string());
-                    self.plan.remove(0);
-                    self.follow_plan();
-                }
-            }
+        self.plan_idle = 0;
+        if !self.plan_on {
+            return;
+        }
+        let at = self.plan_at;
+        let Some(step) = self.plan.get_mut(at) else {
+            return;
+        };
+        if step.id != id {
+            return;
+        }
+        step.done += 1;
+        let counted = step.n > 0 && step.done >= step.n;
+        let until = step.until.clone();
+        if counted || until.is_some_and(|u| self.holds(&u)) {
+            r.steps.push(id.to_string());
+            self.plan_at += 1;
+            self.follow_plan(r);
         }
     }
 
+    /// The running step cannot go on: the plan moves to the next, or the
+    /// action stops when no plan runs.
     fn next_step(&mut self, r: &mut Report) {
-        if self.plan.is_empty() {
+        if !self.plan_on {
             self.stop();
             return;
         }
-        r.steps.push(self.plan[0].id.clone());
-        self.plan.remove(0);
-        self.follow_plan();
+        if let Some(st) = self.plan.get(self.plan_at) {
+            r.steps.push(st.id.clone());
+        }
+        self.plan_at += 1;
+        self.follow_plan(r);
     }
 
-    fn follow_plan(&mut self) {
-        match self.plan.first().map(|s| s.id.clone()) {
-            Some(id) => self.begin(&id),
-            None => self.stop(),
+    /// Whether a plan's condition holds now (at least its amount).
+    pub fn holds(&self, cd: &Cond) -> bool {
+        self.cond_value(cd) >= cd.n
+    }
+
+    pub fn cond_value(&self, cd: &Cond) -> u64 {
+        match cd.kind.as_str() {
+            "item" => self.have(&cd.id),
+            "level" => c::skill_index(&cd.id).map_or(0, |i| self.level(i) as u64),
+            _ => self.gold,
         }
+    }
+
+    /// Runs the plan from `plan_at`: control steps are followed at once, a
+    /// plain step whose `until` already holds is passed, and the first step
+    /// with something to do begins. The plan ends after its last step. A
+    /// plan that passes more steps than twice its length without an action
+    /// finishing goes round doing nothing, so it stops.
+    fn follow_plan(&mut self, r: &mut Report) {
+        while self.plan_on {
+            let at = self.plan_at;
+            let Some(st) = self.plan.get(at).cloned() else {
+                break;
+            };
+            self.plan_idle += 1;
+            if self.plan_idle > 2 * self.plan.len() as u64 + 1 {
+                r.plan_stuck = Some(at);
+                break;
+            }
+            match st.kind.as_str() {
+                "repeat" => {
+                    if st.to < at && (st.times == 0 || st.used < st.times) {
+                        self.plan[at].used += 1;
+                        for s in &mut self.plan[st.to..at] {
+                            s.done = 0;
+                            if s.kind == "repeat" {
+                                s.used = 0;
+                            }
+                        }
+                        self.plan_at = st.to;
+                    } else {
+                        self.plan[at].used = 0;
+                        self.plan_at += 1;
+                    }
+                }
+                "if" => {
+                    let jump = st.cond.as_ref().is_some_and(|cd| self.holds(cd) != st.below);
+                    self.plan_at = if jump && st.to < self.plan.len() {
+                        st.to
+                    } else {
+                        at + 1
+                    };
+                }
+                _ => {
+                    if st.until.as_ref().is_some_and(|u| self.holds(u)) || !self.unlocked(&st.id) {
+                        self.plan_at += 1;
+                    } else {
+                        self.begin(&st.id);
+                        return;
+                    }
+                }
+            }
+        }
+        self.plan_on = false;
+        self.plan_at = 0;
+        self.stop();
     }
 
     /// One action or one swing.
@@ -1074,16 +1200,56 @@ impl State {
 
     // ---------- the plan (P3) ----------
 
+    /// How many steps a plan may hold: more in advanced mode (IG-Q53 A).
+    pub fn plan_max(&self) -> usize {
+        if self.plan_advanced {
+            c::PLAN_STEPS_ADVANCED
+        } else {
+            c::PLAN_STEPS
+        }
+    }
+
     pub fn plan_add(&mut self, id: &str) -> bool {
-        if self.plan.len() >= c::PLAN_STEPS || !self.unlocked(id) {
+        if self.plan.len() >= self.plan_max() || !self.unlocked(id) {
             return false;
         }
         self.plan.push(Step {
             id: id.into(),
-            n: 0,
-            done: 0,
+            ..Step::default()
         });
         true
+    }
+
+    /// Adds a "repeat" (back to the first step, forever) or an "if" (on
+    /// gold, to the first step) in advanced mode; the player then edits it.
+    pub fn plan_add_control(&mut self, kind: &str) -> bool {
+        if !self.plan_advanced || self.plan.len() >= self.plan_max() || !matches!(kind, "repeat" | "if") {
+            return false;
+        }
+        self.plan.push(Step {
+            kind: kind.into(),
+            cond: (kind == "if").then(|| Cond {
+                kind: "gold".into(),
+                id: String::new(),
+                n: c::PLAN_AMOUNTS[0],
+            }),
+            below: kind == "if",
+            ..Step::default()
+        });
+        true
+    }
+
+    /// The Advanced switch. It turns off only when no step uses it.
+    pub fn plan_set_advanced(&mut self, on: bool) -> bool {
+        if !on && (self.plan_uses_advanced() || self.plan.len() > c::PLAN_STEPS) {
+            return false;
+        }
+        self.plan_advanced = on;
+        true
+    }
+
+    pub fn plan_uses_advanced(&self) -> bool {
+        self.plan.iter().any(|s| !s.kind.is_empty() || s.until.is_some())
     }
 
     pub fn plan_count(&mut self, at: usize, n: u64) {
@@ -1092,17 +1258,154 @@ impl State {
         }
     }
 
+    /// Removes a step; jumps past it move up one, and jumps to it go to
+    /// the step that takes its place.
     pub fn plan_remove(&mut self, at: usize) {
-        if at < self.plan.len() {
-            self.plan.remove(at);
+        if at >= self.plan.len() {
+            return;
+        }
+        self.plan.remove(at);
+        for s in &mut self.plan {
+            if s.to > at {
+                s.to -= 1;
+            }
+        }
+        if self.plan_on {
+            self.plan_on = false;
+            self.stop();
+        }
+        self.plan_at = 0;
+    }
+
+    pub fn plan_clear(&mut self) {
+        self.plan.clear();
+        self.plan_at = 0;
+        if self.plan_on {
+            self.plan_on = false;
+            self.stop();
         }
     }
 
     pub fn plan_start(&mut self) {
+        let mut r = Report::default();
+        self.plan_start_with(&mut r);
+    }
+
+    pub fn plan_start_with(&mut self, r: &mut Report) {
         for s in &mut self.plan {
             s.done = 0;
+            s.used = 0;
         }
-        self.follow_plan();
+        self.plan_at = 0;
+        self.plan_idle = 0;
+        self.plan_on = !self.plan.is_empty();
+        self.follow_plan(r);
+    }
+
+    /// Edits a step: the amount, the until, a jump's target, a repeat's
+    /// times, an if's test. Values outside the offered lists are refused.
+    pub fn plan_edit(&mut self, at: usize, what: &str, value: &str) -> bool {
+        let len = self.plan.len();
+        let advanced = self.plan_advanced;
+        let Some(st) = self.plan.get(at).cloned() else {
+            return false;
+        };
+        let made = self.plan_items();
+        let number = value.parse::<u64>().ok();
+        let edited = match (what, st.kind.as_str()) {
+            ("to", "repeat") => number
+                .filter(|&t| (t as usize) < at)
+                .map(|t| Step { to: t as usize, ..st }),
+            ("to", "if") => number
+                .filter(|&t| (t as usize) < len && t as usize != at)
+                .map(|t| Step { to: t as usize, ..st }),
+            ("times", "repeat") => number
+                .filter(|n| c::PLAN_TIMES.contains(n))
+                .map(|n| Step { times: n, ..st }),
+            ("below", "if") => Some(Step {
+                below: value == "1",
+                ..st
+            }),
+            ("on", "if") => {
+                let cd = if value == "gold" {
+                    Some(Cond {
+                        kind: "gold".into(),
+                        id: String::new(),
+                        n: c::PLAN_AMOUNTS[0],
+                    })
+                } else {
+                    made.iter().any(|i| i == value).then(|| Cond {
+                        kind: "item".into(),
+                        id: value.into(),
+                        n: c::PLAN_AMOUNTS[0],
+                    })
+                };
+                cd.map(|cd| Step { cond: Some(cd), ..st })
+            }
+            ("amount", "if") => number.filter(|n| c::PLAN_AMOUNTS.contains(n)).and_then(|n| {
+                st.cond.clone().map(|cd| Step {
+                    cond: Some(Cond { n, ..cd }),
+                    ..st.clone()
+                })
+            }),
+            ("count", "") => number
+                .filter(|n| c::PLAN_COUNTS.contains(n))
+                .map(|n| Step { n, ..st }),
+            ("until", "") if advanced => self.until_from(&st, value).map(|u| Step { until: u, ..st }),
+            _ => None,
+        };
+        match edited {
+            Some(s) => {
+                self.plan[at] = s;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Parses an until choice for a plain step: "none", "item:N" (what the
+    /// step makes), "level:N" (its skill) or "gold:N".
+    fn until_from(&self, st: &Step, value: &str) -> Option<Option<Cond>> {
+        if value == "none" {
+            return Some(None);
+        }
+        let (kind, n) = value.split_once(':')?;
+        let n = n.parse::<u64>().ok()?;
+        let (id, ok) = match kind {
+            "item" => (self.makes_of(&st.id)?, c::PLAN_AMOUNTS.contains(&n)),
+            "level" => (
+                c::SKILLS[self.skill_of(&st.id)].id.to_string(),
+                n > self.level(self.skill_of(&st.id)) as u64 && n <= xp::MAX_LEVEL as u64,
+            ),
+            "gold" => (String::new(), c::PLAN_AMOUNTS.contains(&n)),
+            _ => return None,
+        };
+        ok.then(|| {
+            Some(Cond {
+                kind: kind.into(),
+                id,
+                n,
+            })
+        })
+    }
+
+    /// What a plan step's action makes, if it is an action.
+    pub fn makes_of(&self, id: &str) -> Option<String> {
+        c::action_index(id).map(|i| c::ACTIONS[i].makes.0.to_string())
+    }
+
+    /// The items the plan's plain steps make, in order, once each: what an
+    /// "if" can test.
+    pub fn plan_items(&self) -> Vec<String> {
+        let mut out: Vec<String> = Vec::new();
+        for s in &self.plan {
+            if let Some(m) = self.makes_of(&s.id) {
+                if !out.contains(&m) {
+                    out.push(m);
+                }
+            }
+        }
+        out
     }
 
     // ---------- gold (P10) ----------
@@ -1274,13 +1577,127 @@ mod tests {
     }
 
     #[test]
-    fn picking_an_action_by_hand_clears_the_plan() {
+    fn picking_an_action_by_hand_stops_the_plan_and_keeps_its_steps() {
         let mut s = State::new(3);
         s.plan_add("tree");
         s.plan_add("essence");
         s.plan_start();
+        assert!(s.plan_on);
         s.start("copper", 0);
-        assert!(s.plan.is_empty());
+        assert!(!s.plan_on);
+        assert_eq!(s.plan.len(), 2);
+        assert_eq!(s.active.as_deref(), Some("copper"));
+    }
+
+    fn advanced() -> State {
+        let mut s = State::new(3);
+        s.plan_advanced = true;
+        s
+    }
+
+    #[test]
+    fn an_until_step_stops_at_its_amount() {
+        // Chop until 5 logs (3 s each, 15 s), then burn until out (2 s each).
+        let mut s = advanced();
+        s.plan_add("tree");
+        s.plan_add("burn_logs");
+        assert!(s.plan_edit(0, "until", "item:10"));
+        s.plan[0].until.as_mut().unwrap().n = 5;
+        s.plan_start();
+        run(&mut s, 15_000);
+        assert_eq!(s.have("logs"), 5);
+        assert_eq!(s.active.as_deref(), Some("burn_logs"));
+        run(&mut s, 10_000);
+        assert_eq!(s.have("logs"), 0);
+        assert_eq!(s.xp[c::FIREMAKING], 5 * 40);
+    }
+
+    #[test]
+    fn a_repeat_goes_back_its_number_of_times_and_the_plan_then_ends() {
+        // Two chops, then back to the start twice: six chops, 18 s.
+        let mut s = advanced();
+        s.plan_add("tree");
+        s.plan_count(0, 2);
+        assert!(s.plan_add_control("repeat"));
+        assert!(s.plan_edit(1, "times", "2"));
+        s.plan_start();
+        run(&mut s, 17_999);
+        assert_eq!(s.have("logs"), 5);
+        assert!(s.plan_on);
+        run(&mut s, 1);
+        assert_eq!(s.have("logs"), 6);
+        assert!(!s.plan_on);
+        assert_eq!(s.active, None);
+        assert_eq!(s.plan.len(), 2);
+    }
+
+    #[test]
+    fn an_if_jumps_while_its_test_holds() {
+        // Chop one, and go back while there are fewer than 10 logs: ten chops
+        // (30 s), then burn all ten (20 s), 400 Firemaking XP.
+        let mut s = advanced();
+        s.plan_add("tree");
+        s.plan_count(0, 1);
+        assert!(s.plan_add_control("if"));
+        assert!(s.plan_edit(1, "on", "logs"));
+        assert!(s.plan_edit(1, "amount", "10"));
+        assert!(s.plan_edit(1, "to", "0"));
+        s.plan_add("burn_logs");
+        s.plan_start();
+        run(&mut s, 30_000);
+        assert_eq!(s.have("logs"), 10);
+        assert_eq!(s.active.as_deref(), Some("burn_logs"));
+        run(&mut s, 20_000);
+        assert_eq!(s.xp[c::FIREMAKING], 400);
+        assert!(!s.plan_on);
+    }
+
+    #[test]
+    fn a_plan_that_goes_round_doing_nothing_stops() {
+        // No logs to burn, and a repeat back to it forever.
+        let mut s = advanced();
+        s.plan_add("burn_logs");
+        s.plan_add_control("repeat");
+        s.plan_start();
+        let r = run(&mut s, 1);
+        assert!(r.plan_stuck.is_some());
+        // It stops after passing each step about twice, not later.
+        assert!(r.steps.len() <= 2 * 2 + 1, "{:?}", r.steps);
+        assert!(!s.plan_on);
+        assert_eq!(s.active, None);
+        // The same plan stuck in the middle of a stretch of time ends too.
+        let mut s = advanced();
+        s.plan_add("tree");
+        s.plan_count(0, 1);
+        s.plan_add("burn_logs");
+        s.plan_count(1, 1);
+        s.plan_add("burn_logs");
+        s.plan_add_control("repeat");
+        assert!(s.plan_edit(3, "to", "1"));
+        s.plan_start();
+        let r = run(&mut s, 60_000);
+        assert!(r.plan_stuck.is_some());
+        assert!(!s.plan_on);
+    }
+
+    #[test]
+    fn plan_edits_outside_the_offered_choices_are_refused() {
+        let mut s = advanced();
+        s.plan_add("tree");
+        s.plan_add_control("repeat");
+        assert!(!s.plan_edit(1, "to", "1"), "a repeat goes back, not to itself");
+        assert!(!s.plan_edit(1, "times", "7"));
+        assert!(!s.plan_edit(0, "count", "7"));
+        assert!(!s.plan_edit(0, "until", "item:7"));
+        assert!(!s.plan_edit(0, "until", "level:1"), "a level you already have");
+        assert!(s.plan_edit(0, "until", "level:2"));
+        s.plan_advanced = false;
+        assert!(!s.plan_edit(0, "until", "none"));
+        assert!(!s.plan_set_advanced(false));
+        s.plan_advanced = true;
+        s.plan_remove(1);
+        s.plan_edit(0, "until", "none");
+        assert!(s.plan_set_advanced(false));
     }
 
     #[test]

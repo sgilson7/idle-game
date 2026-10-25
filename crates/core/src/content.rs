@@ -1210,6 +1210,12 @@ pub const PRESTIGE_STEP_BP: u64 = 2_500;
 
 /// A plan holds this many steps (P3, four since T9).
 pub const PLAN_STEPS: usize = 4;
+/// In advanced mode (T18, IG-Q53 A).
+pub const PLAN_STEPS_ADVANCED: usize = 12;
+/// The amounts an "until" or an "if" can test, for items and gold.
+pub const PLAN_AMOUNTS: [u64; 7] = [10, 50, 100, 500, 1_000, 5_000, 10_000];
+/// How many times a "repeat" can go back; 0 is forever.
+pub const PLAN_TIMES: [u64; 5] = [0, 2, 3, 5, 10];
 /// Step lengths offered on the plan screen; 0 means until the inputs run out
 /// (or, for gathering, until you come back).
 pub const PLAN_COUNTS: [u64; 4] = [0, 100, 500, 1_000];
