@@ -13,6 +13,7 @@ One row per assumption, surprise or open item. **Kind** is *divergence* (what wa
 | R1.3 | divergence | iPhone Safari could take a fullscreen button. | The mobile kit records that a phone's Safari has no Fullscreen API for a page; iPad Safari has it. | Proposed: the button opens home-screen instructions on iPhone (IG-Q4). | | open |
 | R1.4 | worklist | | The game's name, the version 1 skills, the offline cap, the art route, combat, pacing and deploy are the person's (IG-Q1 to IG-Q9). | Asked in the journal's opening entry with a default for each. | | person |
 | R1.5 | worklist | | Every skill, tree and item name in the mockups was written by the agent from RuneScape's conventions. | The person approves or replaces the list before it goes in `data/` (IG-11). | | person |
+| R1.6 | worklist | | The mockups decide one action at a time with a plan, a 10-minute return threshold, four mastery checkpoints and tools as the gold sink. | Asked as IG-Q10 to IG-Q13 in the journal's Mockups entry, each with a default. | | person |
 
 ## Strings written by the agent
 
