@@ -63,7 +63,7 @@ One row per assumption, surprise or open item. **Kind** is *divergence* (what wa
 | R8.1 | finding | "Four times as long" has one obvious meaning. | Today a gathering skill takes about 150 to 300 hours to 99, and the first prestige comes at about 40 hours (by a model from the XP table and the best action at each level, scaled to R5.6). Four times the first could mean about 1,000 hours a skill; four times the second, about 160 hours. | Asked as IG-Q36 and IG-Q37; the model is on the journal's Full game tab. | | person |
 | R8.2 | worklist | | Plan 3 (P23 to P30, four regions, four times the rows, a tier of every engine for each region, dungeons, a bank for 500 items) is the agent's plan for T15. | For the person and co-designer to review (journal, Full game tabs, IG-Q36 to IG-Q45). Nothing is built until then. | | person |
 | R8.3 | worklist | | About 400 new names; the Coast's are written as placeholders. | Asked as IG-Q39. | | person |
-
+| R8.4 | finding | The browser check gives the same answer every run. | The first `publish.sh` run stopped in the browser check, waiting for a page to load; the rerun a minute later passed in all five engines, and so did the check against the live site. | Noted; a second flake would get its own triage row and a longer load wait. | | open |
 ## Strings written by the agent
 
 Each reader-visible string the agent wrote, with its key, for the person to read.

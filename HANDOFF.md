@@ -74,7 +74,7 @@ By system, from `SECOND-ORDER.md`, with the rule each one produced.
 
 ## What passed
 
-2026-10-25 (engines, T8 to T14): `./scripts/check.sh` BUILDER CHECK PASSED (browser check in chromium, firefox, webkit, webkit-iphone, webkit-ipad); `./scripts/count-tests.sh` 124 passed, 0 failed; breaks 60 of 60.
+2026-10-25 (engines, T8 to T14): published from `eb4c567` with `scripts/publish.sh`; the browser check against https://sgilson7.github.io/idle-game passed in all five engines (one earlier publish attempt stopped on a page-load wait, R8.4). `./scripts/check.sh` BUILDER CHECK PASSED (browser check in chromium, firefox, webkit, webkit-iphone, webkit-ipad); `./scripts/count-tests.sh` 124 passed, 0 failed; breaks 60 of 60.
 
 2026-10-25: `./scripts/check.sh` BUILDER CHECK PASSED (browser check in chromium, firefox, webkit, webkit-iphone, webkit-ipad); `./scripts/count-tests.sh` 80 passed, 0 failed; breaks 12 of 12; browser check against https://sgilson7.github.io/idle-game passed in all five.
 
