@@ -24,7 +24,7 @@ What a new session gets wrong first.
 
 ## The journal
 
-Where the design journal is, its link if it is published, and its newest entry.
+`../idle-game-journal/index.html`, published privately at https://claude.ai/artifact/Sd1T2jh5mG3qaHbZQEA67N (republish from the same file to keep the link). Newest entry: the first mockups (2026-10-25).
 
 ## Open for the person
 
