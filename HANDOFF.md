@@ -30,6 +30,9 @@ Where the design journal is, its link if it is published, and its newest entry.
 
 Every `SECOND-ORDER.md` row with status *person*, by number, with what the person has to decide or supply. `scripts/notebook_check.py` fails while one is missing.
 
+- R1.4: answer IG-Q1 to IG-Q9 in the journal's opening entry.
+- R1.5: approve or replace the agent-written skill, tree and item names in the mockups.
+
 ## Mistakes so far
 
 By system, from `SECOND-ORDER.md`, with the rule each one produced.
