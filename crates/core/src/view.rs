@@ -1134,7 +1134,7 @@ impl View<'_> {
                 "prestige_intro",
                 &[
                     ("pct", (c::PRESTIGE_STEP_BP / 100).to_string()),
-                    ("rise", c::PRESTIGE_RISE.to_string()),
+                    ("need", need.to_string()),
                 ],
             ),
             ..block("note")
@@ -1158,11 +1158,6 @@ impl View<'_> {
             chips: vec![
                 chip("p", self.t.t("mult_now", &[("x", times(self.s.mult_bp()))])),
                 chip("p", self.t.t("mult_after", &[("x", times(next_bp))])),
-                chip(
-                    "t",
-                    self.t
-                        .t("next_asks", &[("n", (need + c::PRESTIGE_RISE).to_string())]),
-                ),
             ],
             ..block("chips")
         });
@@ -1171,11 +1166,11 @@ impl View<'_> {
             label2: self.t.s("starts_over"),
             list: vec![
                 self.t.t("keep_mult", &[("x", times(next_bp))]),
-                self.t.s("keep_mastery"),
-                self.t.s("keep_kills"),
+                self.t.s("keep_log"),
             ],
             list2: vec![
                 self.t.s("lose_levels"),
+                self.t.s("lose_mastery"),
                 self.t.s("lose_bank"),
                 self.t.s("lose_tools"),
                 self.t.s("lose_plan"),

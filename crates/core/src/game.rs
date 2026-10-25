@@ -180,7 +180,7 @@ impl State {
     }
 
     pub fn prestige_needs(&self) -> u32 {
-        c::PRESTIGE_BASE + c::PRESTIGE_RISE * self.prestige
+        c::PRESTIGE_BASE
     }
 
     /// How long one action takes now, after mastery and tools.
@@ -593,13 +593,12 @@ impl State {
         self.total_level() >= self.prestige_needs()
     }
 
-    /// Back to level 1 with a bigger multiplier. Mastery, kills, the log,
-    /// flags and counts stay (IG-Q18 default A).
+    /// Back to level 1 with a bigger multiplier, and nothing else from the game
+    /// kept: mastery and kill counts start over too (T6, IG-Q18 B). The
+    /// playtest log, flags and counts stay; they are about the player.
     pub fn do_prestige(&mut self, wall: u64) {
         let keep = self.clone();
         let mut s = State::new(wall);
-        s.mxp = keep.mxp;
-        s.kills = keep.kills;
         s.prestige = keep.prestige + 1;
         s.log = keep.log;
         s.flags = keep.flags;
@@ -847,7 +846,7 @@ mod tests {
     }
 
     #[test]
-    fn prestige_needs_600_then_625_and_multiplies_xp() {
+    fn every_prestige_needs_600_and_keeps_only_the_multiplier() {
         let mut s = State::new(1);
         assert_eq!(s.prestige_needs(), 600);
         assert!(!s.can_prestige());
@@ -856,14 +855,16 @@ mod tests {
         }
         assert!(s.can_prestige());
         s.mxp.insert("tree".into(), 500);
+        s.kills.insert("cow".into(), 3);
         s.gold = 99;
         s.do_prestige(10);
         assert_eq!(s.prestige, 1);
-        assert_eq!(s.prestige_needs(), 625);
+        assert_eq!(s.prestige_needs(), 600);
         assert_eq!(s.mult_bp(), 12_500);
         assert_eq!(s.level(0), 1);
         assert_eq!(s.gold, 0);
-        assert_eq!(s.mxp["tree"], 500);
+        assert!(s.mxp.is_empty());
+        assert!(s.kills.is_empty());
         // a tree's 10 XP becomes 12 (12.5, rounded down)
         s.start("tree", 0);
         run(&mut s, 3_000);

@@ -346,10 +346,9 @@ pub const FORECAST_MS: u64 = 20 * 60_000;
 pub const EXPORT_REMIND_MS: u64 = 7 * 24 * 3_600_000;
 pub const AUTOSAVE_MS: u64 = 10_000;
 
-/// Prestige (P9): +25% skill XP per prestige; the first needs total level
-/// 600 and each after it 25 more.
+/// Prestige (P9): +25% skill XP per prestige; every prestige needs total
+/// level 600 (T7, IG-Q19 B).
 pub const PRESTIGE_BASE: u32 = 600;
-pub const PRESTIGE_RISE: u32 = 25;
 pub const PRESTIGE_STEP_BP: u64 = 2_500;
 
 /// A plan holds this many steps (P3).

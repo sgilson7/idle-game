@@ -39,7 +39,7 @@
     "file": "crates/core/src/game.rs",
     "find": "10_000 + c::PRESTIGE_STEP_BP * self.prestige as u64",
     "replace": "10_000",
-    "test": "prestige_needs_600_then_625_and_multiplies_xp"
+    "test": "every_prestige_needs_600_and_keeps_only_the_multiplier"
   },
   {
     "name": "an unreadable save is kept",
@@ -75,5 +75,12 @@
     "find": "            if let Some(item) = self.missing(&id) {\n                r.stop",
     "replace": "            if let Some(item) = self.missing(&id).filter(|_| false) {\n                r.stop",
     "test": "making_uses_its_inputs_and_stops_when_they_run_out"
+  },
+  {
+    "name": "prestige clears mastery",
+    "file": "crates/core/src/game.rs",
+    "find": "        s.prestige = keep.prestige + 1;",
+    "replace": "        s.prestige = keep.prestige + 1;\n        s.mxp = keep.mxp.clone();",
+    "test": "every_prestige_needs_600_and_keeps_only_the_multiplier"
   }
 ]

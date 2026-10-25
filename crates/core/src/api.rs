@@ -656,7 +656,6 @@ fn tuning() -> serde_json::Value {
         "away_cap_ms": c::AWAY_CAP_MS,
         "return_after_ms": c::RETURN_AFTER_MS,
         "prestige_base": c::PRESTIGE_BASE,
-        "prestige_rise": c::PRESTIGE_RISE,
         "prestige_step_bp": c::PRESTIGE_STEP_BP,
         "mastery_scale": crate::xp::MASTERY_SCALE,
         "nest_one_in": c::NEST_ONE_IN,

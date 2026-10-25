@@ -71,7 +71,7 @@ def main(path):
     print(f"- Too slow ({len(slow)}) / too fast ({len(fast)}): action `ms` and `xp` per row in `crates/core/src/content.rs` `ACTIONS`, "
           "or `MASTERY_SCALE` in `xp.rs` for mastery.")
     print("- Returns feel thin: `AWAY_CAP_MS`, `RETURN_AFTER_MS`, `BONFIRE_*`, `NEST_ONE_IN` in `content.rs`.")
-    print("- Prestige too soon or too late: `PRESTIGE_BASE`, `PRESTIGE_RISE`, `PRESTIGE_STEP_BP`.")
+    print("- Prestige too soon or too late: `PRESTIGE_BASE`, `PRESTIGE_STEP_BP`.")
     print(f"\nThe file's tuning table matches this build: {len(d['tuning']['actions'])} actions, {len(d['tuning']['enemies'])} enemies.")
 
 
