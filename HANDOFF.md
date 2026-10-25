@@ -59,7 +59,8 @@ Every `SECOND-ORDER.md` row with status *person*, by number, with what the perso
 - R3.11: granted 2026-10-25 (sgilson7/idle-game).
 - R3.12: confirm the MIT licence.
 - R5.2, R5.3: the co-designer checks the Farming and Crafting designs.
-- R5.5: what Firemaking should feed (IG-Q21).
+- R5.5: answered IG-Q21 B (compost); planned as T8.
+- R6.1, R6.2, R6.3, R6.4, R6.5, R6.6, R6.7, R6.8: review the engine plan and answer IG-Q24 to IG-Q35 (journal, Engines tabs). Nothing is built until then.
 
 ## Mistakes so far
 

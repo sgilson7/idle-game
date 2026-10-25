@@ -41,6 +41,14 @@ One row per assumption, surprise or open item. **Kind** is *divergence* (what wa
 | R5.4 | divergence | Saves had twelve skills. | Crafting and Farming went at the end of the skill list, so a version-1 save gains two skills at 0 and keeps everything else. | `SAVE_VERSION` 2. | test `a_version_one_save_gains_crafting_and_farming`; a break row | done |
 | R5.5 | finding | With T4, Firemaking takes logs and gives only XP and ashes. | It feeds nothing: the one skill outside the "scale off each other" web (T3). | Asked of the person (IG-Q21). | | person |
 | R5.6 | finding | With T6 and T7 together, each run starts from nothing at the same total level with more XP. | Run length shrinks as the multiplier grows: by the chart's model, from about 41 h to about 14 h by the ninth run; mastery no longer carries over to slow that. | Noted for the co-designer in the journal; playtest files will show it. | | done |
+| R6.1 | worklist | | The engine plan (T10 to T14) is the agent's design from the person's request: each engine spends what skills make, gives some back, and has a ladder, a timer that runs alongside and something to collect. | For the person and co-designer to review before any code (journal, Engines tabs). | | person |
+| R6.2 | worklist | | Four new skills (Construction, Trading, Invention, Attunement), engine unlock levels (150, 250, 350, 450) and the cross-engine links were chosen by the agent, held to "no skill takes from or feeds more than three". | To review. | a content test once built | person |
+| R6.3 | worklist | | Prestige under IG-Q18 B would reset the engines too; the build order is open. | Asked as IG-Q24 and IG-Q25. | | person |
+| R6.4 | worklist | | Nine recipes, their odds and their ingredients are the agent's. | IG-Q26, IG-Q27. | | person |
+| R6.5 | worklist | | Nobility's ranks, costs, rooms and servants are the agent's. | IG-Q28, IG-Q29. | | person |
+| R6.6 | worklist | | Trader's towns, orders and caravans are the agent's. | IG-Q30, IG-Q31. | | person |
+| R6.7 | worklist | | Cosmic's sky, starlight, stardust and time rewards are the agent's; boosts were kept out to match IG-Q14. | IG-Q32, IG-Q33. | | person |
+| R6.8 | worklist | | Inventor's parts, blueprints, gadgets and machines are the agent's. | IG-Q34, IG-Q35. | | person |
 
 ## Strings written by the agent
 

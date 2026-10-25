@@ -22,3 +22,16 @@ Stage 2. The MVP, built on the default of every open question (BRIEF.md, Autonom
 | P16 | Working name "Idle Game" until IG-Q1 is answered. | IG-Q1 | — |
 
 Not in the MVP: Crafting and Farming (IG-Q15 C), a mastery pool, more than three plan steps, sound.
+
+## Plan 2: recipes and four engines (2026-10-25, for review)
+
+Stage 2 for T8 to T14. The design is on the journal's Engines tabs, with diagrams, mockups and twelve questions (IG-Q24 to IG-Q35). **Not approved in advance: nothing is built until the person has read it.**
+
+| # | Decision | Reason | Held by (once built) |
+| --- | --- | --- | --- |
+| P17 | Ashes are compost: planting uses one if you have any, and that crop grows 25% faster. | T8, IG-Q21 B | a farming test and a break row |
+| P18 | A plan holds four steps. | T9 | `PLAN_STEPS`; a plan test |
+| P19 | Nine recipes drop from enemies (1 in 64 to 1 in 512) and unlock unique weapons, armour and food that need two or three skills' goods. | T10 | content tests: every recipe's inputs are made somewhere |
+| P20 | Four engines (Trader, Nobility, Inventor, Cosmic), each with a ladder, one timer alongside the action, and something to collect; one new skill each (Trading, Construction, Invention, Attunement). | T11 to T14 | a content test: no skill takes from or feeds more than three |
+| P21 | Navigation becomes five groups with a strip of skills or engines. | 18 skills and 5 engines do not fit 16 tabs | browser check |
+| P22 | Build order and prestige behaviour follow IG-Q24 and IG-Q25. | the person's | — |
