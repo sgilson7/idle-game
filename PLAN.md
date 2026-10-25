@@ -1,19 +1,24 @@
 # Plan
 
-Stage 2, written by the agent from `BRIEF.md`. `B2 Require step-by-step justification`.
+Stage 2. The MVP, built on the default of every open question (BRIEF.md, Autonomy, 2026-10-25). Each decision names its reason and the test that shows it holds. The journal's Round 2 tab and Mockups tab are the pictures this plan follows (`mockups/v2.html`).
 
-Each decision in build order, with the reason for it and the test that will show it holds. The person reads this at stage 3 (`C3 Interrogate the claim`) and accepts, revises, or answers the open questions.
-
-| # | Decision | Reason | Test that shows it holds |
+| # | Decision | Reason | Held by |
 | --- | --- | --- | --- |
-| 1 | | | |
+| P1 | Twelve skills: Woodcutting, Mining, Fishing gather; Firemaking, Fletching, Smithing, Cooking, Runecrafting make from what others gather; Melee, Ranged, Magic fight, with Hitpoints. | T1, T3; IG-Q15 default A | `content.rs` tests: every recipe's inputs are made by some action |
+| P2 | RuneScape's experience table, levels 1 to 99, as integers in the core. | IG-2 | `xp.rs` tests against the published values |
+| P3 | One action at a time; a plan of up to three steps runs in order; picking an action by hand clears the plan. | IG-Q10 | `game.rs` tests |
+| P4 | Time enters as the page's clock in milliseconds. One rule credits it: watching, a background tab and a closed tab are the same. Away time counts up to 24 hours. | IG-3, IG-4, IG-Q3 | test: one 8-hour step equals 28,800 one-second steps |
+| P5 | Away 10 minutes or longer: the return screen (gains, used, kills, unlocks, what ran out and who makes more, ready for you). Shorter: toasts. | IG-Q11, LR-9 | `game.rs` tests |
+| P6 | Mastery per action to 99, four checkpoints each (10, 25, 50, 99). | IG-Q12 | tests on each checkpoint's effect |
+| P7 | Firemaking lights a bonfire: each log adds 30 s, up to an hour ahead; gathering XP +10% while it burns. | IG-Q14 default B | test: boost on and off, independent of step size |
+| P8 | Combat: one style at a time; each enemy weak to one style; a sword, a bow and arrows, or runes; food eaten below 45% HP; out of food means retreat with nothing lost. | IG-Q16 A, IG-Q17 A | `combat` tests |
+| P9 | Prestige at total level 600, +25 per prestige; +25% skill XP per prestige; keeps mastery and the multiplier. | IG-Q18 A, IG-Q19 A, IG-Q20 A | tests |
+| P10 | Gold from selling; tools (axe, pickaxe, rod) in six tiers make one skill faster. | IG-Q13 | tests |
+| P11 | Save: the core writes a versioned save; `web/save.js` stores it in `localStorage` every few seconds and on leaving; export and import a `.json` file; an unreadable save starts a new game and is kept, not overwritten. Change to D17. | IG-5, IG-6 | `no_storage.rs` becomes a fence; save tests |
+| P12 | Playtest file: the core keeps a log (levels, unlocks, returns, run-outs, purchases, prestiges, screens opened) and the player's flagged moments (fun, pace, a note). "Send playtest file" shares it from a phone or downloads it. Nothing is sent by the page. | the person's request, 2026-10-25 | playtest tests; browser check sees the download |
+| P13 | The core describes every screen (`ui`): blocks the page draws by kind. The page holds no number, and re-draws only when the core says something changed or an action completes; bars and the swing animate in CSS. | Builder D3; IG-8 | `boundary.rs`; browser check |
+| P14 | Mobile kit: manifest, home-screen icon, touch baseline, a fullscreen button where the browser has fullscreen and home-screen steps on iPhone; the browser check adds iPhone and iPad passes. Changes D4 and D7. | IG-10, IG-Q4 | browser check |
+| P15 | 2D art: one SVG sprite of icons, drawn from shapes; no WebGL. | IG-Q5 default A | review |
+| P16 | Working name "Idle Game" until IG-Q1 is answered. | IG-Q1 | — |
 
-## Open questions for the person
-
-Numbered, so they can be answered by number.
-
-1. 
-
-## Status
-
-- [ ] Read by the person on: 
+Not in the MVP: Crafting and Farming (IG-Q15 C), a mastery pool, more than three plan steps, sound.

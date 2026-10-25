@@ -7,6 +7,10 @@ members = ["crates/core", "crates/shim"]
 [profile.release]
 opt-level = "s"
 lto = true
+# Smaller module for phones (P13): one codegen unit, no unwinding, no symbols.
+codegen-units = 1
+panic = "abort"
+strip = true
 
 # Whole-game tests in unoptimised integer maths get slow enough to stop being
 # run. Overflow checks stay on.

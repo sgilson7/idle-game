@@ -2,21 +2,44 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <!-- Reference default. connect-src 'self' keeps fetches on this origin;
-       'wasm-unsafe-eval' lets the page compile its own WebAssembly module;
-       form-action 'none' blocks form posts. A meta policy cannot stop data
-       leaving by navigation, so the browser check still watches requests. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>Builder tool</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Reference default, plus manifest-src 'self' for the mobile kit (D4).
+       connect-src 'self' keeps fetches on this origin; 'wasm-unsafe-eval' lets
+       the page compile its own WebAssembly module; form-action 'none' blocks
+       form posts. A meta policy cannot stop navigation, so the browser check
+       still watches requests. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; style-src 'self'; img-src 'self' data: blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="theme-color" content="#10141c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Idle Game">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="data/icons/icon-180.png">
+  <title>Idle Game</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body data-ready="false">
-  <main>
-    <h1 id="title"></h1>
-    <div id="panels"></div>
-    <p id="message" role="status"></p>
-  </main>
+  <div class="app">
+    <header class="top" id="top"></header>
+    <main class="main" id="main" aria-live="polite"></main>
+    <nav class="tabs" id="tabs" aria-label="Skills and screens"></nav>
+  </div>
+  <div class="shade" id="shade" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <p id="message" role="status"></p>
+  <input type="file" id="importer" accept="application/json,.json" hidden>
+  <template id="scene-tpl">
+    <svg class="scene-svg" viewBox="0 0 320 120" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+      <circle cx="280" cy="22" r="10" class="moon"/>
+      <use class="target" x="122" y="40" width="72" height="72"/>
+      <g class="figure">
+        <circle cx="100" cy="56" r="7" class="skin"/>
+        <path d="M100 63v20M100 83l-7 17M100 83l7 17" class="body"/>
+        <g class="swing"><path d="M100 70l14 0" class="arm"/><path d="M112 72l18 0" class="haft"/><path d="M128 66l6 6-6 6z" class="blade"/></g>
+      </g>
+    </svg>
+  </template>
   <noscript><p>This page needs JavaScript and WebAssembly.</p></noscript>
   <script type="module" src="app.js"></script>
 </body>

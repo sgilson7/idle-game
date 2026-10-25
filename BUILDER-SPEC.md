@@ -64,4 +64,5 @@ These stay with the person and go in `BRIEF.md` or `PLAN.md`:
 
 | Default | Changed to | Reason | Recorded in |
 | --- | --- | --- | --- |
-| | | | |
+| D17 | The page saves the game in `localStorage` and exports and imports a `.json` save; only `web/save.js` names storage | the brief asks for a short-term save in the browser and a long-term save in a file | `no_storage.rs` (a fence); SECOND-ORDER.md R1.2 |
+| D4, D7 | CSP adds `manifest-src 'self'` and `blob:` images; the browser check adds `webkit-iphone` and `webkit-ipad` passes by default | the game is played on phones and tablets (kits/mobile) | SECOND-ORDER.md R3.2 |

@@ -36,6 +36,8 @@ An ad-free incremental idle game in the browser with RuneScape-like skills. Each
 
 ## Done means
 
+- The player can save a playtest file (the save, a log of what happened and when, and moments the player flagged with a note) and send it on, from a phone. Nothing leaves the device unless the player sends the file.
+
 - A skill can be trained by choosing an action and waiting; it gains experience and levels to 99, and higher levels unlock better resources.
 - Each resource has its own mastery level to 99 with a visible effect.
 - Progress made while the page was closed is credited on return, up to a stated limit, and a summary says what was gained.
@@ -66,7 +68,9 @@ Skill, level, experience (XP), mastery, action, resource, offline progress, as d
 
 ## Autonomy
 
-The plan is not approved in advance: after the opening entry, the literature review and the mockups, the agent stops for the person. Where this brief is silent, the agent decides, records the decision in `SECOND-ORDER.md`, and continues. The agent may not loosen a Builder requirement or a boundary test, and may not add a server, an account, analytics, ads or any off-origin request. The agent may not create a repository, push or publish until the person names the repository and says so.
+On 2026-10-25 the person wrote: "so my friend cant submit till later, so for now build the mvp version of the game using your default selections, and then get yourself ready to take in his playtesting feedback / make it so he can easily download and send me a file that contains any content that would help influence gameplay / numbers tuning / fun". So the plan for the MVP is approved in advance, built on the default of every open question (IG-Q1 to IG-Q20); an answer that differs later becomes a TRIAGE row citing the question.
+
+Earlier: the plan was not approved in advance: after the opening entry, the literature review and the mockups, the agent stops for the person. Where this brief is silent, the agent decides, records the decision in `SECOND-ORDER.md`, and continues. The agent may not loosen a Builder requirement or a boundary test, and may not add a server, an account, analytics, ads or any off-origin request. The agent may not create a repository, push or publish until the person names the repository and says so.
 
 ## Journal
 

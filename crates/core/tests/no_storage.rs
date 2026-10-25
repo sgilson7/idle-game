@@ -1,13 +1,14 @@
-//! Reference default (D17): the page keeps nothing between visits. This reads
-//! every file under web/ (vendor/ aside) and fails if one names a browser
-//! storage API. From Feedback Drafts and Status Trends.
-//!
-//! When the brief allows storage, delete this file and record the change in
-//! BUILDER-SPEC.md. Then let the core write and read what is stored, and test
-//! that an unreadable save is treated as a new one.
+//! Changed default (D17 → IG-6): the brief allows a save in the browser. This
+//! reads every file under web/ (vendor/ aside) and fails if any file other than
+//! `web/save.js` names a browser storage API, so storage has one door the way
+//! the core does. The core writes and reads the save; `api.rs` tests that an
+//! unreadable save starts a new game and is kept.
 
 use std::fs;
 use std::path::{Path, PathBuf};
+
+/// The one page file allowed to name storage.
+const STORAGE_DOOR: &str = "web/save.js";
 
 const STORAGE_NAMES: &[&str] = &[
     "localStorage",
@@ -53,20 +54,23 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
 }
 
 #[test]
-fn the_page_names_no_browser_storage() {
+fn only_save_js_names_browser_storage() {
     let web = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../web");
     let mut found = Vec::new();
     for path in files_under(&web) {
         let Ok(text) = fs::read_to_string(&path) else {
             continue;
         };
+        if path.ends_with(STORAGE_DOOR) {
+            continue;
+        }
         for name in storage_names_in(&text) {
             found.push(format!("{}: {name}", path.display()));
         }
     }
     assert!(
         found.is_empty(),
-        "browser storage in the page (D17; the brief must allow it):\n{}",
+        "browser storage outside web/save.js (IG-6):\n{}",
         found.join("\n")
     );
 }

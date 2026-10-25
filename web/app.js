@@ -1,71 +1,502 @@
 // The page draws what the core returns and decides nothing.
 //
-// The core describes the screen (its name, panels, actions and the
-// glossary's definitions), and this file builds the DOM from that
-// description without knowing what any panel means. Every button sends its
-// action name and value back through `act`, the core's one door for
-// settings, screens and flags. (After Peter's Mandible.)
-import init, { start, act } from "./pkg/tool_shim.js";
+// The core describes every screen as blocks of a few kinds (a bar, a row of
+// chips, a grid of cards ...), and this file turns each kind into DOM without
+// knowing what a level or a tree is. Buttons send their action name and value
+// back through the core's one door, `act`. The page's own jobs are the
+// device's: the clock, the timer for the next action, saving the core's text,
+// fullscreen, and handing files to the player.
+import init, { Game } from "./pkg/tool_shim.js";
+import { load, store, stash, persist } from "./save.js";
 
+const SVG = "http://www.w3.org/2000/svg";
 const el = (id) => document.getElementById(id);
-const make = (tag, text) => {
+const now = () => Date.now();
+
+let game = null;
+let ui = null;
+let timer = null;
+let saved = "";
+
+function h(tag, cls, text) {
   const node = document.createElement(tag);
-  if (text !== undefined) node.textContent = text;
+  if (cls) node.className = cls;
+  if (text !== undefined && text !== "") node.textContent = text;
   return node;
+}
+
+function icon(id, cls) {
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("class", cls || "ic");
+  svg.setAttribute("viewBox", "0 0 40 40");
+  svg.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS(SVG, "use");
+  use.setAttribute("href", "icons.svg#" + id);
+  svg.append(use);
+  return svg;
+}
+
+function timing(node, dur, delay) {
+  if (dur) node.style.setProperty("--dur", dur);
+  if (delay) node.style.setProperty("--delay", delay);
+}
+
+// ---------- buttons go through the core, or to the device ----------
+
+const device = {
+  "page.fullscreen": fullscreen,
+  "page.export": exportSave,
+  "page.import": () => el("importer").click(),
+  "page.playtest": sendPlaytest,
 };
 
-let state = null;
-let glossary = "";
-let hints = [];
-
-function call(fn, ...args) {
-  return JSON.parse(fn(...args));
+function press(b) {
+  if (device[b.act]) return device[b.act]();
+  draw(game.act(b.act, b.value || "", now()));
 }
 
-// A label whose text is a glossary term shows the definition on hover.
-function mark(node) {
-  const hint = hints.find((h) => h.term === node.textContent);
-  if (hint) {
-    node.dataset.term = hint.term;
-    node.title = hint.definition;
-  }
+function btn(b, cls) {
+  const node = h("button", "btn " + (b.tone || "") + " " + (cls || ""));
+  if (b.icon) node.append(icon(b.icon));
+  const label = h("span", "label", b.label);
+  node.append(label);
+  if (b.sub) node.append(h("small", "", b.sub));
+  node.disabled = !b.enabled;
+  if (b.pressed) node.setAttribute("aria-pressed", "true");
+  node.dataset.act = b.act;
+  node.dataset.value = b.value || "";
+  node.addEventListener("click", () => press(b));
+  return node;
 }
 
-function panel(p) {
-  const box = make("section");
-  box.id = p.id;
-  if (p.heading) box.append(make("h2", p.heading));
-  if (p.text) box.append(make("p", p.text));
-  (p.actions || []).forEach((a) => {
-    const button = make("button", a.label);
-    button.disabled = !a.enabled;
-    button.addEventListener("click", () => draw(call(act, JSON.stringify(state), glossary, a.name, a.value)));
-    box.append(button);
+function bar(b) {
+  const box = h("div", "bar " + b.tone);
+  const fill = h("i");
+  fill.style.width = b.width;
+  const text = h("span");
+  text.append(h("b", "", b.left), h("b", "", b.right));
+  box.append(fill, text);
+  return box;
+}
+
+function chips(list) {
+  const box = h("div", "chips");
+  list.forEach((c) => {
+    const chip = h("span", "chip " + c.tone);
+    chip.append(h("i", "dot"), h("span", "", c.text));
+    box.append(chip);
   });
   return box;
 }
 
-function draw(result) {
-  if (result.error) {
-    el("message").textContent = result.error;
+function progress(dur, delay, cls) {
+  const box = h("div", "act-bar " + (cls || ""));
+  const fill = h("i");
+  timing(fill, dur, delay);
+  box.append(fill);
+  return box;
+}
+
+function card(c) {
+  const box = h("article", "panel card" + (c.active ? " active" : "") + (c.locked ? " locked" : ""));
+  const top = h("div", "card-top");
+  const art = h("div", "art");
+  art.append(icon(c.icon, "ic big"));
+  const name = h("div", "nm");
+  name.append(h("strong", "", c.title), h("small", "", c.sub));
+  top.append(art, name);
+  if (c.tag) top.append(h("span", "tag " + c.tone, c.tag));
+  box.append(top, chips(c.chips));
+  if (c.bar) box.append(bar(c.bar));
+  if (c.checks && c.checks.length) {
+    const checks = h("div", "checks");
+    c.checks.forEach((k) => checks.append(h("div", k.on ? "on" : "", k.text)));
+    box.append(checks);
+  }
+  if (c.active) box.append(progress(c.dur, c.delay));
+  const row = h("div", "card-buttons");
+  c.buttons.forEach((b, i) => row.append(btn(b, i ? "small" : "go")));
+  box.append(row);
+  return box;
+}
+
+function rows(list) {
+  const box = h("div", "rows");
+  list.forEach((r) => {
+    const row = h("div", "rowi " + (r.tone || ""));
+    if (r.icon) row.append(icon(r.icon, "ic row-ic"));
+    const text = h("div", "grow");
+    text.append(h("b", "", r.title));
+    if (r.sub) text.append(h("small", "", r.sub));
+    row.append(text);
+    if (r.chip) row.append(h("span", "chip", r.chip));
+    if (r.buttons && r.buttons.length) {
+      const bs = h("div", "row-buttons");
+      r.buttons.forEach((b) => bs.append(btn(b, "small")));
+      row.append(bs);
+    }
+    box.append(row);
+  });
+  return box;
+}
+
+function scene(b) {
+  const box = h("div", "scene" + (b.running ? " running" : ""));
+  const svg = el("scene-tpl").content.firstElementChild.cloneNode(true);
+  svg.querySelector(".target").setAttribute("href", "icons.svg#" + b.icon);
+  timing(box, b.dur, b.delay);
+  box.append(svg, h("span", "cap", b.text));
+  return box;
+}
+
+const blocks = {
+  head: (b) => {
+    const box = h("div", "head");
+    const ico = h("div", "ico");
+    ico.append(icon(b.icon));
+    box.append(ico, h("h1", "", b.title));
+    if (b.tag) box.append(h("span", "tag " + b.tone, b.tag));
+    return box;
+  },
+  bar: (b) => bar(b.bar),
+  links: (b) => {
+    const box = h("div", "flow");
+    box.append(h("span", "", b.title));
+    (b.buttons || []).forEach((x) => box.append(btn(x, "link")));
+    if (b.buttons2 && b.buttons2.length) {
+      box.append(h("span", "", "→ " + b.label2));
+      b.buttons2.forEach((x) => box.append(btn(x, "link")));
+    }
+    return box;
+  },
+  scene,
+  progress: (b) => progress(b.dur, b.delay, "now"),
+  chips: (b) => chips(b.chips),
+  forecast: (b) => {
+    const box = h("section", "panel forecast");
+    box.append(h("h2", "sec-h", b.title), chips(b.chips));
+    return box;
+  },
+  cards: (b) => {
+    const box = h("div", "cards");
+    b.cards.forEach((c) => box.append(card(c)));
+    return box;
+  },
+  note: (b) => h("p", "note", b.text),
+  styles: (b) => {
+    const box = h("div", "styles");
+    b.buttons.forEach((x) => box.append(btn(x, "style")));
+    return box;
+  },
+  fight: (b) => {
+    const box = h("div", "fight");
+    const you = h("div", "fighter");
+    you.append(h("b", "", b.title), bar(b.bar));
+    const foe = h("div", "fighter");
+    foe.append(h("b", "", b.label2), bar(b.bar2));
+    box.append(you, h("span", "vs", "vs"), foe);
+    return box;
+  },
+  bank: (b) => {
+    const box = h("div", "panel bank");
+    b.buttons.forEach((x) => {
+      const slot = h("button", "slot " + (x.tone || ""));
+      slot.append(h("b", "", x.sub), icon(x.icon, "ic slot-ic"), h("small", "", x.label));
+      slot.setAttribute("aria-label", x.label + ", " + x.sub);
+      slot.dataset.act = x.act;
+      slot.dataset.value = x.value;
+      slot.addEventListener("click", () => press(x));
+      box.append(slot);
+    });
+    return box;
+  },
+  rows: (b) => {
+    const box = h("section", "group");
+    if (b.title) box.append(h("h2", "sec-h", b.title));
+    const list = rows(b.rows);
+    list.classList.add("panel");
+    box.append(list);
+    return box;
+  },
+  buttons: (b) => {
+    const box = h("div", "button-row");
+    b.buttons.forEach((x) => box.append(btn(x)));
+    return box;
+  },
+  keep: (b) => {
+    const box = h("div", "panel keep");
+    [{ head: b.title, items: b.list, cls: "k" }, { head: b.label2, items: b.list2, cls: "l" }].forEach((part) => {
+      const col = h("div", part.cls);
+      const list = h("ul");
+      part.items.forEach((t) => list.append(h("li", "", t)));
+      col.append(h("h3", "", part.head), list);
+      box.append(col);
+    });
+    return box;
+  },
+  card: (b) => {
+    const box = h("section", "panel info");
+    box.append(h("h2", "", b.title), h("p", "", b.text));
+    return box;
+  },
+  choice: (b) => {
+    const box = h("div", "choice");
+    box.append(h("h3", "", b.title));
+    const row = h("div", "button-row");
+    b.buttons.forEach((x) => row.append(btn(x, "pick")));
+    box.append(row);
+    return box;
+  },
+  input: (b) => {
+    const box = h("label", "input");
+    box.append(h("h3", "", b.title));
+    const area = h("textarea");
+    area.rows = "3";
+    area.value = b.value || "";
+    area.placeholder = b.text;
+    // The note goes to the core as it is typed; the screen is not redrawn, so
+    // the keyboard stays up.
+    area.addEventListener("input", () => game.act(b.act, area.value, now()));
+    box.append(area);
+    return box;
+  },
+};
+
+function drawBlocks(list, parent) {
+  list.forEach((b) => {
+    const make = blocks[b.kind];
+    if (make) parent.append(make(b));
+  });
+}
+
+// ---------- the frame: top bar, tabs, screen, sheet, toasts ----------
+
+function drawTop(top) {
+  const box = el("top");
+  const gold = h("div", "pill");
+  gold.append(icon("gold", "ic coin"), h("span", "", top.gold));
+  box.replaceChildren(gold, h("div", "pill", top.total));
+  if (top.mult) box.append(h("div", "pill pres", top.mult));
+  box.append(h("span", "sp"));
+  box.append(btn(top.flag, "icon-btn flag-btn"));
+  if (top.screen) box.append(btn(top.screen, "icon-btn"));
+}
+
+function drawTabs(tabs) {
+  el("tabs").replaceChildren(
+    ...tabs.map((t) => {
+      const node = h("button", "tab");
+      node.dataset.tab = t.id;
+      if (t.current) node.setAttribute("aria-current", "page");
+      node.append(h("span", "lvl", t.level), icon(t.id));
+      const label = h("span", "tab-label");
+      label.append(h("span", "short", t.short), h("span", "full", t.label));
+      node.append(label);
+      if (t.running) node.append(h("i", "run"));
+      node.addEventListener("click", () => draw(game.act("tab", t.id, now())));
+      return node;
+    })
+  );
+}
+
+let lastSheet = "";
+function drawSheet(s) {
+  const shade = el("shade");
+  if (!s) {
+    shade.hidden = true;
+    lastSheet = "";
     return;
   }
-  const ui = result.ok;
-  state = ui.state;
-  hints = ui.hints;
-  document.title = ui.title;
-  el("title").textContent = ui.title;
-  el("panels").replaceChildren(...ui.panels.map(panel));
-  document.querySelectorAll("#panels h2, #panels button").forEach(mark);
-  el("message").textContent = "";
-  document.body.dataset.screen = ui.screen;
+  // An unchanged sheet is left as it is, so its rows do not rise in again.
+  const same = JSON.stringify(s);
+  if (same === lastSheet && !shade.hidden) return;
+  lastSheet = same;
+  const box = el("sheet");
+  box.className = "sheet " + s.kind;
+  box.replaceChildren();
+  if (s.eyebrow) box.append(h("p", "eyebrow", s.eyebrow));
+  if (s.title) box.append(h("h2", "", s.title));
+  if (s.big) box.append(h("div", "big", s.big));
+  (s.lines || []).forEach((t) => box.append(h("p", "", t)));
+  if (s.gains && s.gains.length) {
+    const gains = rows(s.gains);
+    gains.classList.add("gains");
+    Array.from(gains.children).forEach((row, i) => row.style.setProperty("--i", i));
+    box.append(gains);
+  }
+  if (s.ready && s.ready.length) {
+    box.append(h("h3", "sec-h", s.ready_title));
+    const ready = rows(s.ready);
+    ready.classList.add("panel", "ready");
+    box.append(ready);
+  }
+  (s.notes || []).forEach((t) => box.append(h("p", "capnote", t)));
+  drawBlocks(s.blocks || [], box);
+  const row = h("div", "button-row sheet-buttons");
+  s.buttons.forEach((b) => row.append(btn(b)));
+  box.append(row);
+  shade.hidden = false;
 }
+
+function drawToasts(list) {
+  const box = el("toasts");
+  list.forEach((t, i) => {
+    const toast = h("div", "toast", t);
+    toast.style.setProperty("--i", i);
+    toast.addEventListener("animationend", () => toast.remove());
+    box.append(toast);
+  });
+}
+
+function hint(nodes, hints) {
+  nodes.forEach((node) => {
+    const found = hints.find((x) => x.term === node.textContent);
+    if (found) {
+      node.title = found.definition;
+      node.dataset.term = found.term;
+    }
+  });
+}
+
+let lastScreen = "";
+function draw(json) {
+  const result = JSON.parse(json);
+  ui = result;
+  if (ui.stash) stash(saved);
+  document.title = ui.title;
+  drawTop(ui.top);
+  drawTabs(ui.tabs);
+  const main = el("main");
+  const keep = lastScreen === ui.screen ? main.scrollTop : 0;
+  const frag = document.createDocumentFragment();
+  drawBlocks(ui.blocks, frag);
+  main.replaceChildren(frag);
+  main.scrollTop = keep;
+  lastScreen = ui.screen;
+  document.body.dataset.screen = ui.screen;
+  drawSheet(ui.sheet);
+  drawToasts(ui.toasts);
+  hint(document.querySelectorAll(".head h1, .tab .full, .sheet h2"), ui.hints);
+  schedule();
+  return ui;
+}
+
+// One timer, set for the moment the running action completes (IG-8): no
+// frame loop. The bars move in CSS.
+function schedule() {
+  clearTimeout(timer);
+  if (ui.next_ms && !document.hidden) timer = setTimeout(() => draw(game.tick(now())), ui.next_ms);
+}
+
+function keep() {
+  if (game) store(game.save());
+}
+
+// ---------- the device's jobs ----------
+
+function deviceInfo() {
+  const standalone =
+    navigator.standalone === true ||
+    matchMedia("(display-mode: standalone)").matches ||
+    matchMedia("(display-mode: fullscreen)").matches;
+  return JSON.stringify({
+    fullscreen: !!(document.fullscreenEnabled || document.webkitFullscreenEnabled),
+    ios: /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1),
+    standalone,
+    ua: navigator.userAgent,
+    w: screen.width,
+    h: screen.height,
+  });
+}
+
+function fullscreen() {
+  const root = document.documentElement;
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else if (root.requestFullscreen) {
+    root.requestFullscreen().catch(() => draw(game.act("help.home", "", now())));
+  } else if (root.webkitRequestFullscreen) {
+    root.webkitRequestFullscreen();
+  }
+}
+
+function stamp() {
+  return new Date().toISOString().split("T")[0];
+}
+
+function download(name, text) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  link.download = name;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), ui.autosave_ms);
+}
+
+function exportSave() {
+  download("idle-game-save-" + stamp() + ".json", game.export(now()));
+  keep();
+  draw(game.tick(now()));
+}
+
+// On a phone the share sheet sends the file by Messages or mail; elsewhere
+// it downloads.
+async function sendPlaytest() {
+  const name = "idle-game-playtest-" + stamp() + ".json";
+  const text = game.playtest(now());
+  keep();
+  const file = new File([text], name, { type: "application/json" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: name });
+    } else {
+      download(name, text);
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") download(name, text);
+  }
+  draw(game.act("playtest.sent", "", now()));
+}
+
+el("importer").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  draw(game.import(await file.text(), now()));
+  keep();
+});
+
+el("shade").addEventListener("click", (e) => {
+  if (e.target.id === "shade" && ui.sheet && ui.sheet.kind !== "flag") draw(game.act("sheet.close", "", now()));
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    clearTimeout(timer);
+    game.act("seen.hide", "", now());
+    keep();
+  } else {
+    draw(game.act("seen.show", "", now()));
+  }
+});
+addEventListener("pagehide", keep);
 
 async function main() {
   await init();
   const strings = await (await fetch("data/strings.json")).text();
-  glossary = await (await fetch("data/glossary.md")).text();
-  draw(call(start, strings, glossary));
+  const glossary = await (await fetch("data/glossary.md")).text();
+  saved = load();
+  try {
+    game = new Game(strings, glossary, saved, deviceInfo(), now());
+  } catch (e) {
+    el("message").textContent = String(e);
+    return;
+  }
+  draw(game.tick(now()));
+  keep();
+  persist();
+  setInterval(keep, ui.autosave_ms);
   document.body.dataset.ready = "true";
 }
 

@@ -39,7 +39,9 @@ from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DIST = ROOT / "dist"
-ENGINES = os.environ.get("BUILDER_ENGINES", "chromium firefox webkit").split()
+# The game is played on phones and tablets (kits/mobile, D7): the iPhone and
+# iPad passes run by default.
+ENGINES = os.environ.get("BUILDER_ENGINES", "chromium firefox webkit webkit-iphone webkit-ipad").split()
 IDLE_MS = int(float(os.environ.get("BUILDER_IDLE", "10")) * 1000)
 
 failures = []
@@ -91,7 +93,8 @@ def run_engine(p, engine, base, interactions):
     # phone viewport). Emulation shows layout and touch events; it cannot show
     # real multitouch, fullscreen or install, which stay a person's check.
     launcher, _, device = engine.partition("-")
-    profile = dict(p.devices["iPhone 15"]) if device == "iphone" else {}
+    profiles = {"iphone": "iPhone 15", "ipad": "iPad Pro 11 landscape"}
+    profile = dict(p.devices[profiles[device]]) if device in profiles else {}
     browser = getattr(p, launcher).launch()
     context = browser.new_context(accept_downloads=True, **profile)
     context.on("request", lambda r: None if same_origin(r.url) else seen["foreign"].append(r.url))
