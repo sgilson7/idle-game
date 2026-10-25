@@ -260,16 +260,16 @@ pub const GROUPS: [(&str, &[&str]); 5] = [
     ("make", &["firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction"]),
     ("fight", &["combat", "recipes"]),
     ("engines", &["trader", "estate", "workshop", "observatory"]),
-    ("more", &["bank", "shop", "plan", "prestige", "settings"]),
+    ("more", &["bank", "shop", "regions", "plan", "prestige", "settings"]),
 ];
 
 #[rustfmt::skip]
-pub const TABS: [&str; 22] = [
+pub const TABS: [&str; 23] = [
     "woodcutting", "mining", "fishing", "farming",
     "firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction",
     "combat", "recipes",
     "trader", "estate", "workshop", "observatory",
-    "bank", "shop", "plan", "prestige", "settings",
+    "bank", "shop", "regions", "plan", "prestige", "settings",
 ];
 
 /// The tabs whose skills or engines take things in and give things out,
@@ -305,7 +305,14 @@ pub struct View<'a> {
     pub t: &'a Text,
     pub s: &'a State,
     pub device: &'a Device,
+    /// The bank search box (IG-Q41 A).
+    pub search: &'a str,
+    /// Skill screens show every row.
+    pub all: bool,
 }
+
+/// How many of a skill's newest rows show before "Show all" (T15).
+pub const NEWEST: usize = 8;
 
 impl View<'_> {
     fn name(&self, id: &str) -> String {
@@ -461,6 +468,7 @@ impl View<'_> {
                         self.t.s(&format!("tab_{id}_short")),
                         match id {
                             "prestige" if self.s.prestige > 0 => self.s.prestige.to_string(),
+                            "regions" => self.s.regions_open().to_string(),
                             "trader" => self.s.level(c::TRADING).to_string(),
                             "workshop" => self.s.level(c::INVENTION).to_string(),
                             "observatory" => self.s.level(c::ATTUNEMENT).to_string(),
@@ -497,6 +505,7 @@ impl View<'_> {
         }
         match self.s.screen.as_str() {
             "recipes" => self.recipes(),
+            "regions" => self.regions(),
             "trader" => self.trader(),
             "estate" => self.estate(),
             "workshop" => self.workshop(),
@@ -613,27 +622,67 @@ impl View<'_> {
         if let Some(a) = active {
             out.push(self.forecast(&c::ACTIONS[a]));
         }
+        out.extend(self.action_cards(i, active));
+        out
+    }
+
+    /// A skill's action cards. With four regions a skill has up to 36 rows,
+    /// so a phone shows the newest eight you can do and the next two to
+    /// unlock, with a button for the rest (T15).
+    pub(crate) fn action_cards(&self, i: usize, active: Option<usize>) -> Vec<Block> {
+        let mut rows: Vec<&c::Action> = c::ACTIONS
+            .iter()
+            .filter(|a| a.skill == i && self.shown(a.id) && self.s.region_open(a.region))
+            .collect();
+        rows.sort_by_key(|a| (a.level, a.region));
+        let closed = c::ACTIONS
+            .iter()
+            .filter(|a| a.skill == i && !self.s.region_open(a.region))
+            .count();
+        let lvl = self.s.level(i);
+        let open: Vec<&c::Action> = rows.iter().copied().filter(|a| a.level <= lvl).collect();
+        let locked: Vec<&c::Action> = rows.iter().copied().filter(|a| a.level > lvl).collect();
+        let older = open.len().saturating_sub(NEWEST);
         let mut cards = Vec::new();
-        let mut locked_shown = 0;
-        let mut hidden = 0;
-        for a in c::ACTIONS.iter().filter(|a| a.skill == i && self.shown(a.id)) {
-            if self.s.level(i) < a.level {
-                // LR-2: the next two locked ones show; the rest wait out of sight.
-                if locked_shown >= 2 {
-                    hidden += 1;
-                    continue;
-                }
-                locked_shown += 1;
+        for (k, a) in open.iter().enumerate() {
+            let on = active == c::action_index(a.id);
+            if self.all || k >= older || on {
+                cards.push(self.action_card(a, on));
             }
-            cards.push(self.action_card(a, active == c::action_index(a.id)));
+        }
+        // LR-2: the next two locked ones show; the rest wait out of sight.
+        for a in locked.iter().take(2) {
+            cards.push(self.action_card(a, false));
+        }
+        let mut out = Vec::new();
+        if older > 0 {
+            out.push(Block {
+                buttons: vec![button(
+                    if self.all {
+                        self.t.s("show_newest")
+                    } else {
+                        self.t.t("show_all", &[("n", open.len().to_string())])
+                    },
+                    "list.all",
+                    "",
+                )],
+                ..block("buttons")
+            });
         }
         out.push(Block {
             cards,
             ..block("cards")
         });
+        let hidden = locked.len().saturating_sub(2);
         if hidden > 0 {
             out.push(Block {
                 text: self.t.t("more_later", &[("n", hidden.to_string())]),
+                ..block("note")
+            });
+        }
+        if closed > 0 {
+            out.push(Block {
+                text: self.t.t("more_in_regions", &[("n", closed.to_string())]),
                 ..block("note")
             });
         }
@@ -738,6 +787,13 @@ impl View<'_> {
         if a.makes.1 > 1 {
             chips.push(chip("g", self.t.t("makes_n", &[("n", a.makes.1.to_string())])));
         }
+        if a.region > 0 {
+            chips.push(chip("p", self.t.s(&format!("region_{}", c::REGIONS[a.region].0))));
+        }
+        if open && self.s.rare_tree() == Some(a.id) {
+            let left = c::RARE_TREE_MS - self.s.sim_ms % c::RARE_TREE_MS;
+            chips.push(chip("fire", self.t.t("rare_tree", &[("left", dur(left))])));
+        }
         if open && a.needs.is_empty() {
             chips.push(chip(
                 "m",
@@ -811,7 +867,8 @@ impl View<'_> {
 
     fn combat(&self) -> Vec<Block> {
         let st = &c::STYLES[self.s.style];
-        let fighting = self.s.active.as_deref().and_then(c::enemy_index);
+        let fighting = self.s.active.as_deref().and_then(|id| self.s.foe(id));
+        let in_dungeon = self.s.active.as_deref().and_then(c::dungeon_index);
         let e = &c::ENEMIES[fighting.unwrap_or(0)];
         let mut out = vec![self.head(
             "combat",
@@ -826,9 +883,15 @@ impl View<'_> {
             .map(|(k, s)| {
                 let strong: Vec<String> = c::ENEMIES
                     .iter()
-                    .filter(|e| e.weak == s.skill)
+                    .filter(|e| e.weak == s.skill && self.s.unlocked(e.id))
                     .map(|e| self.t.enemy(e.id).to_lowercase())
                     .collect();
+                // a long list becomes a count once the regions open (T15)
+                let strong_text = if strong.len() > 4 {
+                    self.t.t("strong_vs_n", &[("n", strong.len().to_string())])
+                } else {
+                    self.t.t("strong_vs", &[("list", strong.join(", "))])
+                };
                 button(
                     self.t.t(
                         "style_lvl",
@@ -841,7 +904,7 @@ impl View<'_> {
                     &k.to_string(),
                 )
                 .icon(c::SKILLS[s.skill].id)
-                .below(self.t.t("strong_vs", &[("list", strong.join(", "))]))
+                .below(strong_text)
                 .pressed(k == self.s.style)
             })
             .collect();
@@ -909,8 +972,8 @@ impl View<'_> {
         };
         let mut chips = vec![chip("h", food)];
         chips.push(match self.s.armour() {
-            ("", _) => chip("t", self.t.s("armour_none")),
-            (item, tier) => chip(
+            ("", _, _) => chip("t", self.t.s("armour_none")),
+            (item, tier, _) => chip(
                 "t",
                 self.t.t(
                     "armour_have",
@@ -982,16 +1045,80 @@ impl View<'_> {
                 ..block("forecast")
             });
         }
-        let cards = c::ENEMIES
+        let mut dungeons: Vec<Card> = c::DUNGEONS
             .iter()
-            .filter(|en| self.s.unlocked(en.id))
-            .map(|en| self.enemy_card(en, fighting == c::enemy_index(en.id)))
+            .enumerate()
+            .filter(|(_, d)| self.s.unlocked(d.id))
+            .map(|(k, d)| self.dungeon_card(d, in_dungeon == Some(k)))
+            .collect();
+        if !dungeons.is_empty() {
+            dungeons.reverse();
+            out.push(Block {
+                title: self.t.s("dungeons_title"),
+                cards: dungeons,
+                ..block("cards")
+            });
+        }
+        // the newest region's enemies first
+        let mut list: Vec<&c::Enemy> = c::ENEMIES.iter().filter(|en| self.s.unlocked(en.id)).collect();
+        list.sort_by_key(|en| (std::cmp::Reverse(en.region), en.level));
+        let cards = list
+            .into_iter()
+            .map(|en| self.enemy_card(en, in_dungeon.is_none() && fighting == c::enemy_index(en.id)))
             .collect();
         out.push(Block {
             cards,
             ..block("cards")
         });
         out
+    }
+
+    fn dungeon_card(&self, d: &c::Dungeon, on: bool) -> Card {
+        let n = d.stages.len();
+        let stage = if on { self.s.dungeon_stage.min(n - 1) } else { 0 };
+        let foe = d.stages[stage];
+        let chips = vec![
+            chip(
+                "t",
+                self.t.t(
+                    "dungeon_stage",
+                    &[
+                        ("k", (stage + 1).to_string()),
+                        ("n", n.to_string()),
+                        ("enemy", self.t.enemy(foe)),
+                    ],
+                ),
+            ),
+            chip("g", self.t.s("dungeon_chest")),
+            chip("p", self.t.s(&format!("region_{}", c::REGIONS[d.region].0))),
+        ];
+        let main = if on {
+            button(self.t.s("retreat"), "do", d.id).tone("stop")
+        } else if let Some(item) = self.s.missing(d.id) {
+            button(self.t.t("need_item", &[("item", self.t.item(&item))]), "do", d.id).enabled(false)
+        } else {
+            button(self.t.s("dungeon_go"), "do", d.id).tone("primary")
+        };
+        Card {
+            icon: d.stages[n - 1].into(),
+            title: self.t.s(&format!("dungeon_{}", d.id)),
+            sub: self.t.t(
+                "dungeon_sub",
+                &[("n", n.to_string()), ("boss", self.t.enemy(d.stages[n - 1]))],
+            ),
+            tag: self.t.s("dungeon_tag"),
+            tone: "mast".into(),
+            active: on,
+            dur: format!("{}ms", c::STYLES[self.s.style].ms),
+            delay: if on {
+                format!("-{}ms", self.s.progress_ms)
+            } else {
+                String::new()
+            },
+            chips,
+            buttons: vec![main],
+            ..Card::default()
+        }
     }
 
     fn enemy_card(&self, e: &c::Enemy, on: bool) -> Card {
@@ -1034,18 +1161,18 @@ impl View<'_> {
                 ),
             ));
         }
-        if let Some(k) = c::CHAMPIONS.iter().position(|&ch| ch == e.id) {
-            chips.push(chip(
-                "p",
-                self.t.t(
-                    "champion_chip",
-                    &[(
-                        "rank",
-                        self.t
-                            .s(&format!("noble_{}", c::NOBLE_RANKS[k + c::DEED_FROM].id)),
-                    )],
-                ),
-            ));
+        for (reg, row) in c::CHAMPIONS.iter().enumerate() {
+            if let Some(k) = row.iter().position(|&ch| ch == e.id) {
+                let rank = c::NOBLE_RANKS[reg][k + c::DEED_FROM].id;
+                chips.push(chip(
+                    "p",
+                    self.t
+                        .t("champion_chip", &[("rank", self.t.s(&format!("noble_{rank}")))]),
+                ));
+            }
+        }
+        if e.region > 0 {
+            chips.push(chip("p", self.t.s(&format!("region_{}", c::REGIONS[e.region].0))));
         }
         let missing = self.s.missing(e.id);
         let main = if on {
@@ -1117,19 +1244,49 @@ impl View<'_> {
                 ..block("note")
             });
         }
-        let buttons = items
-            .iter()
-            .map(|(k, n)| {
-                button(self.t.item(k), "sell", k)
-                    .icon(k)
-                    .below(num(**n))
-                    .tone(if c::value(k) > 0 { "" } else { "keep" })
-            })
-            .collect();
+        // A search box, and the items grouped by the tab that makes them (IG-Q41 A).
         out.push(Block {
-            buttons,
-            ..block("bank")
+            title: self.t.s("bank_search"),
+            act: "bank.search".into(),
+            value: self.search.to_string(),
+            text: self.t.s("bank_search_hint"),
+            ..block("search")
         });
+        let q = self.search.trim().to_lowercase();
+        let mut groups: Vec<(&'static str, Vec<Button>)> = Vec::new();
+        for (k, n) in &items {
+            let name = self.t.item(k);
+            if !q.is_empty() && !name.to_lowercase().contains(&q) {
+                continue;
+            }
+            let tab = maker_tab(k);
+            let b = button(name, "sell", k)
+                .icon(k)
+                .below(num(**n))
+                .tone(if c::value(k) > 0 { "" } else { "keep" });
+            match groups.iter_mut().find(|(t, _)| *t == tab) {
+                Some((_, list)) => list.push(b),
+                None => groups.push((tab, vec![b])),
+            }
+        }
+        groups.sort_by_key(|(t, _)| TABS.iter().position(|x| x == t).unwrap_or(TABS.len()));
+        if groups.is_empty() && !items.is_empty() {
+            out.push(Block {
+                text: self.t.s("bank_none_match"),
+                ..block("note")
+            });
+        }
+        for (tab, buttons) in groups {
+            out.push(Block {
+                title: if tab == "other" {
+                    self.t.s("bank_other")
+                } else {
+                    self.tab_name(tab)
+                },
+                buttons,
+                ..block("bank")
+            });
+        }
         out
     }
 
@@ -1196,7 +1353,7 @@ impl View<'_> {
         let l = self.s.level(c::FARMING);
         c::CROPS
             .iter()
-            .filter(|cr| cr.level <= l + 10)
+            .filter(|cr| cr.level <= l + 10 && self.s.region_open(cr.region))
             .map(|cr| {
                 let cost = cr.seed_cost * c::SEED_PACK;
                 Row {
@@ -1295,7 +1452,7 @@ impl View<'_> {
         let empty = (0..open).any(|i| self.s.patch(i).crop.is_empty());
         let mut cards = Vec::new();
         let mut locked = 0;
-        for cr in c::CROPS {
+        for cr in c::CROPS.iter().filter(|cr| self.s.region_open(cr.region)) {
             let unlocked = lvl >= cr.level;
             if !unlocked {
                 locked += 1;
@@ -1378,8 +1535,18 @@ impl View<'_> {
             text: self.t.s("farming_intro"),
             ..block("note")
         });
-        let mut boost = vec![if self.s.have("ashes") > 0 {
-            chip(
+        let mut boost = vec![match self.s.compost() {
+            Some("fine_ashes") => chip(
+                "fire",
+                self.t.t(
+                    "compost_fine",
+                    &[
+                        ("n", num(self.s.have("fine_ashes"))),
+                        ("pct", (100 - c::FINE_COMPOST_GROW_PCT).to_string()),
+                    ],
+                ),
+            ),
+            Some(_) => chip(
                 "fire",
                 self.t.t(
                     "compost_have",
@@ -1388,9 +1555,8 @@ impl View<'_> {
                         ("pct", (100 - c::COMPOST_GROW_PCT).to_string()),
                     ],
                 ),
-            )
-        } else {
-            chip("t", self.t.s("compost_none"))
+            ),
+            None => chip("t", self.t.s("compost_none")),
         }];
         if self.s.harvest_moon() {
             boost.push(chip(
@@ -1816,6 +1982,25 @@ impl View<'_> {
                 ..Row::default()
             });
         }
+        for id in &r.chests {
+            gains.push(Row {
+                icon: "gold".into(),
+                title: self
+                    .t
+                    .t("chest_from", &[("what", self.t.s(&format!("dungeon_{id}")))]),
+                tone: "rare".into(),
+                ..Row::default()
+            });
+        }
+        if r.masterworks > 0 {
+            gains.push(Row {
+                icon: "smithing".into(),
+                title: self.t.s("masterworks"),
+                chip: self.t.t("plus_n", &[("n", num(r.masterworks))]),
+                tone: "rare".into(),
+                ..Row::default()
+            });
+        }
         for id in &r.research {
             ready.push(Row {
                 title: self
@@ -1980,6 +2165,34 @@ fn kind_key(k: Kind) -> &'static str {
     }
 }
 
+/// The tab whose skill or engine makes an item, for grouping the bank.
+pub fn maker_tab(item: &str) -> &'static str {
+    if let Some(a) = c::ACTIONS.iter().find(|a| a.makes.0 == item) {
+        return tab_of_skill(a.skill);
+    }
+    if c::CROPS.iter().any(|cr| cr.produce == item) {
+        return "farming";
+    }
+    if c::GEMS.iter().any(|g| g.0 == item) {
+        return "mining";
+    }
+    if c::ENEMIES.iter().any(|e| e.drops.iter().any(|d| d.0 == item)) {
+        return "combat";
+    }
+    if c::TOWNS.iter().any(|t| t.sells == item) {
+        return "trader";
+    }
+    if c::MACHINES.iter().any(|m| m.makes.0 == item) || item.ends_with("_parts") {
+        return "workshop";
+    }
+    match item {
+        "starlight" | "stardust" => "observatory",
+        "fine_ashes" | "ashes" => "firemaking",
+        "bird_nest" => "woodcutting",
+        _ => "other",
+    }
+}
+
 fn first_action(skill: usize) -> usize {
     c::ACTIONS.iter().position(|a| a.skill == skill).unwrap_or(0)
 }
@@ -1999,7 +2212,7 @@ pub fn io_of(tab: &str) -> (Vec<&'static str>, Vec<&'static str>) {
             .flat_map(|s| s.held.iter().chain(s.spent.iter()).map(|(i, _)| *i))
             .collect();
         ins.extend(c::FOOD.iter().map(|(f, _)| *f));
-        ins.extend(c::ARMOUR.iter().map(|(a, _)| *a));
+        ins.extend(c::ARMOUR.iter().map(|(a, _, _)| *a));
         let outs = c::ENEMIES
             .iter()
             .flat_map(|e| e.drops.iter().map(|d| d.0))
@@ -2014,7 +2227,12 @@ pub fn io_of(tab: &str) -> (Vec<&'static str>, Vec<&'static str>) {
     if tab == "estate" {
         let mut ins: Vec<&str> = c::ROOM_PLANKS.to_vec();
         ins.extend(["nails", "limestone"]);
-        ins.extend(c::TRIBUTES.iter().flat_map(|t| t.iter().map(|(i, _)| *i)));
+        ins.extend(
+            c::TRIBUTES
+                .iter()
+                .flatten()
+                .flat_map(|t| t.iter().map(|(i, _)| *i)),
+        );
         return (ins, Vec::new());
     }
     let i = match tab {
@@ -2033,7 +2251,7 @@ pub fn io_of(tab: &str) -> (Vec<&'static str>, Vec<&'static str>) {
     let mut ins: Vec<&str> = ins;
     let mut outs: Vec<&str> = acts.map(|a| a.makes.0).filter(|m| !m.is_empty()).collect();
     if i == c::INVENTION {
-        for m in &c::MACHINES {
+        for m in c::MACHINES {
             ins.extend(m.needs.iter().map(|(n, _)| *n));
             outs.push(m.makes.0);
         }

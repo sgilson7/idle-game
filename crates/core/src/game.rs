@@ -13,8 +13,9 @@ use crate::xp;
 
 /// The save format's version (IG-5). A save from a newer version is not read.
 /// 2 added Crafting, Farming and patches (T5); 3 added the four engines and
-/// their skills (T10 to T14). An older save is brought up to it.
-pub const SAVE_VERSION: u32 = 3;
+/// their skills (T10 to T14); 4 the regions, their engine tiers, twelve
+/// rooms and dungeons (T15). An older save is brought up to it.
+pub const SAVE_VERSION: u32 = 4;
 
 /// What is running: an action id or an enemy id.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -133,9 +134,15 @@ pub struct State {
     /// Rank on each engine's ladder: Trader, Nobility, Inventor, Cosmic.
     #[serde(default)]
     pub ranks: [usize; 4],
-    /// Each estate room's level, in `ROOMS` order.
+    /// Each estate room's level, in `ROOMS` order (six before T15, twelve since).
     #[serde(default)]
-    pub rooms: [u64; 6],
+    pub rooms: Vec<u64>,
+    /// Each later region's rank on each engine ladder (T15).
+    #[serde(default)]
+    pub region_ranks: [[usize; 4]; 3],
+    /// How far into the dungeon you are (T15).
+    #[serde(default)]
+    pub dungeon_stage: usize,
     #[serde(default)]
     pub servants: Vec<Servant>,
     #[serde(default)]
@@ -198,6 +205,10 @@ pub struct Report {
     pub wages: u64,
     /// A servant went unpaid.
     pub unpaid: bool,
+    /// Dungeon chests opened.
+    pub chests: Vec<String>,
+    /// Masterworks, sold as they were made, and the gold they brought.
+    pub masterworks: u64,
 }
 
 fn add(map: &mut BTreeMap<String, u64>, k: &str, n: u64) {
@@ -236,7 +247,9 @@ impl State {
             recipes: Vec::new(),
             hot_pot_until: 0,
             ranks: [0; 4],
-            rooms: [0; 6],
+            rooms: vec![0; c::ROOMS.len()],
+            region_ranks: [[0; 4]; 3],
+            dungeon_stage: 0,
             servants: Vec::new(),
             caravans: Vec::new(),
             filled: Vec::new(),
@@ -269,8 +282,21 @@ impl State {
         self.bank.get(item).copied().unwrap_or(0)
     }
 
+    /// Hitpoints from the level, the regions' armour and warding jewellery.
     pub fn max_hp(&self) -> u64 {
         self.level(c::HITPOINTS) as u64 * c::HP_PER_LEVEL
+            + self.armour().2
+            + self.trinket(c::Trinket::Warding)
+    }
+
+    /// The best enchanted jewellery of one kind you hold (Q40 A).
+    pub fn trinket(&self, kind: c::Trinket) -> u64 {
+        c::TRINKETS
+            .iter()
+            .filter(|(i, k, _)| *k == kind && self.have(i) > 0)
+            .map(|(_, _, v)| *v)
+            .max()
+            .unwrap_or(0)
     }
 
     /// The skill-XP multiplier in basis points (P9).
@@ -284,7 +310,7 @@ impl State {
 
     /// How long one action takes now, after mastery and tools.
     pub fn duration(&self, id: &str) -> u64 {
-        if c::enemy_index(id).is_some() {
+        if c::enemy_index(id).is_some() || c::dungeon_index(id).is_some() {
             return c::STYLES[self.style].ms;
         }
         let Some(i) = c::action_index(id) else {
@@ -304,8 +330,9 @@ impl State {
         {
             ms = ms * (100 - c::GADGET_PCT) / 100;
         }
-        if a.skill == c::COOKING {
-            ms = ms * (100 - c::KITCHEN_PCT * self.rooms[c::KITCHEN]) / 100;
+        let room = self.room_speed_pct(a.skill);
+        if room > 0 {
+            ms = ms * (100 - room) / 100;
         }
         ms
     }
@@ -347,7 +374,7 @@ impl State {
 
     /// The first missing input, if any.
     pub fn missing(&self, id: &str) -> Option<String> {
-        if c::enemy_index(id).is_some() {
+        if c::enemy_index(id).is_some() || c::dungeon_index(id).is_some() {
             let s = &c::STYLES[self.style];
             if !s.held_optional && !s.held.is_empty() && !s.held.iter().any(|(i, _)| self.have(i) > 0) {
                 return Some(s.held[s.held.len() - 1].0.to_string());
@@ -370,10 +397,19 @@ impl State {
         match c::action_index(id) {
             Some(i) => {
                 let a = &c::ACTIONS[i];
-                self.level(a.skill) >= a.level && self.skill_open(a.skill) && self.gate_open(a.id)
+                self.level(a.skill) >= a.level
+                    && self.skill_open(a.skill)
+                    && self.region_open(a.region)
+                    && self.gate_open(a.id)
             }
-            None if c::is_champion(id) => self.engine_open(c::Engine::Nobility),
-            None => c::enemy_index(id).is_some(),
+            None => match (c::enemy_index(id), c::dungeon_index(id)) {
+                (Some(e), _) => {
+                    self.region_open(c::ENEMIES[e].region)
+                        && (!c::is_champion(id) || self.engine_open(c::Engine::Nobility))
+                }
+                (_, Some(d)) => self.region_open(c::DUNGEONS[d].region),
+                _ => false,
+            },
         }
     }
 
@@ -382,7 +418,7 @@ impl State {
         if c::recipe_index(id).is_some() {
             return self.recipes.iter().any(|r| r == id);
         }
-        if let Some(b) = c::BLUEPRINTS.iter().find(|b| b.build == id) {
+        if let Some(b) = c::blueprint_of_build(id).map(|b| &c::BLUEPRINTS[b]) {
             return self.blueprints.iter().any(|k| k == b.id) && self.have(b.id) == 0;
         }
         if id == "astral_runes" {
@@ -393,6 +429,7 @@ impl State {
 
     /// The skill an action or enemy trains.
     pub fn skill_of(&self, id: &str) -> usize {
+        // enemies and dungeons train the style in use
         match c::action_index(id) {
             Some(i) => c::ACTIONS[i].skill,
             None => c::STYLES[self.style].skill,
@@ -415,19 +452,31 @@ impl State {
         } else {
             0
         };
-        c::MAX_HIT_BASE
+        let hit = c::MAX_HIT_BASE
             + self.level(s.skill) as u64 * c::MAX_HIT_PER_LEVEL
             + tiers * c::MAX_HIT_PER_TIER
-            + strong
+            + strong;
+        hit * (100 + self.trinket(c::Trinket::Power)) / 100
     }
 
-    /// The best armour in the bank, and its tier (T5).
-    pub fn armour(&self) -> (&'static str, u64) {
+    /// The best armour in the bank: its tier, and the hitpoints the regions' armour adds (T5, T15).
+    pub fn armour(&self) -> (&'static str, u64, u64) {
         c::ARMOUR
             .iter()
             .copied()
-            .find(|(i, _)| self.have(i) > 0)
-            .unwrap_or(("", 0))
+            .find(|(i, _, _)| self.have(i) > 0)
+            .unwrap_or(("", 0, 0))
+    }
+
+    /// The enemy you face now: the one picked, or the dungeon's current stage.
+    pub fn foe(&self, id: &str) -> Option<usize> {
+        match c::dungeon_index(id) {
+            Some(d) => {
+                let st = c::DUNGEONS[d].stages;
+                c::enemy_index(st[self.dungeon_stage.min(st.len() - 1)])
+            }
+            None => c::enemy_index(id),
+        }
     }
 
     // ---------- farming (T5) ----------
@@ -435,7 +484,9 @@ impl State {
     /// Patches open: by Farming level, and one more for each Garden level (T11).
     pub fn patches_open(&self) -> usize {
         let l = self.level(c::FARMING);
-        c::PATCH_LEVELS.iter().filter(|&&need| l >= need).count() + self.rooms[c::GARDEN] as usize
+        c::PATCH_LEVELS.iter().filter(|&&need| l >= need).count()
+            + c::PATCH_PER_REGION * self.regions_open().saturating_sub(1)
+            + self.rooms_of(c::RoomEffect::Patch) as usize
     }
 
     /// The patch at `i` as it stands (patches not yet stored are empty).
@@ -455,13 +506,21 @@ impl State {
     /// harvest moon (T13) each take a quarter off.
     pub fn grow_ms(&self, crop: &c::Crop) -> u64 {
         let mut ms = crop.grow_ms;
-        if self.have("ashes") > 0 {
-            ms = ms * c::COMPOST_GROW_PCT / 100;
+        match self.compost() {
+            Some("fine_ashes") => ms = ms * c::FINE_COMPOST_GROW_PCT / 100,
+            Some(_) => ms = ms * c::COMPOST_GROW_PCT / 100,
+            None => {}
         }
-        if self.harvest_moon() {
+        // a harvest moon in each sky that shows Farming
+        for _ in 0..self.signs_for(c::FARMING) {
             ms = ms * c::HARVEST_MOON_PCT / 100;
         }
         ms
+    }
+
+    /// The compost planting would use: fine ashes first (T15), then ashes.
+    pub fn compost(&self) -> Option<&'static str> {
+        ["fine_ashes", "ashes"].into_iter().find(|a| self.have(a) > 0)
     }
 
     pub fn ready(&self, i: usize) -> bool {
@@ -477,13 +536,13 @@ impl State {
         let Some(slot) = (0..self.patches_open()).find(|&i| self.patch(i).crop.is_empty()) else {
             return false;
         };
-        if self.level(c::FARMING) < cr.level || self.have(cr.seed) == 0 {
+        if self.level(c::FARMING) < cr.level || self.have(cr.seed) == 0 || !self.region_open(cr.region) {
             return false;
         }
         let ms = self.grow_ms(cr);
         self.take(cr.seed, 1, r);
-        if self.have("ashes") > 0 {
-            self.take("ashes", 1, r);
+        if let Some(a) = self.compost() {
+            self.take(a, 1, r);
         }
         if self.patches.len() <= slot {
             self.patches.resize(slot + 1, Patch::default());
@@ -518,6 +577,60 @@ impl State {
 
     pub fn food(&self) -> Option<(&'static str, u64)> {
         c::FOOD.iter().copied().find(|(i, _)| self.have(i) > 0)
+    }
+
+    /// One action's gathering finds and makers' luck (T15, Q40 A): rare trees,
+    /// gems, treasure, masterworks and perfect dishes. Your own work only.
+    fn luck(&mut self, a: &c::Action, n: &mut u64, r: &mut Report) {
+        if !self.mechanics_open() {
+            return;
+        }
+        match a.skill {
+            c::WOODCUTTING if self.rare_tree() == Some(a.id) => *n *= 2,
+            c::MINING if self.rng.one_in(c::GEM_ONE_IN) => {
+                let gem = c::GEMS
+                    .iter()
+                    .rev()
+                    .find(|(_, at)| a.level >= *at)
+                    .map(|(g, _)| *g)
+                    .unwrap_or("sapphire");
+                self.put(gem, 1, r, true);
+            }
+            c::FISHING if self.rng.one_in(c::TREASURE_ONE_IN) => self.treasure(a.level, r),
+            c::SMITHING if self.rng.one_in(c::MASTERWORK_ONE_IN) => {
+                let gold = c::value(a.makes.0) * *n * c::MASTERWORK_TIMES;
+                self.gold += gold;
+                r.gold += gold;
+                r.masterworks += gold;
+            }
+            c::COOKING if self.rng.one_in(c::PERFECT_ONE_IN) => *n += 1,
+            _ => {}
+        }
+    }
+
+    /// Treasure from the water: seeds, runes or gold, by a roll.
+    fn treasure(&mut self, level: u32, r: &mut Report) {
+        match self.rng.below(3) {
+            0 => {
+                let open: Vec<&'static str> = c::CROPS
+                    .iter()
+                    .filter(|cr| self.region_open(cr.region))
+                    .map(|cr| cr.seed)
+                    .collect();
+                let seed = open[self.rng.below(open.len() as u64) as usize];
+                self.put(seed, 5, r, true);
+            }
+            1 => {
+                let runes = ["air_rune", "water_rune", "fire_rune", "chaos_rune", "death_rune"];
+                let rune = runes[self.rng.below(runes.len() as u64) as usize];
+                self.put(rune, 30, r, true);
+            }
+            _ => {
+                let gold = 10 * level as u64;
+                self.gold += gold;
+                r.gold += gold;
+            }
+        }
     }
 
     // ---------- changing the state ----------
@@ -581,9 +694,12 @@ impl State {
     fn begin(&mut self, id: &str) {
         if self.active.as_deref() != Some(id) {
             self.progress_ms = 0;
+            if c::dungeon_index(id).is_some() {
+                self.dungeon_stage = 0;
+            }
         }
         self.active = Some(id.to_string());
-        if let Some(e) = c::enemy_index(id) {
+        if let Some(e) = self.foe(id) {
             self.foe_hp = c::ENEMIES[e].hp;
         }
     }
@@ -603,8 +719,9 @@ impl State {
         let mut left = ms;
         loop {
             self.settle(r);
-            let dt = self.next_event().min(left);
-            self.pass(dt);
+            let timers = self.timers();
+            let dt = self.next_event_with(&timers).min(left);
+            self.pass(dt, &timers);
             left -= dt;
             self.fire(r);
             if left == 0 {
@@ -626,19 +743,37 @@ impl State {
         }
     }
 
+    /// What every timer needs, worked out once for a step of the loop.
+    pub(crate) fn timers(&self) -> crate::engines::Timers {
+        let open = self.open_now();
+        crate::engines::Timers {
+            servants: (0..self.servants.len())
+                .map(|i| self.servant_need_in(i, &open))
+                .collect(),
+            machines: c::MACHINES
+                .iter()
+                .map(|m| self.machine_need_in(m, &open))
+                .collect(),
+        }
+    }
+
     /// Game time until the next thing completes.
     pub fn next_event(&self) -> u64 {
+        self.next_event_with(&self.timers())
+    }
+
+    fn next_event_with(&self, t: &crate::engines::Timers) -> u64 {
         let mut next = u64::MAX;
         if let Some(id) = &self.active {
             next = next.min(self.duration(id).saturating_sub(self.progress_ms));
         }
-        for i in 0..self.servants.len() {
-            if let Some(need) = self.servant_need(i) {
+        for (i, need) in t.servants.iter().enumerate() {
+            if let Some(need) = need {
                 next = next.min(need.saturating_sub(self.servants[i].progress));
             }
         }
-        for m in &c::MACHINES {
-            if let Some(need) = self.machine_need(m) {
+        for (m, need) in c::MACHINES.iter().zip(&t.machines) {
+            if let Some(need) = need {
                 next = next.min(need.saturating_sub(self.machine_ms.get(m.id).copied().unwrap_or(0)));
             }
         }
@@ -656,18 +791,18 @@ impl State {
     }
 
     /// Moves every running timer on by `dt`.
-    fn pass(&mut self, dt: u64) {
+    fn pass(&mut self, dt: u64, t: &crate::engines::Timers) {
         self.sim_ms += dt;
         if self.active.is_some() {
             self.progress_ms += dt;
         }
-        for i in 0..self.servants.len() {
-            if self.servant_need(i).is_some() {
+        for (i, need) in t.servants.iter().enumerate() {
+            if need.is_some() {
                 self.servants[i].progress += dt;
             }
         }
-        for m in &c::MACHINES {
-            if self.machine_need(m).is_some() {
+        for (m, need) in c::MACHINES.iter().zip(&t.machines) {
+            if need.is_some() {
                 *self.machine_ms.entry(m.id.to_string()).or_insert(0) += dt;
             }
         }
@@ -735,8 +870,11 @@ impl State {
 
     /// One action or one swing.
     fn once(&mut self, id: &str, r: &mut Report) -> Result<(), Stop> {
+        if let Some(d) = c::dungeon_index(id) {
+            return self.dungeon_swing(d, r);
+        }
         if let Some(e) = c::enemy_index(id) {
-            return self.swing(e, r);
+            return self.swing(e, r).map(|_| ());
         }
         let Some(ai) = c::action_index(id) else {
             return Err(Stop::Missing(String::new()));
@@ -771,8 +909,16 @@ impl State {
             }
         }
         let mut n = a.makes.1;
+        if yours {
+            self.luck(a, &mut n, r);
+        }
+        let made = if a.makes.0 == "ashes" && a.level >= c::FINE_ASH_LEVEL && self.mechanics_open() {
+            "fine_ashes"
+        } else {
+            a.makes.0
+        };
         if a.id.starts_with("take_apart") {
-            n += c::INVENTOR_RANK_PARTS * self.ranks[2] as u64;
+            n += c::INVENTOR_RANK_PARTS * self.rank_sum(c::Engine::Inventor) as u64;
             if self.rng.one_in(c::FINE_PARTS_ONE_IN) {
                 self.put("fine_parts", 1, r, true);
             }
@@ -785,7 +931,7 @@ impl State {
                 n += 1;
             }
         }
-        self.put(a.makes.0, n, r, false);
+        self.put(made, n, r, false);
         if a.skill == c::WOODCUTTING && self.rng.one_in(c::NEST_ONE_IN) {
             self.put("bird_nest", 1, r, true);
         }
@@ -798,7 +944,54 @@ impl State {
         }
     }
 
-    fn swing(&mut self, e: usize, r: &mut Report) -> Result<(), Stop> {
+    /// One swing in a dungeon: the stage's enemy, then the next; a chest at the end.
+    fn dungeon_swing(&mut self, d: usize, r: &mut Report) -> Result<(), Stop> {
+        let dg = &c::DUNGEONS[d];
+        let stage = self.dungeon_stage.min(dg.stages.len() - 1);
+        let e = c::enemy_index(dg.stages[stage]).unwrap_or(0);
+        match self.swing(e, r) {
+            Ok(true) => {
+                self.dungeon_stage = stage + 1;
+                if self.dungeon_stage >= dg.stages.len() {
+                    self.dungeon_stage = 0;
+                    self.chest(d, r);
+                }
+                if let Some(next) = self.foe(dg.id) {
+                    self.foe_hp = c::ENEMIES[next].hp;
+                }
+                Ok(())
+            }
+            Ok(false) => Ok(()),
+            Err(stop) => {
+                self.dungeon_stage = 0;
+                Err(stop)
+            }
+        }
+    }
+
+    /// A dungeon's chest: twice the run's gold, fine parts, and a chance of a recipe.
+    fn chest(&mut self, d: usize, r: &mut Report) {
+        let dg = &c::DUNGEONS[d];
+        let gold: u64 = dg
+            .stages
+            .iter()
+            .filter_map(|s| c::enemy_index(s))
+            .map(|e| c::ENEMIES[e].gold)
+            .sum::<u64>()
+            * c::CHEST_GOLD_TIMES;
+        self.gold += gold;
+        r.gold += gold;
+        self.put("fine_parts", c::CHEST_FINE_PARTS, r, true);
+        if self.rng.one_in(c::CHEST_RECIPE_ONE_IN) {
+            let mine: Vec<&c::Recipe> = c::RECIPES.iter().filter(|rc| rc.region == dg.region).collect();
+            let rc = mine[self.rng.below(mine.len() as u64) as usize];
+            self.find_recipe(rc, r);
+        }
+        r.chests.push(dg.id.to_string());
+    }
+
+    /// One swing at enemy `e`; `Ok(true)` when it falls.
+    fn swing(&mut self, e: usize, r: &mut Report) -> Result<bool, Stop> {
         let enemy = &c::ENEMIES[e];
         let style = &c::STYLES[self.style];
         let (spent, _) = self.tier(style.spent);
@@ -826,7 +1019,7 @@ impl State {
         if self.hp * 100 < max_hp * c::EAT_BELOW_PCT {
             if let Some((food, heal)) = self.food() {
                 self.take(food, 1, r);
-                let mut heal = heal;
+                let mut heal = heal * (100 + self.trinket(c::Trinket::Vigour)) / 100;
                 if self.have("spices") > 0 {
                     self.take("spices", 1, r);
                     heal = heal * (100 + c::SPICE_HEAL_PCT) / 100;
@@ -840,11 +1033,12 @@ impl State {
         if self.foe_hp == 0 {
             add(&mut self.kills, enemy.id, 1);
             add(&mut r.kills, enemy.id, 1);
-            let gold = if self.sim_ms < self.hot_pot_until {
+            let mut gold = if self.sim_ms < self.hot_pot_until {
                 enemy.gold * (100 + c::HOT_POT_GOLD_PCT) / 100
             } else {
                 enemy.gold
             };
+            gold = gold * (100 + self.trinket(c::Trinket::Wealth)) / 100;
             self.gold += gold;
             r.gold += gold;
             for (item, n, one_in) in enemy.drops {
@@ -859,13 +1053,18 @@ impl State {
             }
             self.starlight(style.skill, r);
             self.foe_hp = enemy.hp;
+            if self.hp <= enemy.hit && self.food().is_none() {
+                self.hp = max_hp;
+                return Err(Stop::Food);
+            }
+            return Ok(true);
         }
         if self.hp <= enemy.hit && self.food().is_none() {
             self.hp = max_hp;
             self.foe_hp = enemy.hp;
             return Err(Stop::Food);
         }
-        Ok(())
+        Ok(false)
     }
 
     // ---------- the plan (P3) ----------
@@ -950,6 +1149,7 @@ impl State {
         s.sim_ms = keep.sim_ms;
         s.rng = keep.rng;
         s.recipes = keep.recipes;
+        s.rooms = vec![0; c::ROOMS.len()];
         s.upkeep_hour = keep.sim_ms / c::HOUR;
         s.screen = "woodcutting".into();
         *self = s;
@@ -1191,9 +1391,9 @@ mod tests {
     }
 
     #[test]
-    fn every_prestige_needs_600_and_keeps_only_the_multiplier() {
+    fn every_prestige_needs_900_and_keeps_only_the_multiplier() {
         let mut s = State::new(1);
-        assert_eq!(s.prestige_needs(), 600);
+        assert_eq!(s.prestige_needs(), 900);
         assert!(!s.can_prestige());
         for i in 0..c::SKILLS.len() {
             s.xp[i] = xp::at(50);
@@ -1204,7 +1404,7 @@ mod tests {
         s.gold = 99;
         s.do_prestige(10);
         assert_eq!(s.prestige, 1);
-        assert_eq!(s.prestige_needs(), 600);
+        assert_eq!(s.prestige_needs(), 900);
         assert_eq!(s.mult_bp(), 12_500);
         assert_eq!(s.level(0), 1);
         assert_eq!(s.gold, 0);
@@ -1279,7 +1479,7 @@ mod tests {
         assert_eq!(s.armour().1, 0);
         s.bank.insert("leather_body".into(), 1);
         s.bank.insert("silk_robe".into(), 1);
-        assert_eq!(s.armour(), ("silk_robe", 3));
+        assert_eq!(s.armour(), ("silk_robe", 3, 0));
     }
 
     #[test]

@@ -28,11 +28,18 @@ ENEMY = {"chicken": "#f2efe6", "cow": "#d8cbb8", "goblin": "#6aa84f", "spider": 
          "goblin_warlord": "#4a8a2f", "broodmother": "#5a3a6a", "giant_chieftain": "#c08a5a", "black_knight_titan": "#14141c",
          "elder_dragon": "#b8302a"}
 
-def first(word, table, default="#9aa4b8"):
+def hue(word):
+    """A steady colour from a name, for the regions' many new things (T15)."""
+    import colorsys, hashlib
+    h = int(hashlib.md5(word.encode()).hexdigest()[:6], 16)
+    r, g, b = colorsys.hls_to_rgb((h % 360) / 360, 0.55, 0.45)
+    return "#%02x%02x%02x" % (int(r * 255), int(g * 255), int(b * 255))
+
+def first(word, table, default=None):
     for k, v in table.items():
         if k in word:
             return v
-    return default
+    return default or hue(word)
 
 def tree(c): return f'<rect x="17" y="22" width="6" height="14" fill="#6b4a2a"/><circle cx="20" cy="15" r="11" fill="{c}"/><circle cx="13" cy="19" r="7" fill="{c}"/><circle cx="27" cy="19" r="7" fill="{c}"/>'
 def log(c): return f'<rect x="5" y="15" width="30" height="11" rx="5.5" fill="{c}" stroke="#2a1a0a"/><ellipse cx="33" cy="20.5" rx="3.5" ry="5.5" fill="#e8c890" stroke="#2a1a0a"/>'
@@ -146,6 +153,7 @@ UI = {
     "send": '<path d="M5 20L35 6 27 34l-7-11z" fill="#46c47a" stroke="#123"/><path d="M20 23l15-17" stroke="#123"/>',
     "save": '<rect x="6" y="6" width="28" height="28" rx="3" fill="#3d5bb8" stroke="#123"/><rect x="11" y="6" width="16" height="10" fill="#cfd6e6"/><rect x="11" y="22" width="18" height="12" fill="#e8ecf5"/>',
     "reset": '<path d="M30 14A12 12 0 1 0 32 22" stroke="#cfd6e6" stroke-width="3.5" fill="none"/><path d="M33 5v10H23" stroke="#cfd6e6" stroke-width="3.5" fill="none"/>',
+    "regions": '<circle cx="20" cy="20" r="15" fill="#3d8bd0" stroke="#123"/><path d="M9 14q6 4 4 10t6 8M24 7q-2 7 5 9t3 10" stroke="#5ac85a" stroke-width="4" fill="none"/>',
     "gold": '<circle cx="20" cy="20" r="13" fill="#f0c040" stroke="#9c6a00" stroke-width="2"/><circle cx="20" cy="20" r="8" fill="none" stroke="#c89010" stroke-width="2"/>',
     # groups of the bottom bar (P21)
     "gather": '<path d="M7 34l17-17" stroke="#c8a070" stroke-width="4" stroke-linecap="round"/><path d="M22 6c7 0 12 5 12 10l-10 2-5-5z" fill="#6ac84a" stroke="#222"/>',
@@ -174,12 +182,48 @@ UI = {
     "sign_moon": sign('<path d="M24 10a10 10 0 1 0 0 20 8 8 0 1 1 0-20z" fill="#fff3b0"/>'),
 }
 
+REGION_CROPS = set(re.findall(r'crop\("([a-z_]+)"', (ROOT / "crates" / "core" / "src" / "content.rs").read_text()))
+STONES = {"rock_salt", "sandstone", "quartz", "granite", "flint", "rock_crystal", "basalt", "black_sand", "obsidian", "charcoal"}
+GEM = {"sapphire": "#3d6be0", "emerald": "#2fa860", "ruby": "#d03a4a", "diamond": "#e8f2ff", "pearl": "#f2efe6", "jade": "#4ab88a",
+       "fire_opal": "#f06a2a", "sunstone": "#f0c040", "coral": "#f07a7a"}
+def gem(c): return f'<path d="M20 5l12 10-12 20L8 15z" fill="{c}" stroke="#222"/><path d="M8 15h24M14 15l6 20 6-20" stroke="#fff" stroke-opacity=".5" fill="none"/>'
+def ring(c, stone): return f'<circle cx="20" cy="23" r="10" fill="none" stroke="{c}" stroke-width="5"/><circle cx="20" cy="12" r="4.5" fill="{stone}" stroke="#222"/>'
+def amulet(c, stone): return f'<path d="M8 6q12 22 24 0" fill="none" stroke="{c}" stroke-width="2.5"/><circle cx="20" cy="27" r="7" fill="{c}" stroke="#222"/><circle cx="20" cy="27" r="3.5" fill="{stone}"/>'
+def staff(c): return f'<path d="M9 35L26 12" stroke="#7a5a3a" stroke-width="3.5" stroke-linecap="round"/><circle cx="28" cy="10" r="6.5" fill="{c}" stroke="#222"/>'
+def boat(c): return f'<path d="M4 24h32l-5 9H9z" fill="{c}" stroke="#222"/><path d="M20 4v20" stroke="#5a4a3a" stroke-width="2.5"/><path d="M21 6l11 14H21z" fill="#eeeef6" stroke="#888"/>'
+def furniture(c): return f'<rect x="6" y="12" width="28" height="6" rx="1" fill="{c}" stroke="#222"/><path d="M9 18v16M31 18v16" stroke="#5a4a3a" stroke-width="3"/>'
+def stone(c): return f'<path d="M5 30l6-14 10-6 12 6 3 14z" fill="{c}" stroke="#222"/>'
+
 def item_icon(i):
     if i in GENERIC: return GENERIC[i]
-    if i.endswith("_seed"): return seeds(CROP[i[:-5]])
+    if i.endswith("_seed"): return seeds(CROP.get(i[:-5]) or hue(i[:-5]))
     if i in CROP: return produce(CROP[i], i)
-    if i.endswith("_logs") or i == "logs": return log(first(i, WOOD))
-    if i.endswith("_ore") or i in ("coal", "rune_essence"): return rock(first(i, MAT), dark=(i == "coal"))
+    if i in REGION_CROPS: return produce(hue(i), "")
+    if i in STONES: return stone("#2a2a30" if i == "charcoal" else hue(i))
+    if i in GEM: return gem(GEM[i])
+    if i == "fine_ashes": return GENERIC["ashes"].replace("#999", "#d8d0c0")
+    if i.startswith("ring_of") or i.endswith("_ring"): return ring("#c0c8d8", first(i, GEM))
+    if i.startswith("amulet_of") or i.endswith("_amulet"): return amulet("#c0c8d8", first(i, GEM))
+    if i.endswith("_bracelet"): return ring(first(i, GEM), "#c0c8d8")
+    if i.endswith("_staff"): return staff(hue(i))
+    if i in ("ship", "sandship"): return boat(hue(i))
+    if i == "mule_train": return GENERIC["cart"].replace("#a8884a", hue(i))
+    if i.endswith("_plank"): return plank(hue(i))
+    if i.endswith("_cloth"): return GENERIC["silk_cloth"].replace("#eeeef6", hue(i))
+    if any(i.endswith(x) for x in ("_skin", "_pelt", "_hide", "_fur", "_silk")): return GENERIC["cowhide"].replace("#e8e0d0", hue(i))
+    if i in ("snakeskin", "wolf_leather", "salamander_leather"): return GENERIC["leather"].replace("#a0703a", hue(i))
+    if any(i.endswith(x) for x in ("_body", "_chaps", "_robe", "_vest", "_plate", "_coat", "_mantle", "_platebody")): return body(hue(i))
+    if i.endswith("_dish") or i.startswith("cooked_") or i in ("crab_cakes", "fishermans_pie", "ink_risotto", "hunters_stew", "barley_bread",
+                                                               "yeti_broth", "fire_curry", "sun_feast", "phoenix_roast"):
+        return pot(hue(i)) if not i.startswith("cooked_") else fish(hue(i), cooked=True)
+    if i in ("tidecutter", "frostbrand", "sunblade"): return sword(hue(i))
+    if i in ("sea_salt", "mountain_tea", "fire_oil", "wool"): return pot(hue(i))
+    if i.endswith("_logs") or i == "logs":
+        base = i[:-5] if i != "logs" else "logs"
+        return log(WOOD.get(base) or hue(i))
+    if i.endswith("_ore") or i in ("coal", "rune_essence"):
+        base = i[:-4] if i.endswith("_ore") else i
+        return rock(MAT.get(base) or (MAT["essence"] if i == "rune_essence" else hue(i)), dark=(i == "coal"))
     if i.startswith("raw_"): return fish(first(i, FISH))
     if i in FISH: return fish(FISH[i], cooked=True)
     if i.endswith("_bar"): return bar(first(i, MAT))
@@ -188,9 +232,18 @@ def item_icon(i):
     if i.endswith("arrows"): return arrow(first(i, MAT))
     if i.endswith("sword"): return sword(first(i, MAT))
     if i.endswith("rune"): return rune(first(i, RUNE))
-    raise SystemExit(f"no icon rule for item {i}")
+    if i.startswith("build_") or i in MACHINE_IDS: return machine(hue(i))
+    return furniture(hue(i))
+
+MACHINE_IDS = set(re.findall(r'Machine \{ id: "([a-z_]+)"', (ROOT / "crates" / "core" / "src" / "content.rs").read_text())) | \
+    {u for u in re.findall(r'\("([a-z_]+)", "[a-z_]+"\),', (ROOT / "crates" / "core" / "src" / "content.rs").read_text().split("pub const UPGRADES")[1].split("];")[0])}
+
+ROOM_IDS = set(re.findall(r'Room \{ id: "([a-z_]+)"', (ROOT / "crates" / "core" / "src" / "content.rs").read_text()))
 
 def action_icon(a, made):
+    if a.endswith("_tree"): return tree(hue(a))
+    if a.endswith("_rock"): return rock(hue(a), dark=False)
+    if a == "char_logs": return fire()
     if a.startswith("meditate_"): return rune(RUNE[a[len("meditate_"):]]) + star("#fff3b0", 6).replace('M20 14', 'M30 4', 1)
     if a in WOOD or a in ("magic_tree", "redwood", "mahogany", "teak"): return tree(first(a.replace("_tree", ""), WOOD))
     if a.endswith("_spot"): return water() + f'<g transform="translate(4 -6) scale(.8)">{fish(first(a, FISH))}</g>'
@@ -213,7 +266,14 @@ for i in STR["items"]:
 for crop in CROP:
     sym[crop] = produce(CROP[crop], crop)
 for e in STR["enemies"]:
-    sym[e] = enemy(ENEMY[e])
+    sym[e] = enemy(ENEMY.get(e) or hue(e))
+for k in STR["ui"]:
+    if k.startswith("sign_") and k not in sym:
+        sym[k] = sign(f'<circle cx="20" cy="20" r="7" fill="{hue(k)}"/><circle cx="20" cy="20" r="3" fill="#fff3b0"/>')
+    if k.startswith("region_") and k not in sym:
+        sym[k] = f'<path d="M4 32l10-16 6 8 6-12 10 20z" fill="{hue(k)}" stroke="#222"/><circle cx="30" cy="9" r="4" fill="#f5e6a8"/>'
+    if k.startswith("room_") and k[5:] in ROOM_IDS and k[5:] not in sym:
+        sym[k[5:]] = house(hue(k))
 for s in STR["skills"]:
     if s not in sym: raise SystemExit(f"no icon for skill {s}")
 body = "\n".join(f'<symbol id="{k}" viewBox="0 0 40 40">{v}</symbol>' for k, v in sorted(sym.items()))

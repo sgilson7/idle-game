@@ -28,6 +28,10 @@ Ashes used when you plant. A crop planted with compost grows faster.
 
 What a noble rank from Squire on asks besides gold and rooms: defeating that rank's champion, or a tribute of fine goods.
 
+### Dungeon
+
+A run through one region's enemies in a fixed order, ending at its strongest champion, with a chest at the end. Running out of food starts it over.
+
 ### Engine
 
 A long ladder beside the skills that spends what they make and gives some back: combat, the Trader, the estate, the Inventor and the sky.
@@ -69,6 +73,12 @@ A step on an engine's ladder. Each rank asks for something and makes the engine 
 ### Recipe
 
 A rare drop from an enemy that unlocks one unique food, weapon or armour. Recipes stay through prestige.
+
+### Region
+
+One part of the world: the Vale, the Coast, the Peaks or the Wastes. Each opens at a total level and adds new things to every skill and engine.
+
+Not: zone, area
 
 ### Servant
 

@@ -38,7 +38,7 @@ The person answered on 2026-10-25: "all of the design decisions are in the desig
 | P21 | Navigation becomes five groups with a strip of skills or engines. | 18 skills and 5 engines do not fit 16 tabs | browser check |
 | P22 | Build order and prestige behaviour follow IG-Q24 and IG-Q25: recipes, Trader, Nobility, Inventor, Cosmic; the engines start over at prestige and recipes stay (IG-Q26 A). | the person's | tests `recipes_are_kept_through_prestige_and_engines_are_not` |
 
-## Plan 3: the full game (2026-10-25, for review)
+## Plan 3: the full game (2026-10-25; answered in the journal and built the same day)
 
 Stage 2 for T15: four times the length and content of every skill and engine. The design is on the journal's Full game tabs, with ten questions (IG-Q36 to IG-Q45). **Not approved in advance: nothing is built until the person has read it.** The rows below assume each question's default.
 
@@ -53,3 +53,4 @@ Stage 2 for T15: four times the length and content of every skill and engine. Th
 | P29 | The Peaks, then the Wastes, each from a written list the person has read. | IG-Q39 | as P25 |
 | P30 | A balance pass over all four regions from playtest files. | R7.6 | readout tool; triage rows |
 
+The person answered on 2026-10-25: "the answers are in the log, build the full game". The tapped answers were all defaults, and the three left untapped (IG-Q36 to IG-Q38) take theirs (R9.1). All three regions were built at once (R9.2).

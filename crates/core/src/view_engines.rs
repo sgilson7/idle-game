@@ -1,10 +1,11 @@
-//! The engines' screens (T10 to T14): the recipe book, the Trader's towns,
-//! the estate, the workshop and the observatory, and the screen a tab shows
-//! before its engine opens. Like the rest of the view, every number here is
-//! already formatted, and the page draws these as ordinary blocks.
+//! The engines' screens (T10 to T14) and the regions (T15): the recipe book,
+//! the Trader's towns, the estate, the workshop, the observatory, the regions
+//! screen, and the screen a tab shows before its engine opens. Like the rest
+//! of the view, every number here is already formatted, and the page draws
+//! these as ordinary blocks.
 
 use crate::content::{self as c, Engine};
-use crate::text::{dur, num};
+use crate::text::{dur, num, width};
 use crate::view::{block, button, chip, Bar, Block, Button, Row, View};
 
 impl View<'_> {
@@ -15,6 +16,15 @@ impl View<'_> {
             "observatory" => Engine::Cosmic,
             _ => Engine::Trader,
         }
+    }
+
+    pub(crate) fn region_name(&self, r: usize) -> String {
+        self.t.s(&format!("region_{}", c::REGIONS[r].0))
+    }
+
+    /// The open regions, the Vale first.
+    fn open_regions(&self) -> Vec<usize> {
+        (0..c::REGIONS.len()).filter(|&r| self.s.region_open(r)).collect()
     }
 
     /// A tab whose engine has not opened: what opens it, and how far you are.
@@ -28,22 +38,30 @@ impl View<'_> {
                 text: self.t.s(&format!("about_{id}")),
                 ..block("note")
             },
-            Block {
-                bar: Some(Bar {
-                    tone: "pres".into(),
-                    width: crate::text::width((tl as u64 * 10_000 / at.max(1) as u64).min(10_000)),
-                    left: self
-                        .t
-                        .t("total_of", &[("n", tl.to_string()), ("need", at.to_string())]),
-                    right: self.t.t("to_go", &[("n", at.saturating_sub(tl).to_string())]),
-                }),
-                ..block("bar")
-            },
+            self.total_bar(tl, at),
             Block {
                 text: self.t.t("opens_at", &[("n", at.to_string())]),
                 ..block("note")
             },
         ]
+    }
+
+    fn total_bar(&self, tl: u32, at: u32) -> Block {
+        Block {
+            bar: Some(Bar {
+                tone: "pres".into(),
+                width: width((tl as u64 * 10_000 / at.max(1) as u64).min(10_000)),
+                left: self
+                    .t
+                    .t("total_of", &[("n", tl.to_string()), ("need", at.to_string())]),
+                right: if tl >= at {
+                    self.t.s("ready")
+                } else {
+                    self.t.t("to_go", &[("n", (at - tl).to_string())])
+                },
+            }),
+            ..block("bar")
+        }
     }
 
     /// A ladder of ranks: done, now, and what the next one needs.
@@ -77,6 +95,10 @@ impl View<'_> {
         }
     }
 
+    fn ladder_title(&self, r: usize) -> String {
+        self.t.t("ladder_in", &[("region", self.region_name(r))])
+    }
+
     fn list(&self, needs: &[(&str, u64)]) -> String {
         needs
             .iter()
@@ -100,9 +122,101 @@ impl View<'_> {
             head.icon = tab.into();
             head.title = self.tab_name(tab);
         }
-        let at = v.iter().position(|b| b.kind == "cards").unwrap_or(v.len());
+        let at = v
+            .iter()
+            .position(|b| {
+                b.kind == "cards" || (b.kind == "buttons" && b.buttons.iter().any(|x| x.act == "list.all"))
+            })
+            .unwrap_or(v.len());
         v.splice(at..at, extra);
         v
+    }
+
+    // ---------- the regions (T15) ----------
+
+    pub(crate) fn regions(&self) -> Vec<Block> {
+        let tl = self.s.total_level();
+        let mut out = vec![self.head(
+            "regions",
+            self.t.s("tab_regions"),
+            self.t.t(
+                "regions_open",
+                &[
+                    ("n", self.s.regions_open().to_string()),
+                    ("max", c::REGIONS.len().to_string()),
+                ],
+            ),
+            "pres",
+        )];
+        out.push(Block {
+            text: self.t.s("regions_intro"),
+            ..block("note")
+        });
+        for (r, &(id, at)) in c::REGIONS.iter().enumerate() {
+            let gathers = |a: &c::Action| matches!(a.skill, c::WOODCUTTING | c::MINING | c::FISHING);
+            let gather = c::ACTIONS.iter().filter(|a| a.region == r && gathers(a)).count();
+            let make = c::ACTIONS.iter().filter(|a| a.region == r && !gathers(a)).count();
+            let enemies = c::ENEMIES
+                .iter()
+                .filter(|e| e.region == r && !c::is_champion(e.id))
+                .count();
+            let champs = c::ENEMIES
+                .iter()
+                .filter(|e| e.region == r && c::is_champion(e.id))
+                .count();
+            let crops = c::CROPS.iter().filter(|cr| cr.region == r).count();
+            let towns = c::TOWNS.iter().filter(|t| t.region == r).count();
+            let open = self.s.region_open(r);
+            let mut rows = vec![Row {
+                icon: format!("region_{id}"),
+                title: if open {
+                    self.t.s("region_is_open")
+                } else {
+                    self.t.t("opens_at", &[("n", at.to_string())])
+                },
+                sub: self.t.t(
+                    "region_holds",
+                    &[
+                        ("gather", gather.to_string()),
+                        ("make", make.to_string()),
+                        ("enemies", enemies.to_string()),
+                        ("champions", champs.to_string()),
+                        ("crops", crops.to_string()),
+                        ("towns", towns.to_string()),
+                    ],
+                ),
+                tone: if open { "up".into() } else { "used".into() },
+                ..Row::default()
+            }];
+            if let Some(d) = c::DUNGEONS.iter().find(|d| d.region == r) {
+                rows.push(Row {
+                    icon: d.stages[d.stages.len() - 1].into(),
+                    title: self.t.s(&format!("dungeon_{}", d.id)),
+                    sub: self.t.s("dungeon_about"),
+                    buttons: if open {
+                        vec![button(self.t.skill("combat").name.clone(), "tab", "combat")]
+                    } else {
+                        Vec::new()
+                    },
+                    ..Row::default()
+                });
+            }
+            out.push(Block {
+                title: self.region_name(r),
+                rows,
+                ..block("rows")
+            });
+            if !open {
+                out.push(self.total_bar(tl, at));
+            }
+        }
+        out.push(Block {
+            text: self
+                .t
+                .t("regions_prestige", &[("n", c::PRESTIGE_BASE.to_string())]),
+            ..block("note")
+        });
+        out
     }
 
     // ---------- the recipe book (T10) ----------
@@ -125,43 +239,57 @@ impl View<'_> {
             text: self.t.s("recipes_intro"),
             ..block("note")
         });
-        let rows = c::RECIPES
-            .iter()
-            .map(|rc| {
-                let known = self.s.recipes.iter().any(|k| k == rc.id);
-                let a = &c::ACTIONS[c::action_index(rc.id).unwrap_or(0)];
-                Row {
-                    icon: rc.id.into(),
-                    title: self.t.action(rc.id),
-                    sub: if known {
-                        format!(
-                            "{} · {}",
+        for r in self.open_regions() {
+            let rows = c::RECIPES
+                .iter()
+                .filter(|rc| rc.region == r)
+                .map(|rc| {
+                    let known = self.s.recipes.iter().any(|k| k == rc.id);
+                    let a = &c::ACTIONS[c::action_index(rc.id).unwrap_or(0)];
+                    Row {
+                        icon: rc.id.into(),
+                        title: self.t.action(rc.id),
+                        sub: if known {
+                            format!(
+                                "{} · {}",
+                                self.t.t(
+                                    "needs_level",
+                                    &[("skill", self.skill_name(a.skill)), ("n", a.level.to_string())]
+                                ),
+                                self.t.s(&format!("does_{}", rc.id))
+                            )
+                        } else {
                             self.t.t(
-                                "needs_level",
-                                &[("skill", self.skill_name(a.skill)), ("n", a.level.to_string())]
-                            ),
-                            self.t.s(&format!("does_{}", rc.id))
-                        )
-                    } else {
-                        self.t.t(
-                            "recipe_from",
-                            &[("enemy", self.t.enemy(rc.enemy)), ("n", rc.one_in.to_string())],
-                        )
-                    },
-                    chip: if known { self.t.s("found") } else { String::new() },
-                    tone: if known { "up".into() } else { "used".into() },
-                    buttons: if known {
-                        vec![button(self.skill_name(a.skill), "tab", c::SKILLS[a.skill].id)]
-                    } else {
-                        vec![button(self.t.skill("combat").name.clone(), "tab", "combat")]
-                    },
-                }
-            })
-            .collect();
-        out.push(Block {
-            rows,
-            ..block("rows")
-        });
+                                "recipe_from",
+                                &[("enemy", self.t.enemy(rc.enemy)), ("n", rc.one_in.to_string())],
+                            )
+                        },
+                        chip: if known { self.t.s("found") } else { String::new() },
+                        tone: if known { "up".into() } else { "used".into() },
+                        buttons: if known {
+                            vec![button(self.skill_name(a.skill), "tab", c::SKILLS[a.skill].id)]
+                        } else {
+                            vec![button(self.t.skill("combat").name.clone(), "tab", "combat")]
+                        },
+                    }
+                })
+                .collect();
+            out.push(Block {
+                title: self.region_name(r),
+                rows,
+                ..block("rows")
+            });
+        }
+        let closed = c::RECIPES
+            .iter()
+            .filter(|rc| !self.s.region_open(rc.region))
+            .count();
+        if closed > 0 {
+            out.push(Block {
+                text: self.t.t("recipes_closed", &[("n", closed.to_string())]),
+                ..block("note")
+            });
+        }
         out.push(Block {
             text: self.t.s("recipes_copy"),
             ..block("note")
@@ -184,37 +312,50 @@ impl View<'_> {
         });
         let (ins, outs) = crate::view::io_of("trader");
         out.push(self.links("trader", &ins, &outs));
-        let (on_road, most) = self.s.caravan_room();
+        let mut chips = Vec::new();
+        for veh in ["cart", "ship", "mule_train", "sandship"] {
+            if veh != "cart"
+                && !c::TOWNS
+                    .iter()
+                    .any(|t| t.vehicle == veh && self.s.region_open(t.region))
+            {
+                continue;
+            }
+            let (on_road, most) = self.s.caravan_room_for(veh);
+            chips.push(chip(
+                "t",
+                self.t.t(
+                    "vehicles_out",
+                    &[
+                        ("what", self.t.item(veh)),
+                        ("n", on_road.to_string()),
+                        ("max", most.to_string()),
+                    ],
+                ),
+            ));
+        }
+        chips.push(chip(
+            "g",
+            self.t.t(
+                "orders_done",
+                &[("n", num(self.s.counts.get("orders").copied().unwrap_or(0)))],
+            ),
+        ));
+        chips.push(chip(
+            "x",
+            self.t.t(
+                "trader_bonus",
+                &[(
+                    "pct",
+                    (c::TRADER_RANK_PCT * self.s.rank_sum(Engine::Trader) as u64).to_string(),
+                )],
+            ),
+        ));
         out.push(Block {
-            chips: vec![
-                chip(
-                    "t",
-                    self.t.t(
-                        "carts_out",
-                        &[("n", on_road.to_string()), ("max", most.to_string())],
-                    ),
-                ),
-                chip(
-                    "g",
-                    self.t.t(
-                        "orders_done",
-                        &[("n", num(self.s.counts.get("orders").copied().unwrap_or(0)))],
-                    ),
-                ),
-                chip(
-                    "x",
-                    self.t.t(
-                        "trader_bonus",
-                        &[(
-                            "pct",
-                            (c::TRADER_RANK_PCT * self.s.rank(Engine::Trader) as u64).to_string(),
-                        )],
-                    ),
-                ),
-            ],
+            chips,
             ..block("chips")
         });
-        if most == 0 {
+        if self.s.caravan_room().1 == 0 {
             out.push(Block {
                 text: self.t.s("need_cart"),
                 buttons: vec![button(
@@ -231,7 +372,7 @@ impl View<'_> {
                 .caravans
                 .iter()
                 .map(|cv| Row {
-                    icon: "cart".into(),
+                    icon: c::TOWNS[cv.town].vehicle.into(),
                     title: self.t.t(
                         "caravan_to",
                         &[
@@ -261,35 +402,55 @@ impl View<'_> {
                 ..block("rows")
             });
         }
-        for (t, town) in c::TOWNS.iter().enumerate() {
-            out.push(self.town(t, town));
+        for r in self.open_regions().into_iter().rev() {
+            for (t, town) in c::TOWNS.iter().enumerate().filter(|(_, t)| t.region == r) {
+                out.push(self.town(t, town));
+            }
         }
-        let ranks = c::TRADER_RANKS
-            .iter()
-            .map(|rk| {
-                (
-                    self.t.s(&format!("trader_{}", rk.id)),
-                    self.t.t(
-                        &format!("trader_needs_{}", rk.id),
-                        &[
-                            ("lvl", rk.level.to_string()),
-                            ("orders", rk.orders.to_string()),
-                            ("fee", num(rk.fee)),
-                            ("each", rk.each_town.to_string()),
-                        ],
-                    ),
-                )
-            })
-            .collect();
-        let rise = vec![button(self.t.s("rise"), "rise.trader", "")
-            .tone("pres")
-            .enabled(self.s.trader_ready())];
-        out.push(self.ladder(self.t.s("ladder"), ranks, self.s.rank(Engine::Trader), rise));
+        for r in self.open_regions() {
+            let ranks = c::TRADER_RANKS[r]
+                .iter()
+                .map(|rk| {
+                    let key = if r == 0 {
+                        format!("trader_needs_{}", rk.id)
+                    } else {
+                        "trader_needs_tier".to_string()
+                    };
+                    (
+                        self.t.s(&format!("trader_{}", rk.id)),
+                        self.t.t(
+                            &key,
+                            &[
+                                ("lvl", rk.level.to_string()),
+                                ("orders", rk.orders.to_string()),
+                                ("fee", num(rk.fee)),
+                                ("each", rk.each_town.to_string()),
+                                ("region", self.region_name(r)),
+                            ],
+                        ),
+                    )
+                })
+                .collect();
+            let rise = vec![button(self.t.s("rise"), "rise.trader", &r.to_string())
+                .tone("pres")
+                .enabled(self.s.trader_ready_in(r))];
+            out.push(self.ladder(
+                self.ladder_title(r),
+                ranks,
+                self.s.rank_in(Engine::Trader, r),
+                rise,
+            ));
+        }
         out
     }
 
     fn town(&self, t: usize, town: &c::Town) -> Block {
         let name = self.t.s(&format!("town_{}", town.id));
+        let title = if town.region > 0 {
+            format!("{name} · {}", self.region_name(town.region))
+        } else {
+            name
+        };
         if !self.s.town_open(t) {
             let why = if t == c::EMBERFALL && self.s.level(c::TRADING) >= town.level {
                 self.t.s("needs_charter")
@@ -303,7 +464,7 @@ impl View<'_> {
                 )
             };
             return Block {
-                title: name,
+                title,
                 rows: vec![Row {
                     icon: "town".into(),
                     title: why,
@@ -362,7 +523,7 @@ impl View<'_> {
                 },
             });
         }
-        let (out_now, most) = self.s.caravan_room();
+        let (out_now, most) = self.s.caravan_room_for(town.vehicle);
         for item in town.wants.iter().filter(|i| self.s.have(i) > 0) {
             let n = self.s.have(item).min(c::CART_LOAD);
             let cv = crate::game::Caravan {
@@ -374,7 +535,7 @@ impl View<'_> {
             };
             let free = out_now < most;
             rows.push(Row {
-                icon: "cart".into(),
+                icon: town.vehicle.into(),
                 title: self.t.t("send_n", &[("n", num(n)), ("item", self.t.item(item))]),
                 sub: self.t.t(
                     "send_sub",
@@ -402,8 +563,23 @@ impl View<'_> {
                 ..Row::default()
             });
         }
+        if most == 0 {
+            rows.push(Row {
+                icon: town.vehicle.into(),
+                title: self.t.t(
+                    "needs_vehicle",
+                    &[("what", self.t.item(town.vehicle).to_lowercase())],
+                ),
+                buttons: vec![button(
+                    self.t.skill("construction").name.clone(),
+                    "tab",
+                    "construction",
+                )],
+                ..Row::default()
+            });
+        }
         Block {
-            title: name,
+            title,
             rows,
             ..block("rows")
         }
@@ -423,22 +599,26 @@ impl View<'_> {
     // ---------- the estate (T11) ----------
 
     pub(crate) fn estate(&self) -> Vec<Block> {
-        let rank = self.s.rank(Engine::Nobility);
+        let top = self
+            .open_regions()
+            .into_iter()
+            .rev()
+            .find(|&r| r == 0 || self.s.rank_in(Engine::Nobility, r) > 0)
+            .unwrap_or(0);
         let mut out = vec![self.head(
             "estate",
             self.t.s("tab_estate"),
-            self.t.s(&format!("noble_{}", c::NOBLE_RANKS[rank].id)),
+            self.t.s(&format!(
+                "noble_{}",
+                c::NOBLE_RANKS[top][self.s.rank_in(Engine::Nobility, top)].id
+            )),
             "pres",
         )];
         let (ins, outs) = crate::view::io_of("estate");
         out.push(self.links("estate", &ins, &outs));
         out.push(Block {
             chips: vec![
-                chip(
-                    "g",
-                    self.t
-                        .t("income_per_hour", &[("n", num(c::NOBLE_RANKS[rank].income))]),
-                ),
+                chip("g", self.t.t("income_per_hour", &[("n", num(self.s.income()))])),
                 chip(
                     "t",
                     self.t.t(
@@ -474,9 +654,31 @@ impl View<'_> {
         let rows = c::ROOMS
             .iter()
             .enumerate()
+            .filter(|(_, room)| self.s.region_open(room.region))
             .map(|(k, room)| {
-                let l = self.s.rooms[k];
+                let l = self.s.room(k);
                 let cost = self.s.room_cost(k);
+                let extra = self.s.room_effect(k).saturating_sub(l);
+                let mut sub = self.t.s(&format!("room_{}_does", room.id));
+                if extra > 0 {
+                    sub = format!(
+                        "{sub} · {}",
+                        self.t.t("furniture_adds", &[("n", extra.to_string())])
+                    );
+                }
+                if let Some((plank, p, n, st, g, lvl)) = cost {
+                    sub = format!(
+                        "{sub} · {}",
+                        self.t.t(
+                            "room_cost",
+                            &[
+                                ("list", self.list(&[(plank, p), ("nails", n), ("limestone", st)])),
+                                ("gold", num(g)),
+                                ("lvl", lvl.to_string()),
+                            ],
+                        )
+                    );
+                }
                 Row {
                     icon: room.id.into(),
                     title: self.t.t(
@@ -484,24 +686,10 @@ impl View<'_> {
                         &[
                             ("room", self.t.s(&format!("room_{}", room.id))),
                             ("n", l.to_string()),
-                            ("max", room.max.to_string()),
+                            ("max", self.s.room_max(k).to_string()),
                         ],
                     ),
-                    sub: match cost {
-                        Some((plank, p, n, st, g, lvl)) => format!(
-                            "{} · {}",
-                            self.t.s(&format!("room_{}_does", room.id)),
-                            self.t.t(
-                                "room_cost",
-                                &[
-                                    ("list", self.list(&[(plank, p), ("nails", n), ("limestone", st)])),
-                                    ("gold", num(g)),
-                                    ("lvl", lvl.to_string()),
-                                ],
-                            )
-                        ),
-                        None => self.t.s(&format!("room_{}_does", room.id)),
-                    },
+                    sub,
                     buttons: if cost.is_some() {
                         vec![button(
                             if l == 0 {
@@ -596,59 +784,66 @@ impl View<'_> {
                 ..block("note")
             });
         }
-        // the ladder
-        let ranks = c::NOBLE_RANKS
-            .iter()
-            .enumerate()
-            .map(|(k, rk)| {
-                let mut needs = self.t.t(
-                    "noble_needs",
-                    &[
-                        ("gold", num(rk.gold)),
-                        ("rooms", rk.rooms.to_string()),
-                        ("income", num(rk.income)),
-                    ],
-                );
-                if k >= c::DEED_FROM {
-                    let d = k - c::DEED_FROM;
-                    needs = format!(
-                        "{needs} · {}",
-                        self.t.t(
-                            "deed",
-                            &[
-                                ("enemy", self.t.enemy(c::CHAMPIONS[d])),
-                                ("tribute", self.list(c::TRIBUTES[d])),
-                            ],
-                        )
+        // a ladder for each open region
+        for r in self.open_regions() {
+            let ranks = c::NOBLE_RANKS[r]
+                .iter()
+                .enumerate()
+                .map(|(k, rk)| {
+                    let mut needs = self.t.t(
+                        "noble_needs",
+                        &[
+                            ("gold", num(rk.gold)),
+                            ("rooms", rk.rooms.to_string()),
+                            ("income", num(rk.income)),
+                        ],
                     );
-                }
-                if k == 0 {
-                    needs = self.t.s("noble_start");
-                }
-                (self.t.s(&format!("noble_{}", rk.id)), needs)
-            })
-            .collect();
-        let rise = match self.s.noble_next() {
-            Some((gold, rooms, champion, tribute)) => {
-                let base = gold == 0 && rooms == 0;
-                if rank + 1 < c::DEED_FROM {
-                    vec![button(self.t.s("rise"), "rise.noble", "")
-                        .tone("pres")
-                        .enabled(base)]
-                } else {
-                    vec![
-                        button(self.t.s("rise_champion"), "rise.noble", "champion")
+                    if k >= c::DEED_FROM {
+                        let d = k - c::DEED_FROM;
+                        needs = format!(
+                            "{needs} · {}",
+                            self.t.t(
+                                "deed",
+                                &[
+                                    ("enemy", self.t.enemy(c::CHAMPIONS[r][d])),
+                                    ("tribute", self.list(c::TRIBUTES[r][d])),
+                                ],
+                            )
+                        );
+                    }
+                    if k == 0 {
+                        needs = if r == 0 {
+                            self.t.s("noble_start")
+                        } else {
+                            self.t.t("tier_start", &[("region", self.region_name(r))])
+                        };
+                    }
+                    (self.t.s(&format!("noble_{}", rk.id)), needs)
+                })
+                .collect();
+            let now = self.s.rank_in(Engine::Nobility, r);
+            let rise = match self.s.noble_next_in(r) {
+                Some((gold, rooms, champion, tribute)) => {
+                    let base = gold == 0 && rooms == 0;
+                    if now + 1 < c::DEED_FROM {
+                        vec![button(self.t.s("rise"), "rise.noble", &r.to_string())
                             .tone("pres")
-                            .enabled(base && champion),
-                        button(self.t.s("rise_tribute"), "rise.noble", "tribute")
-                            .tone("pres")
-                            .enabled(base && tribute),
-                    ]
+                            .enabled(base)]
+                    } else {
+                        vec![
+                            button(self.t.s("rise_champion"), "rise.noble", &format!("{r}:champion"))
+                                .tone("pres")
+                                .enabled(base && champion),
+                            button(self.t.s("rise_tribute"), "rise.noble", &format!("{r}:tribute"))
+                                .tone("pres")
+                                .enabled(base && tribute),
+                        ]
+                    }
                 }
-            }
-            None => Vec::new(),
-        };
-        out.push(self.ladder(self.t.s("ladder"), ranks, rank, rise));
+                None => Vec::new(),
+            };
+            out.push(self.ladder(self.ladder_title(r), ranks, now, rise));
+        }
         out
     }
 
@@ -659,26 +854,24 @@ impl View<'_> {
             return self.needs_room("workshop");
         }
         let mut extra = Vec::new();
-        let rank = self.s.rank(Engine::Inventor);
         if let Some(rs) = &self.s.research {
-            let bp = &c::BLUEPRINTS[c::blueprint_index(&rs.id).unwrap_or(0)];
+            let ms = self.s.research_ms(&rs.id).unwrap_or(1).max(1);
             extra.push(Block {
                 title: self
                     .t
-                    .t("researching", &[("what", self.t.s(&format!("bp_{}", bp.id)))]),
+                    .t("researching", &[("what", self.t.s(&format!("bp_{}", rs.id)))]),
                 bar: Some(Bar {
                     tone: "mast".into(),
-                    width: crate::text::width(rs.progress.min(bp.ms) * 10_000 / bp.ms.max(1)),
-                    left: dur(rs.progress.min(bp.ms)),
-                    right: self
-                        .t
-                        .t("left_t", &[("t", dur(bp.ms.saturating_sub(rs.progress)))]),
+                    width: width(rs.progress.min(ms) * 10_000 / ms),
+                    left: dur(rs.progress.min(ms)),
+                    right: self.t.t("left_t", &[("t", dur(ms.saturating_sub(rs.progress)))]),
                 }),
                 ..block("bar")
             });
         }
         let rows = c::BLUEPRINTS
             .iter()
+            .filter(|bp| self.s.region_open(bp.region))
             .map(|bp| {
                 let done = self.s.blueprints.iter().any(|k| k == bp.id);
                 let now = self.s.research.as_ref().is_some_and(|r| r.id == bp.id);
@@ -694,7 +887,7 @@ impl View<'_> {
                                 ("lvl", bp.level.to_string()),
                                 ("list", self.list(bp.needs)),
                                 ("gold", num(bp.gold)),
-                                ("t", dur(bp.ms)),
+                                ("t", dur(self.s.research_ms(bp.id).unwrap_or(bp.ms))),
                             ],
                         )
                     ),
@@ -732,8 +925,17 @@ impl View<'_> {
                     self.t.s("machine_off")
                 } else if m.needs.iter().any(|(i, n)| self.s.have(i) < *n) {
                     self.t.t("machine_needs", &[("item", self.t.item(m.needs[0].0))])
-                } else if self.s.fuel_for(m).is_none() {
+                } else if m.fuel && self.s.fuel_for(m).is_none() {
                     self.t.s("machine_no_fuel")
+                } else if !m.fuel {
+                    self.t.t(
+                        "machine_on_free",
+                        &[
+                            ("t", dur(self.s.machine_cycle(m))),
+                            ("n", self.s.machine_makes(m).to_string()),
+                            ("item", self.t.item(m.makes.0)),
+                        ],
+                    )
                 } else {
                     self.t.t(
                         "machine_on",
@@ -794,22 +996,48 @@ impl View<'_> {
                 ..block("chips")
             });
         }
-        let ranks = c::INVENTOR_RANKS
-            .iter()
-            .map(|rk| {
-                (
-                    self.t.s(&format!("inventor_{}", rk.id)),
-                    self.t.t(
-                        &format!("inventor_needs_{}", rk.id),
-                        &[("lvl", rk.level.to_string()), ("room", rk.workshop.to_string())],
-                    ),
-                )
-            })
-            .collect();
-        let rise = vec![button(self.t.s("rise"), "rise.inventor", "")
-            .tone("pres")
-            .enabled(self.s.inventor_ready())];
-        extra.push(self.ladder(self.t.s("ladder"), ranks, rank, rise));
+        for r in self.open_regions() {
+            let ranks = c::INVENTOR_RANKS[r]
+                .iter()
+                .map(|rk| {
+                    let key = if r == 0 {
+                        format!("inventor_needs_{}", rk.id)
+                    } else {
+                        "inventor_needs_tier".to_string()
+                    };
+                    let also = if rk.every_machine {
+                        self.t.s("inv_every_machine")
+                    } else if rk.star_core {
+                        self.t.s("inv_star_core")
+                    } else if rk.machine {
+                        self.t.s("inv_a_machine")
+                    } else {
+                        self.t.s("inv_nothing_else")
+                    };
+                    (
+                        self.t.s(&format!("inventor_{}", rk.id)),
+                        self.t.t(
+                            &key,
+                            &[
+                                ("lvl", rk.level.to_string()),
+                                ("room", rk.workshop.to_string()),
+                                ("region", self.region_name(r)),
+                                ("also", also),
+                            ],
+                        ),
+                    )
+                })
+                .collect();
+            let rise = vec![button(self.t.s("rise"), "rise.inventor", &r.to_string())
+                .tone("pres")
+                .enabled(self.s.inventor_ready_in(r))];
+            extra.push(self.ladder(
+                self.ladder_title(r),
+                ranks,
+                self.s.rank_in(Engine::Inventor, r),
+                rise,
+            ));
+        }
         self.with_cards(self.skill(c::INVENTION), extra, "workshop")
     }
 
@@ -834,49 +1062,49 @@ impl View<'_> {
         if !self.s.engine_open(Engine::Cosmic) {
             return self.needs_room("observatory");
         }
-        let rank = self.s.rank(Engine::Cosmic);
-        let sign = self.s.sign();
         let mut extra = Vec::new();
-        let skills = |k: usize| {
-            c::SIGNS[k]
+        let skills = |sky: usize, k: usize| {
+            c::SKIES[sky].signs[k]
                 .1
                 .iter()
                 .map(|&s| self.skill_name(s))
                 .collect::<Vec<_>>()
                 .join(", ")
         };
-        let mut rows = vec![Row {
-            icon: format!("sign_{}", c::SIGNS[sign].0),
-            title: self.t.t(
-                "sign_up",
-                &[("sign", self.t.s(&format!("sign_{}", c::SIGNS[sign].0)))],
-            ),
-            sub: self.t.t(
-                "sign_sub",
-                &[("skills", skills(sign)), ("left", dur(self.s.sign_left()))],
-            ),
-            tone: "up".into(),
-            ..Row::default()
-        }];
-        let start = self.s.sim_ms + self.s.sign_left();
-        for k in 0..(c::SIGNS.len() - 1) as u64 {
-            let at = start + k * c::SIGN_MS;
-            let next = self.s.sign_at(at);
-            rows.push(Row {
-                icon: format!("sign_{}", c::SIGNS[next].0),
-                title: self.t.s(&format!("sign_{}", c::SIGNS[next].0)),
-                sub: self.t.t(
-                    "sign_later",
-                    &[("skills", skills(next)), ("in", dur(at - self.s.sim_ms))],
-                ),
+        for sky in (0..c::SKIES.len()).filter(|&k| self.s.sky_open(k)) {
+            let now = self.s.sky_sign_at(sky, self.s.sim_ms);
+            let id = c::SKIES[sky].signs[now].0;
+            let left = self.s.sky_left(sky);
+            let mut rows = vec![Row {
+                icon: format!("sign_{id}"),
+                title: self.t.t("sign_up", &[("sign", self.t.s(&format!("sign_{id}")))]),
+                sub: self
+                    .t
+                    .t("sign_sub", &[("skills", skills(sky, now)), ("left", dur(left))]),
+                tone: "up".into(),
                 ..Row::default()
+            }];
+            let start = self.s.sim_ms + left;
+            for k in 0..5u64 {
+                let at = start + k * c::SKIES[sky].sign_ms;
+                let next = self.s.sky_sign_at(sky, at);
+                let nid = c::SKIES[sky].signs[next].0;
+                rows.push(Row {
+                    icon: format!("sign_{nid}"),
+                    title: self.t.s(&format!("sign_{nid}")),
+                    sub: self.t.t(
+                        "sign_later",
+                        &[("skills", skills(sky, next)), ("in", dur(at - self.s.sim_ms))],
+                    ),
+                    ..Row::default()
+                });
+            }
+            extra.push(Block {
+                title: self.t.t("sky_of", &[("region", self.region_name(sky))]),
+                rows,
+                ..block("rows")
             });
         }
-        extra.push(Block {
-            title: self.t.s("sky_title"),
-            rows,
-            ..block("rows")
-        });
         let mut chips = vec![
             chip(
                 "p",
@@ -899,31 +1127,47 @@ impl View<'_> {
                 ),
             ));
         }
+        if self.s.sky_open(1) {
+            chips.push(chip("p", self.t.s("constellations")));
+        }
         extra.push(Block {
             chips,
             ..block("chips")
         });
-        let ranks = c::COSMIC_RANKS
-            .iter()
-            .map(|rk| {
-                (
-                    self.t.s(&format!("cosmic_{}", rk.id)),
-                    self.t.t(
-                        &format!("cosmic_needs_{}", rk.id),
-                        &[
-                            ("lvl", rk.level.to_string()),
-                            ("starlight", num(rk.starlight)),
-                            ("stardust", num(rk.stardust)),
-                            ("lenses", rk.lenses.to_string()),
-                        ],
-                    ),
-                )
-            })
-            .collect();
-        let rise = vec![button(self.t.s("rise"), "rise.cosmic", "")
-            .tone("pres")
-            .enabled(self.s.cosmic_ready())];
-        extra.push(self.ladder(self.t.s("ladder"), ranks, rank, rise));
+        for r in self.open_regions() {
+            let ranks = c::COSMIC_RANKS[r]
+                .iter()
+                .map(|rk| {
+                    let key = if r == 0 {
+                        format!("cosmic_needs_{}", rk.id)
+                    } else {
+                        "cosmic_needs_tier".to_string()
+                    };
+                    (
+                        self.t.s(&format!("cosmic_{}", rk.id)),
+                        self.t.t(
+                            &key,
+                            &[
+                                ("lvl", rk.level.to_string()),
+                                ("starlight", num(rk.starlight)),
+                                ("stardust", num(rk.stardust)),
+                                ("lenses", rk.lenses.to_string()),
+                                ("region", self.region_name(r)),
+                            ],
+                        ),
+                    )
+                })
+                .collect();
+            let rise = vec![button(self.t.s("rise"), "rise.cosmic", &r.to_string())
+                .tone("pres")
+                .enabled(self.s.cosmic_ready_in(r))];
+            extra.push(self.ladder(
+                self.ladder_title(r),
+                ranks,
+                self.s.rank_in(Engine::Cosmic, r),
+                rise,
+            ));
+        }
         self.with_cards(self.skill(c::ATTUNEMENT), extra, "observatory")
     }
 }

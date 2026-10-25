@@ -39,7 +39,7 @@
     "file": "crates/core/src/game.rs",
     "find": "10_000 + c::PRESTIGE_STEP_BP * self.prestige as u64",
     "replace": "10_000",
-    "test": "every_prestige_needs_600_and_keeps_only_the_multiplier"
+    "test": "every_prestige_needs_900_and_keeps_only_the_multiplier"
   },
   {
     "name": "an unreadable save is kept",
@@ -81,7 +81,7 @@
     "file": "crates/core/src/game.rs",
     "find": "        s.prestige = keep.prestige + 1;",
     "replace": "        s.prestige = keep.prestige + 1;\n        s.mxp = keep.mxp.clone();",
-    "test": "every_prestige_needs_600_and_keeps_only_the_multiplier"
+    "test": "every_prestige_needs_900_and_keeps_only_the_multiplier"
   },
   {
     "name": "crops take their time to grow",
@@ -114,8 +114,8 @@
   {
     "name": "crops ripening while away open the return screen",
     "file": "crates/core/src/api.rs",
-    "find": "|| r.stop.is_some() || !ripe.is_empty()",
-    "replace": "|| r.stop.is_some()",
+    "find": "                || !ripe.is_empty()\n",
+    "replace": "",
     "test": "crops_that_ripen_while_away_open_the_return_screen"
   },
   {
@@ -128,8 +128,8 @@
   {
     "name": "ashes are compost",
     "file": "crates/core/src/game.rs",
-    "find": "            ms = ms * c::COMPOST_GROW_PCT / 100;",
-    "replace": "",
+    "find": "            Some(_) => ms = ms * c::COMPOST_GROW_PCT / 100,",
+    "replace": "            Some(_) => {}",
     "test": "ashes_are_compost_and_a_composted_crop_grows_in_three_quarters_of_its_time"
   },
   {
@@ -177,7 +177,7 @@
   {
     "name": "the workshop room opens the inventor",
     "file": "crates/core/src/engines.rs",
-    "find": "            Engine::Inventor => reached && self.rooms[c::WORKSHOP] > 0,",
+    "find": "            Engine::Inventor => reached && self.room(c::WORKSHOP) > 0,",
     "replace": "            Engine::Inventor => reached,",
     "test": "engines_open_one_at_a_time_by_total_level"
   },
@@ -226,8 +226,8 @@
   {
     "name": "the kitchen cooks faster",
     "file": "crates/core/src/game.rs",
-    "find": "            ms = ms * (100 - c::KITCHEN_PCT * self.rooms[c::KITCHEN]) / 100;",
-    "replace": "",
+    "find": "        let room = self.room_speed_pct(a.skill);",
+    "replace": "        let room = self.room_speed_pct(a.skill) * 0;",
     "test": "a_room_costs_planks_nails_limestone_and_gold_and_the_kitchen_cooks_faster"
   },
   {
@@ -289,15 +289,15 @@
   {
     "name": "a switched-off machine stops",
     "file": "crates/core/src/engines.rs",
-    "find": "            || self.machines_off.iter().any(|k| k == m.id)\n",
-    "replace": "",
+    "find": "        if self.have(m.id) == 0 || self.machines_off.iter().any(|k| k == m.id) || !open.engines[2] {",
+    "replace": "        if self.have(m.id) == 0 || !open.engines[2] {",
     "test": "a_switched_off_machine_does_nothing"
   },
   {
     "name": "research takes its time",
     "file": "crates/core/src/engines.rs",
-    "find": "        Some(bp.ms.saturating_sub(rs.progress))",
-    "replace": "        Some(bp.ms.saturating_sub(rs.progress) / 2)",
+    "find": "        Some(self.research_ms(&rs.id)?.saturating_sub(rs.progress))",
+    "replace": "        Some(self.research_ms(&rs.id)?.saturating_sub(rs.progress) / 2)",
     "test": "research_finishes_a_blueprint_and_its_gadget_makes_a_skill_faster"
   },
   {
@@ -310,8 +310,8 @@
   {
     "name": "starlight under the sign",
     "file": "crates/core/src/engines.rs",
-    "find": "        if self.engine_open(Engine::Cosmic) && c::SIGNS[self.sign()].1.contains(&skill) {",
-    "replace": "        if self.engine_open(Engine::Cosmic) {",
+    "find": "                    .contains(&skill)",
+    "replace": "                    .len() > skill * 0",
     "test": "the_sky_turns_and_a_skill_under_its_sign_gathers_starlight"
   },
   {
@@ -324,8 +324,8 @@
   {
     "name": "cosmic ranks lengthen away time",
     "file": "crates/core/src/engines.rs",
-    "find": "            c::AWAY_CAP_BY_COSMIC[self.rank(Engine::Cosmic)]",
-    "replace": "            c::AWAY_CAP_MS",
+    "find": "        let mut cap = c::AWAY_CAP_BY_COSMIC[0][self.rank(Engine::Cosmic)];",
+    "replace": "        let mut cap = c::AWAY_CAP_MS;",
     "test": "cosmic_ranks_lengthen_the_away_limit"
   },
   {
@@ -345,7 +345,7 @@
   {
     "name": "a trader rank needs orders",
     "file": "crates/core/src/engines.rs",
-    "find": "            && orders >= rk.orders",
+    "find": "            && self.orders_in(reg) >= rk.orders",
     "replace": "",
     "test": "a_trader_rank_needs_its_level_and_its_orders"
   },
@@ -366,8 +366,8 @@
   {
     "name": "engines advance chunk-free",
     "file": "crates/core/src/game.rs",
-    "find": "            let dt = self.next_event().min(left);",
-    "replace": "            let dt = left;",
+    "find": "            let dt = self.next_event_with(&timers).min(left);",
+    "replace": "            let dt = left + 0 * self.next_event_with(&timers);",
     "test": "engines_running_together_give_the_same_result_however_time_is_split"
   },
   {
@@ -418,5 +418,201 @@
     "find": "c::CROPS.iter().map(|cr| cr.seed).chain([\"ashes\"]).collect(),",
     "replace": "c::CROPS.iter().map(|cr| cr.seed).collect(),",
     "test": "firemaking_feeds_farming_with_compost"
+  },
+  {
+    "name": "regions open by total level",
+    "file": "crates/core/src/engines.rs",
+    "find": "        c::REGIONS.get(r).is_some_and(|&(_, at)| self.total_level() >= at)",
+    "replace": "        c::REGIONS.get(r).is_some_and(|&(_, at)| self.total_level() + 20 >= at)",
+    "test": "regions_open_at_300_500_and_700_and_close_at_prestige"
+  },
+  {
+    "name": "prestige asks 900",
+    "file": "crates/core/src/content.rs",
+    "find": "pub const PRESTIGE_BASE: u32 = 900;",
+    "replace": "pub const PRESTIGE_BASE: u32 = 600;",
+    "test": "every_prestige_needs_900_and_keeps_only_the_multiplier"
+  },
+  {
+    "name": "a region row waits for its region",
+    "file": "crates/core/src/game.rs",
+    "find": "                    && self.region_open(a.region)\n",
+    "replace": "",
+    "test": "a_region_row_waits_for_its_region"
+  },
+  {
+    "name": "the rare tree doubles",
+    "file": "crates/core/src/game.rs",
+    "find": "            c::WOODCUTTING if self.rare_tree() == Some(a.id) => *n *= 2,",
+    "replace": "",
+    "test": "the_rare_tree_gives_twice_the_logs"
+  },
+  {
+    "name": "gems from mining",
+    "file": "crates/core/src/game.rs",
+    "find": "            c::MINING if self.rng.one_in(c::GEM_ONE_IN) => {",
+    "replace": "            c::MINING if self.rng.one_in(c::GEM_ONE_IN * 1_000) => {",
+    "test": "mining_finds_gems_once_the_coast_is_open"
+  },
+  {
+    "name": "better logs leave fine ashes",
+    "file": "crates/core/src/game.rs",
+    "find": "            \"fine_ashes\"\n",
+    "replace": "            a.makes.0\n",
+    "test": "better_logs_leave_fine_ashes_which_grow_a_crop_in_three_fifths"
+  },
+  {
+    "name": "fine compost grows faster",
+    "file": "crates/core/src/game.rs",
+    "find": "            Some(\"fine_ashes\") => ms = ms * c::FINE_COMPOST_GROW_PCT / 100,",
+    "replace": "            Some(\"fine_ashes\") => ms = ms * c::COMPOST_GROW_PCT / 100,",
+    "test": "better_logs_leave_fine_ashes_which_grow_a_crop_in_three_fifths"
+  },
+  {
+    "name": "masterworks pay",
+    "file": "crates/core/src/game.rs",
+    "find": "                r.masterworks += gold;",
+    "replace": "",
+    "test": "smithing_sells_masterworks_and_cooking_makes_perfect_dishes"
+  },
+  {
+    "name": "perfect dishes",
+    "file": "crates/core/src/game.rs",
+    "find": "            c::COOKING if self.rng.one_in(c::PERFECT_ONE_IN) => *n += 1,",
+    "replace": "",
+    "test": "smithing_sells_masterworks_and_cooking_makes_perfect_dishes"
+  },
+  {
+    "name": "an upgrade doubles a machine",
+    "file": "crates/core/src/engines.rs",
+    "find": "        m.makes.1 * if up { 2 } else { 1 }",
+    "replace": "        m.makes.1 * if up { 1 } else { 1 }",
+    "test": "charcoal_burns_first_and_an_upgrade_doubles_a_machine"
+  },
+  {
+    "name": "charcoal burns first",
+    "file": "crates/core/src/content.rs",
+    "find": "pub const FUEL: [&str; 3] = [\"charcoal\", \"coal\", \"logs\"];",
+    "replace": "pub const FUEL: [&str; 3] = [\"coal\", \"charcoal\", \"logs\"];",
+    "test": "charcoal_burns_first_and_an_upgrade_doubles_a_machine"
+  },
+  {
+    "name": "the tide mill burns no fuel",
+    "file": "crates/core/src/engines.rs",
+    "find": "        if m.fuel {\n            self.fuel_for(m)?;\n        }",
+    "replace": "        self.fuel_for(m)?;",
+    "test": "the_tide_mill_burns_no_fuel"
+  },
+  {
+    "name": "furniture counts as a room level",
+    "file": "crates/core/src/engines.rs",
+    "find": "            self.room(k) + pieces",
+    "replace": "            self.room(k) + pieces * 0",
+    "test": "furniture_counts_as_a_level_of_its_room"
+  },
+  {
+    "name": "regions raise a room's top",
+    "file": "crates/core/src/engines.rs",
+    "find": "        (room.max + c::ROOM_MAX_PER_REGION * later).min(cap)",
+    "replace": "        room.max.min(cap + later * 0)",
+    "test": "each_later_region_raises_every_rooms_top_level"
+  },
+  {
+    "name": "power jewellery",
+    "file": "crates/core/src/game.rs",
+    "find": "        hit * (100 + self.trinket(c::Trinket::Power)) / 100",
+    "replace": "        hit",
+    "test": "jewellery_and_region_armour_make_you_stronger"
+  },
+  {
+    "name": "region armour adds hitpoints",
+    "file": "crates/core/src/game.rs",
+    "find": "            + self.armour().2\n",
+    "replace": "",
+    "test": "jewellery_and_region_armour_make_you_stronger"
+  },
+  {
+    "name": "a dungeon moves on a stage",
+    "file": "crates/core/src/game.rs",
+    "find": "                self.dungeon_stage = stage + 1;",
+    "replace": "                self.dungeon_stage = stage;",
+    "test": "a_dungeon_runs_its_stages_and_pays_a_chest"
+  },
+  {
+    "name": "a dungeon retreat starts over",
+    "file": "crates/core/src/game.rs",
+    "find": "            Err(stop) => {\n                self.dungeon_stage = 0;",
+    "replace": "            Err(stop) => {",
+    "test": "a_dungeon_retreat_starts_it_over"
+  },
+  {
+    "name": "tiers add up income",
+    "file": "crates/core/src/engines.rs",
+    "find": "            .map(|r| c::NOBLE_RANKS[r][self.rank_in(Engine::Nobility, r)].income)",
+    "replace": "            .map(|r| c::NOBLE_RANKS[r][self.rank_in(Engine::Nobility, 0)].income * (r == 0) as u64)",
+    "test": "each_region_has_its_own_tier_of_every_ladder_and_they_add_up"
+  },
+  {
+    "name": "a coast town needs a ship",
+    "file": "crates/core/src/engines.rs",
+    "find": "            .filter(|cv| c::TOWNS[cv.town].vehicle == vehicle)\n            .count() as u64;\n        let most = self.have(vehicle)",
+    "replace": "            .filter(|cv| c::TOWNS[cv.town].vehicle == vehicle)\n            .count() as u64;\n        let most = self.have(\"cart\").max(self.have(vehicle))",
+    "test": "a_coast_town_needs_a_ship"
+  },
+  {
+    "name": "constellations",
+    "file": "crates/core/src/engines.rs",
+    "find": "        (0..open.regions)\n            .filter(|&k| {",
+    "replace": "        (0..open.regions.min(1))\n            .filter(|&k| {",
+    "test": "a_skill_under_signs_in_two_skies_gathers_twice_the_starlight"
+  },
+  {
+    "name": "a later sky lengthens away time",
+    "file": "crates/core/src/engines.rs",
+    "find": "                cap = cap.max(c::AWAY_CAP_BY_COSMIC[r][k]);",
+    "replace": "",
+    "test": "a_later_skys_rank_lengthens_the_away_limit_further"
+  },
+  {
+    "name": "the library speeds research",
+    "file": "crates/core/src/engines.rs",
+    "find": "        let pct = (c::RESEARCH_PCT * self.rooms_of(RoomEffect::Research)).min(50);",
+    "replace": "        let pct = 0;",
+    "test": "the_library_speeds_research_and_the_treasury_income"
+  },
+  {
+    "name": "the treasury pays more",
+    "file": "crates/core/src/engines.rs",
+    "find": "        base * (100 + c::INCOME_PCT * self.rooms_of(RoomEffect::Income)) / 100",
+    "replace": "        base",
+    "test": "the_library_speeds_research_and_the_treasury_income"
+  },
+  {
+    "name": "a patch for each region",
+    "file": "crates/core/src/game.rs",
+    "find": "            + c::PATCH_PER_REGION * self.regions_open().saturating_sub(1)\n",
+    "replace": "",
+    "test": "each_region_opens_one_more_farming_patch"
+  },
+  {
+    "name": "a version-three save gains rooms",
+    "file": "crates/core/src/api.rs",
+    "find": "    state.rooms.resize(c::ROOMS.len(), 0);",
+    "replace": "",
+    "test": "a_version_three_save_gains_twelve_rooms_and_keeps_its_ranks"
+  },
+  {
+    "name": "the bank searches by name",
+    "file": "crates/core/src/view.rs",
+    "find": "            if !q.is_empty() && !name.to_lowercase().contains(&q) {",
+    "replace": "            if q.is_empty() && !name.to_lowercase().contains(&q) {",
+    "test": "the_bank_groups_items_by_the_tab_that_makes_them_and_searches_by_name"
+  },
+  {
+    "name": "a long skill shows its newest",
+    "file": "crates/core/src/view.rs",
+    "find": "            if self.all || k >= older || on {",
+    "replace": "            if self.all || k >= older || on || true {",
+    "test": "a_long_skill_shows_its_newest_eight_until_you_ask_for_all"
   }
 ]

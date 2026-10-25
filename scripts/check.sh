@@ -21,7 +21,8 @@ cargo fmt --all -- --check
 step "2/9 lint (cargo clippy, warnings are errors)"
 cargo clippy --workspace --all-targets --quiet -- -D warnings
 
-step "3/9 core and boundary tests (cargo test)"
+step "3/9 core and boundary tests (cargo test), and the region content is current"
+"$PY" tools/content/regions.py --check
 cargo test --workspace --quiet
 
 step "4/9 release WebAssembly build (scripts/build.sh)"

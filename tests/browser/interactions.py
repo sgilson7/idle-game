@@ -24,7 +24,7 @@ GROUPS = {
     "make": ["firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction"],
     "fight": ["combat", "recipes"],
     "engines": ["trader", "estate", "workshop", "observatory"],
-    "more": ["bank", "shop", "plan", "prestige", "settings"],
+    "more": ["bank", "shop", "regions", "plan", "prestige", "settings"],
 }
 
 
@@ -43,13 +43,13 @@ def icons_on(page):
 
 def run(page, check, engine):
     phone = engine.endswith("iphone")
-    check(page.locator("#tabs .tab").count() == 22, "twenty-two tabs drawn: skills, combat, recipes, four engines and five screens")
+    check(page.locator("#tabs .tab").count() == 23, "twenty-three tabs drawn: skills, combat, recipes, four engines and six screens")
     check(page.locator("#groups .tab").count() == 5, "five groups drawn")
     if phone:
         check(page.locator("#tabs .tab:visible").count() == 4, "iPhone: the strip shows the Gather group's four tabs")
         check(page.locator("#groups").is_visible(), "iPhone: the groups sit along the bottom")
     else:
-        check(page.locator("#tabs .tab:visible").count() in (4, 22), "the rail or the strip shows its tabs")
+        check(page.locator("#tabs .tab:visible").count() in (4, 23), "the rail or the strip shows its tabs")
     check(page.inner_text(".sheet h2") == UI["welcome_title"], "a new game opens with the welcome")
     page.locator(".sheet .btn.primary").click()
     check(page.locator("#shade").is_hidden(), "Start closes the welcome")
@@ -90,6 +90,14 @@ def run(page, check, engine):
     open_tab(page, "trader")
     check(UI["opens_at"].replace("{n}", "150") in page.inner_text("#main"), "the Trader tab says it opens at total level 150")
     check(page.locator('#tabs .tab[data-tab="trader"].locked').count() == 1, "a tab not open yet is drawn dimmed")
+
+    # The bank's search box keeps the keyboard up while it filters.
+    open_tab(page, "bank")
+    field = page.locator('input[data-act="bank.search"]')
+    field.click()
+    field.type("lo")
+    check(page.evaluate("() => document.activeElement && document.activeElement.dataset.act") == "bank.search", "typing in the bank search keeps the box focused")
+    check(field.input_value() == "lo", "the search box keeps what was typed")
 
     # Flag a moment.
     page.locator('#top button[data-act="flag.open"]').click()

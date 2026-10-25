@@ -196,3 +196,5 @@ textarea { -webkit-user-select: text; user-select: text; }
   .scene.running .swing, .act-bar > i { animation-duration: 0s; }
   .gains .rowi, .toast { animation: none; opacity: 1; transform: none; }
 }
+.search { display: grid; gap: 4px; }
+.search input { width: 100%; font: 16px var(--font); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); -webkit-user-select: text; user-select: text; }

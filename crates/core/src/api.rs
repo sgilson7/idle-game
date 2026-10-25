@@ -48,6 +48,10 @@ pub struct Game {
     toasts: Vec<String>,
     draft: Flag,
     stash: bool,
+    /// What the bank search box holds (IG-Q41 A); not saved.
+    search: String,
+    /// Skill screens show every row, not only the newest (T15); not saved.
+    all: bool,
 }
 
 /// A save as it is written to a file: a little about where it came from, then
@@ -75,8 +79,14 @@ fn read_save(text: &str) -> Result<State, String> {
     if (state.v == 1 && state.xp.len() == 12) || (state.v == 2 && state.xp.len() == 14) {
         state.xp.resize(c::SKILLS.len(), 0);
         state.upkeep_hour = state.sim_ms / c::HOUR;
+        state.v = 3;
+    }
+    // Version 3 had six rooms and one tier of each engine; the regions add
+    // six rooms and a tier each (T15). Ranks, rooms and goods carry over.
+    if state.v == 3 {
         state.v = SAVE_VERSION;
     }
+    state.rooms.resize(c::ROOMS.len(), 0);
     if state.xp.len() != c::SKILLS.len()
         || state.tools.len() != c::TOOL_SKILLS.len()
         || state.style >= c::STYLES.len()
@@ -116,6 +126,8 @@ impl Game {
             toasts: Vec::new(),
             draft: Flag::default(),
             stash: false,
+            search: String::new(),
+            all: false,
         };
         if saved.trim().is_empty() {
             g.sheet = Some(g.welcome());
@@ -229,8 +241,10 @@ impl Game {
             "away_ms": aways.iter().map(|e| e.n).sum::<u64>(),
             "flags": self.s.flags.len(),
             "kills": self.s.kills,
+            "regions_open": self.s.regions_open(),
             "engines": {
                 "ranks": self.s.ranks,
+                "region_ranks": self.s.region_ranks,
                 "rooms": self.s.rooms,
                 "recipes": self.s.recipes,
                 "blueprints": self.s.blueprints,
@@ -285,7 +299,13 @@ impl Game {
         self.log_report(&r, now, away);
         if away {
             self.s.count("away_ms", elapsed);
-            if r.actions > 0 || r.stop.is_some() || !ripe.is_empty() || r.gold > 0 || !r.research.is_empty() {
+            if r.actions > 0
+                || r.stop.is_some()
+                || !ripe.is_empty()
+                || r.gold > 0
+                || !r.research.is_empty()
+                || !r.chests.is_empty()
+            {
                 let sheet = self.view().return_sheet(&r);
                 self.sheet = Some(sheet);
             }
@@ -305,12 +325,14 @@ impl Game {
         let mut r = Report::begin(&self.s, 0, 0);
         let (k, rest) = value.split_once(':').unwrap_or((value, ""));
         let num_k = k.parse::<usize>().ok();
+        // A rise names its region first ("2" or "2:tribute"); none is the Vale.
+        let reg = num_k.filter(|&g| g < c::REGIONS.len()).unwrap_or(0);
         let done = match name {
             "room.build" => num_k.is_some_and(|i| i < c::ROOMS.len() && self.s.build_room(i, &mut r)),
-            "rise.noble" => self.s.rise_noble(value == "tribute", &mut r),
-            "rise.trader" => self.s.rise_trader(),
-            "rise.inventor" => self.s.rise_inventor(&mut r),
-            "rise.cosmic" => self.s.rise_cosmic(&mut r),
+            "rise.noble" => self.s.rise_noble_in(reg, value.ends_with("tribute"), &mut r),
+            "rise.trader" => self.s.rise_trader_in(reg),
+            "rise.inventor" => self.s.rise_inventor_in(reg, &mut r),
+            "rise.cosmic" => self.s.rise_cosmic_in(reg, &mut r),
             "servant.set" => {
                 let job = self.s.active.clone().unwrap_or_default();
                 num_k.is_some_and(|i| self.s.set_servant(i, &job))
@@ -417,6 +439,12 @@ impl Game {
         for id in &r.research {
             self.s.note(now, "blueprint", id, 0);
         }
+        for id in &r.chests {
+            self.s.note(now, "chest", id, 0);
+        }
+        if r.masterworks > 0 {
+            self.s.note(now, "masterwork", "", r.masterworks);
+        }
         if r.income > 0 {
             self.s.count("income", r.income);
         }
@@ -473,6 +501,12 @@ impl Game {
         for id in &r.research {
             out.push(t.t("toast_blueprint", &[("what", t.s(&format!("bp_{id}")))]));
         }
+        for id in &r.chests {
+            out.push(t.t("toast_chest", &[("what", t.s(&format!("dungeon_{id}")))]));
+        }
+        if r.masterworks > 0 {
+            out.push(t.t("toast_masterwork", &[("n", num(r.masterworks))]));
+        }
         if !r.steps.is_empty() && self.s.active.is_some() {
             out.push(t.s("toast_plan"));
         }
@@ -493,6 +527,7 @@ impl Game {
                 self.s.screen = value.into();
                 self.sheet = None;
                 self.s.count(&format!("tab:{value}"), 1);
+                self.all = false;
             }
             "do" => {
                 self.sheet = None;
@@ -505,6 +540,7 @@ impl Game {
                         Some(a) => crate::view::tab_of_skill(c::ACTIONS[a].skill).into(),
                         None => "combat".into(),
                     };
+                    self.all = false;
                 }
             }
             "style" => {
@@ -602,6 +638,8 @@ impl Game {
                     .text
                     .t("toast_prestige", &[("n", self.s.prestige.to_string())])];
             }
+            "bank.search" => self.search = value.chars().take(40).collect(),
+            "list.all" => self.all = !self.all,
             "sheet.close" => self.sheet = None,
             "help.home" => self.sheet = Some(self.home_help()),
             "reset.ask" => {
@@ -678,6 +716,8 @@ impl Game {
             t: &self.text,
             s: &self.s,
             device: &self.device,
+            search: &self.search,
+            all: self.all,
         }
     }
 
@@ -844,7 +884,8 @@ fn tuning() -> serde_json::Value {
         "engine_at": c::ENGINE_AT.iter().map(|(_, at)| *at).collect::<Vec<_>>(),
         "recipes": c::RECIPES.iter().map(|r| serde_json::json!([r.id, r.enemy, r.one_in])).collect::<Vec<_>>(),
         "towns": c::TOWNS.iter().map(|t| serde_json::json!([t.id, t.level, t.trip_ms, t.danger])).collect::<Vec<_>>(),
-        "noble_ranks": c::NOBLE_RANKS.iter().map(|r| serde_json::json!([r.id, r.gold, r.rooms, r.income])).collect::<Vec<_>>(),
+        "regions": c::REGIONS,
+        "noble_ranks": c::NOBLE_RANKS.iter().flatten().map(|r| serde_json::json!([r.id, r.gold, r.rooms, r.income])).collect::<Vec<_>>(),
         "blueprints": c::BLUEPRINTS.iter().map(|b| serde_json::json!([b.id, b.level, b.gold, b.ms])).collect::<Vec<_>>(),
         "machines": c::MACHINES.iter().map(|m| serde_json::json!([m.id, m.ms])).collect::<Vec<_>>(),
         "plan_steps": c::PLAN_STEPS,
@@ -874,14 +915,15 @@ mod tests {
         Game::new(STRINGS, GLOSSARY, "", "{}", now).unwrap()
     }
 
-    /// Every skill at 30, every room built once, a rank on each ladder, a
-    /// recipe and a blueprint known, and goods for every screen to show.
+    /// Every skill at 40 (total level 720, so all four regions are open),
+    /// every room built once, a rank on each ladder, a recipe and a
+    /// blueprint known, and goods for every screen to show.
     fn engines_open(g: &mut Game) {
         let s = g.state_mut();
         for i in 0..c::SKILLS.len() {
-            s.xp[i] = crate::xp::at(30);
+            s.xp[i] = crate::xp::at(40);
         }
-        s.rooms = [1; 6];
+        s.rooms = vec![1; c::ROOMS.len()];
         s.ranks = [1, 2, 1, 1];
         s.recipes.push("farmers_stew".into());
         s.blueprints.push("sawmill".into());
@@ -921,7 +963,7 @@ mod tests {
         let v = ui(&g.tick(1_000));
         assert_eq!(v["screen"], "woodcutting");
         assert_eq!(v["sheet"]["kind"], "notice");
-        assert_eq!(v["tabs"].as_array().unwrap().len(), 22);
+        assert_eq!(v["tabs"].as_array().unwrap().len(), 23);
         assert_eq!(v["groups"].as_array().unwrap().len(), 5);
         assert_eq!(v["next_ms"], 0);
     }
@@ -966,9 +1008,18 @@ mod tests {
             "farming",
             "recipes",
             "combat",
+            "regions",
+            "bank",
         ] {
             all_text(&ui(&g.act("tab", tab, 3)), &mut texts);
         }
+        g.act("bank.search", "log", 3);
+        all_text(&ui(&g.act("tab", "bank", 3)), &mut texts);
+        g.act("bank.search", "zzz", 3);
+        all_text(&ui(&g.act("tab", "bank", 3)), &mut texts);
+        g.act("tab", "woodcutting", 3);
+        all_text(&ui(&g.act("list.all", "", 3)), &mut texts);
+        all_text(&ui(&g.act("do", "sunken_ship", 3)), &mut texts);
         all_text(&ui(&g.tick(3 + 2 * 3_600_000)), &mut texts);
         texts.sort();
         texts.dedup();
@@ -1041,7 +1092,7 @@ mod tests {
         let v = ui(&g3.tick(0));
         assert_eq!(v["stash"], true);
         assert_eq!(g3.state().xp[0], 0);
-        let newer = saved.replace("\"v\":3", "\"v\":99");
+        let newer = saved.replace("\"v\":4", "\"v\":99");
         let mut g4 = Game::new(STRINGS, GLOSSARY, &newer, "{}", 0).unwrap();
         assert_eq!(ui(&g4.tick(0))["stash"], true);
     }
@@ -1127,7 +1178,84 @@ mod tests {
         assert_eq!(loaded.state().xp.len(), 18);
         assert_eq!(loaded.state().xp[0], 100);
         assert_eq!(loaded.state().upkeep_hour, 50);
-        assert_eq!(loaded.state().rooms, [0; 6]);
+        assert_eq!(loaded.state().rooms, vec![0; c::ROOMS.len()]);
+    }
+
+    #[test]
+    fn a_version_three_save_gains_twelve_rooms_and_keeps_its_ranks() {
+        let mut g = game(0);
+        g.act("do", "tree", 0);
+        g.tick(30_000);
+        let mut old: serde_json::Value = serde_json::from_str(&g.save()).unwrap();
+        old["v"] = 3.into();
+        old["state"]["v"] = 3.into();
+        old["state"]["rooms"] = serde_json::json!([2, 1, 0, 0, 1, 0]);
+        old["state"]["ranks"] = serde_json::json!([1, 3, 0, 0]);
+        for k in ["region_ranks", "dungeon_stage"] {
+            old["state"].as_object_mut().unwrap().remove(k);
+        }
+        let loaded = Game::new(STRINGS, GLOSSARY, &old.to_string(), "{}", 40_000).unwrap();
+        assert_eq!(loaded.state().v, SAVE_VERSION);
+        assert_eq!(loaded.state().rooms, vec![2, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(loaded.state().ranks, [1, 3, 0, 0]);
+        assert_eq!(loaded.state().region_ranks, [[0; 4]; 3]);
+    }
+
+    #[test]
+    fn the_bank_groups_items_by_the_tab_that_makes_them_and_searches_by_name() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        for (item, n) in [("logs", 5), ("oak_logs", 2), ("copper_ore", 3), ("shrimp", 4)] {
+            g.state_mut().bank.insert(item.into(), n);
+        }
+        let titles = |v: &serde_json::Value| -> Vec<String> {
+            v["blocks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|b| b["kind"] == "bank")
+                .map(|b| b["title"].as_str().unwrap().to_string())
+                .collect()
+        };
+        let v = ui(&g.act("tab", "bank", 0));
+        assert_eq!(titles(&v), ["Woodcutting", "Mining", "Cooking"]);
+        let v = ui(&g.act("bank.search", "LOG", 0));
+        assert_eq!(titles(&v), ["Woodcutting"]);
+        let woods = v["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["kind"] == "bank")
+            .unwrap()["buttons"]
+            .as_array()
+            .unwrap()
+            .len();
+        assert_eq!(woods, 2);
+    }
+
+    #[test]
+    fn a_long_skill_shows_its_newest_eight_until_you_ask_for_all() {
+        // Woodcutting 99 with every region open: 36 trees, all unlocked.
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        for i in 0..c::SKILLS.len() {
+            g.state_mut().xp[i] = crate::xp::at(99);
+        }
+        let cards = |v: &serde_json::Value| {
+            v["blocks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|b| b["kind"] == "cards")
+                .map(|b| b["cards"].as_array().unwrap().len())
+                .sum::<usize>()
+        };
+        let v = ui(&g.act("tab", "woodcutting", 0));
+        assert_eq!(cards(&v), crate::view::NEWEST);
+        let v = ui(&g.act("list.all", "", 0));
+        assert_eq!(cards(&v), 36);
+        let v = ui(&g.act("tab", "mining", 0));
+        assert_eq!(cards(&v), crate::view::NEWEST, "a new tab shows the newest again");
     }
 
     #[test]
@@ -1194,7 +1322,7 @@ mod tests {
         g.act("sheet.close", "", 0);
         engines_open(&mut g);
         g.state_mut().ranks = [0, 0, 0, 0];
-        g.state_mut().rooms = [0; 6];
+        g.state_mut().rooms = vec![0; c::ROOMS.len()];
         g.state_mut().bank.insert("plank".into(), 10);
         g.state_mut().bank.insert("nails".into(), 20);
         g.state_mut().bank.insert("limestone".into(), 10);

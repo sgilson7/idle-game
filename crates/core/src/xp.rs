@@ -30,7 +30,8 @@ pub fn at(level: u32) -> u64 {
 
 /// The level that `xp` experience gives.
 pub fn level(xp: u64) -> u32 {
-    TABLE.iter().take_while(|&&need| need <= xp).count() as u32
+    // the table rises, so a binary search finds the same count as a scan
+    TABLE.partition_point(|&need| need <= xp) as u32
 }
 
 /// Mastery runs on a table this many times the skill table (P6): a mastery 99
@@ -38,10 +39,7 @@ pub fn level(xp: u64) -> u32 {
 pub const MASTERY_SCALE: u64 = 2;
 
 pub fn mastery_level(mxp: u64) -> u32 {
-    TABLE
-        .iter()
-        .take_while(|&&need| need * MASTERY_SCALE <= mxp)
-        .count() as u32
+    TABLE.partition_point(|&need| need * MASTERY_SCALE <= mxp) as u32
 }
 
 pub fn mastery_at(level: u32) -> u64 {

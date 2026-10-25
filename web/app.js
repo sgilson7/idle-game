@@ -180,7 +180,10 @@ const blocks = {
   cards: (b) => {
     const box = h("div", "cards");
     b.cards.forEach((c) => box.append(card(c)));
-    return box;
+    if (!b.title) return box;
+    const group = h("section", "group");
+    group.append(h("h2", "sec-h", b.title), box);
+    return group;
   },
   note: (b) => h("p", "note", b.text),
   styles: (b) => {
@@ -198,7 +201,10 @@ const blocks = {
     return box;
   },
   bank: (b) => {
+    const group = h("section", "group");
+    if (b.title) group.append(h("h2", "sec-h", b.title));
     const box = h("div", "panel bank");
+    group.append(box);
     b.buttons.forEach((x) => {
       const slot = h("button", "slot " + (x.tone || ""));
       slot.append(h("b", "", x.sub), icon(x.icon, "ic slot-ic"), h("small", "", x.label));
@@ -208,6 +214,27 @@ const blocks = {
       slot.addEventListener("click", () => press(x));
       box.append(slot);
     });
+    return group;
+  },
+  // The bank's search box (IG-Q41 A): each keystroke goes to the core, and
+  // the redraw keeps the box focused so the keyboard stays up.
+  search: (b) => {
+    const box = h("label", "search");
+    box.append(h("span", "sec-h", b.title));
+    const field = h("input");
+    field.type = "search";
+    field.value = b.value || "";
+    field.placeholder = b.text;
+    field.dataset.act = b.act;
+    field.addEventListener("input", () => {
+      draw(game.act(b.act, field.value, now()));
+      const again = document.querySelector('input[data-act="' + b.act + '"]');
+      if (again) {
+        again.focus();
+        again.setSelectionRange(again.value.length, again.value.length);
+      }
+    });
+    box.append(field);
     return box;
   },
   rows: (b) => {
