@@ -74,7 +74,7 @@ def run(page, check, engine):
         with page.expect_download() as d:
             page.locator('button[data-act="page.export"]').click()
         saved = json.loads(pathlib.Path(d.value.path()).read_text())
-        check(saved["game"] == "idle-game" and len(saved["state"]["xp"]) == 12, "Export downloads a save with twelve skills")
+        check(saved["game"] == "idle-game" and len(saved["state"]["xp"]) == 14, "Export downloads a save with fourteen skills")
         with page.expect_download() as d:
             page.locator('button[data-act="page.playtest"]').click()
         report = json.loads(pathlib.Path(d.value.path()).read_text())
