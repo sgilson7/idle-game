@@ -33,6 +33,7 @@ Every `SECOND-ORDER.md` row with status *person*, by number, with what the perso
 - R1.4: answer IG-Q1 to IG-Q9 in the journal's opening entry.
 - R1.5: approve or replace the agent-written skill, tree and item names in the mockups.
 - R1.6: answer IG-Q10 to IG-Q13 in the journal's Mockups entry.
+- R2.1, R2.2, R2.3, R2.4, R2.5, R2.6: answer IG-Q14 to IG-Q20 on the journal's Round 2 tab (one tap per card).
 
 ## Mistakes so far
 
