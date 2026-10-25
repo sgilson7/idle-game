@@ -682,6 +682,11 @@ impl Game {
                     }
                 }
             }
+            "buy.shelf" => {
+                if self.s.shop_buy(value) {
+                    self.s.note(now, "buy", value, c::SHOP_PACK);
+                }
+            }
             "prestige.ask" if self.s.can_prestige() => self.sheet = Some(self.prestige_sheet()),
             "prestige.do" if self.s.can_prestige() => {
                 self.s.do_prestige(now);

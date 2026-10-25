@@ -1426,11 +1426,59 @@ impl State {
         let Some(&(cost, _)) = c::TOOL_TIERS.get(tier + 1) else {
             return false;
         };
-        if self.gold < cost {
+        if self.gold < cost || !self.tool_tier_open(tier + 1) {
             return false;
         }
         self.gold -= cost;
         self.tools[line] = tier + 1;
+        true
+    }
+
+    /// The top tool tiers need the Trader's rank (IG-Q55 A).
+    pub fn tool_tier_open(&self, tier: usize) -> bool {
+        tier <= c::TOOL_TIERS_FREE
+            || (self.engine_open(c::Engine::Trader)
+                && self.rank_in(c::Engine::Trader, 0) >= c::TOOL_TIER_RANK)
+    }
+
+    /// Every shelf: (region, rank, items, open). The Vale's come from
+    /// `SHELVES`; each later region's opens at its first Trader rank there.
+    pub fn shelves(&self) -> Vec<(usize, usize, Vec<&'static str>, bool)> {
+        let trader = self.engine_open(c::Engine::Trader);
+        let mut out: Vec<(usize, usize, Vec<&'static str>, bool)> = c::SHELVES
+            .iter()
+            .map(|&(rank, items)| {
+                (
+                    0,
+                    rank,
+                    items.to_vec(),
+                    trader && self.rank_in(c::Engine::Trader, 0) >= rank,
+                )
+            })
+            .collect();
+        for r in 1..c::REGIONS.len() {
+            out.push((
+                r,
+                1,
+                c::region_goods(r),
+                trader && self.region_open(r) && self.rank_in(c::Engine::Trader, r) >= 1,
+            ));
+        }
+        out
+    }
+
+    /// Buys a pack of an item from an open shelf.
+    pub fn shop_buy(&mut self, item: &str) -> bool {
+        let on_sale = self
+            .shelves()
+            .iter()
+            .any(|(_, _, items, open)| *open && items.contains(&item));
+        let cost = c::shop_price(item) * c::SHOP_PACK;
+        if !on_sale || self.gold < cost {
+            return false;
+        }
+        self.gold -= cost;
+        *self.bank.entry(item.to_string()).or_insert(0) += c::SHOP_PACK;
         true
     }
 

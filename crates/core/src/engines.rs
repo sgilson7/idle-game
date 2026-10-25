@@ -1757,3 +1757,73 @@ mod region_tests {
         assert_eq!(at(16).patches_open(), 3);
     }
 }
+
+#[cfg(test)]
+mod shop_tests {
+    use crate::content::{self as c, Engine};
+    use crate::game::State;
+    use crate::xp;
+
+    /// Every skill at level 10: total level 180, so the Trader (150) is open.
+    fn trader_open() -> State {
+        let mut s = State::new(3);
+        for i in 0..c::SKILLS.len() {
+            s.xp[i] = xp::at(10);
+        }
+        assert!(s.engine_open(Engine::Trader));
+        s.gold = 100_000_000;
+        s
+    }
+
+    #[test]
+    fn each_trader_rank_opens_a_shelf_of_the_shop() {
+        let mut s = State::new(3);
+        s.gold = 1_000;
+        assert!(!s.shop_buy("feathers"), "the Trader is not open");
+        let mut s = trader_open();
+        assert!(!s.shop_buy("feathers"), "the first rank has no shelf");
+        s.ranks[0] = 1;
+        let gold = s.gold;
+        // Feathers are worth 1: five times that, at the least 5, for ten.
+        assert!(s.shop_buy("feathers"));
+        assert_eq!(gold - s.gold, 50);
+        assert_eq!(s.have("feathers"), 10);
+        // Cowhide is worth 15: 75 each.
+        assert!(s.shop_buy("cowhide"));
+        assert_eq!(gold - s.gold, 50 + 750);
+        assert!(!s.shop_buy("spider_silk"), "rank 2's shelf");
+        s.ranks[0] = 2;
+        assert!(s.shop_buy("spider_silk"));
+        assert!(!s.shop_buy("logs"), "never on a shelf");
+    }
+
+    #[test]
+    fn the_top_two_tool_tiers_need_the_traders_second_rank() {
+        let mut s = trader_open();
+        s.tools[0] = 5;
+        s.ranks[0] = 1;
+        assert!(!s.buy(0));
+        s.ranks[0] = 2;
+        let gold = s.gold;
+        assert!(s.buy(0));
+        assert_eq!(gold - s.gold, 3_000_000);
+        assert_eq!(s.tools[0], 6);
+    }
+
+    #[test]
+    fn everything_on_a_shelf_is_also_made_in_the_game_and_sells_for_less_than_it_costs() {
+        let made = |i: &str| {
+            c::ACTIONS.iter().any(|a| a.makes.0 == i)
+                || c::ENEMIES.iter().any(|e| e.drops.iter().any(|d| d.0 == i))
+                || c::CROPS.iter().any(|cr| cr.produce == i)
+        };
+        let s = trader_open();
+        for (r, _, items, _) in s.shelves() {
+            assert!(!items.is_empty(), "region {r} has an empty shelf");
+            for i in items {
+                assert!(made(i), "{i} is sold but not made");
+                assert!(c::value(i) < c::shop_price(i), "{i} sells for what it costs");
+            }
+        }
+    }
+}

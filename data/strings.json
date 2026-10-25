@@ -1226,7 +1226,9 @@
    "Steel axe",
    "Mithril axe",
    "Adamant axe",
-   "Rune axe"
+   "Rune axe",
+   "Dragon axe",
+   "Crystal axe"
   ],
   "mining": [
    "Bronze pickaxe",
@@ -1234,7 +1236,9 @@
    "Steel pickaxe",
    "Mithril pickaxe",
    "Adamant pickaxe",
-   "Rune pickaxe"
+   "Rune pickaxe",
+   "Dragon pickaxe",
+   "Crystal pickaxe"
   ],
   "fishing": [
    "Bronze rod",
@@ -1242,7 +1246,9 @@
    "Steel rod",
    "Mithril rod",
    "Adamant rod",
-   "Rune rod"
+   "Rune rod",
+   "Dragon rod",
+   "Crystal rod"
   ]
  },
  "ui": {
@@ -2024,6 +2030,12 @@
   "plan_until_level": "At {skill} level",
   "plan_until_gold": "When you have this much gold",
   "toast_plan_advanced_used": "Remove the repeat, if and until steps first",
-  "toast_plan_stuck": "Plan stopped at step {k}: it went round without doing anything"
+  "toast_plan_stuck": "Plan stopped at step {k}: it went round without doing anything",
+  "tool_needs_rank": "Opens at Trader rank: {rank}",
+  "shelf_title": "Trader's shelf: {rank}",
+  "shelf_region": "Trader's shelf: goods of {region}",
+  "shelf_opens": "The next shelf opens at Trader rank {rank}, with {n} more things to buy.",
+  "shelf_sub": "you have {have}",
+  "shelf_buy": "Buy {n} for {cost}"
  }
 }

@@ -691,5 +691,26 @@
     "find": "&[(\"item\", self.t.item(a.makes.0)), (\"n\", num(self.s.have(a.makes.0)))],",
     "replace": "&[(\"item\", self.t.item(a.makes.0)), (\"n\", num(0))],",
     "test": "a_card_shows_how_many_of_what_it_makes_you_have"
+  },
+  {
+    "name": "each trader rank opens a shelf",
+    "file": "crates/core/src/game.rs",
+    "find": "trader && self.rank_in(c::Engine::Trader, 0) >= rank))",
+    "replace": "trader))",
+    "test": "each_trader_rank_opens_a_shelf_of_the_shop"
+  },
+  {
+    "name": "the top tool tiers need the trader",
+    "file": "crates/core/src/game.rs",
+    "find": "if self.gold < cost || !self.tool_tier_open(tier + 1) {",
+    "replace": "if self.gold < cost {",
+    "test": "the_top_two_tool_tiers_need_the_traders_second_rank"
+  },
+  {
+    "name": "region goods are dropped or grown",
+    "file": "crates/core/src/content.rs",
+    "find": "&& dropped(i) && !out.contains(&i)",
+    "replace": "&& !out.contains(&i)",
+    "test": "everything_on_a_shelf_is_also_made_in_the_game_and_sells_for_less_than_it_costs"
   }
 ]

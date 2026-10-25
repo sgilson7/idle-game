@@ -1063,14 +1063,56 @@ pub const HP_XP_THOUSANDTHS: u64 = 133;
 /// Tools (P10): one line per gathering skill, six tiers each.
 pub const TOOL_SKILLS: [usize; 3] = [0, 1, 2];
 /// (cost in gold, percent faster)
-pub const TOOL_TIERS: [(u64, u64); 6] = [
+pub const TOOL_TIERS: [(u64, u64); 8] = [
     (0, 0),
     (500, 5),
     (4_000, 10),
     (25_000, 15),
     (120_000, 20),
     (600_000, 25),
+    // Opened by the Trader (T18, IG-Q55 A).
+    (3_000_000, 30),
+    (15_000_000, 35),
 ];
+/// Tool tiers past this one need the Trader's rank `TOOL_TIER_RANK` in the Vale.
+pub const TOOL_TIERS_FREE: usize = 5;
+pub const TOOL_TIER_RANK: usize = 2;
+
+/// The Trader's shelves in the shop (T18, IG-Q55 A): a Vale rank and what
+/// it puts on sale. Each later region's first rank adds that region's
+/// goods: what its actions need that no action makes (`region_goods`).
+#[rustfmt::skip]
+pub const SHELVES: &[(usize, &[&str])] = &[
+    (1, &["feathers", "cowhide", "coal", "raw_shrimp", "potato"]),
+    (2, &["spider_silk", "gold_ore", "onion", "tomato"]),
+    (3, &["big_bones", "magic_parts", "raw_lobster", "sweetcorn"]),
+    (4, &["dragon_scale", "yew_logs", "strawberry"]),
+];
+/// The shop sells at this many times what it pays, in packs.
+pub const SHOP_MARKUP: u64 = 5;
+pub const SHOP_PACK: u64 = 10;
+
+pub fn shop_price(item: &str) -> u64 {
+    (value(item) * SHOP_MARKUP).max(SHOP_MARKUP)
+}
+
+/// What a later region's actions need that no action makes but an enemy
+/// drops or a crop grows, cheapest first.
+pub fn region_goods(r: usize) -> Vec<&'static str> {
+    let dropped = |i: &str| {
+        ENEMIES.iter().any(|e| e.drops.iter().any(|d| d.0 == i)) || CROPS.iter().any(|cr| cr.produce == i)
+    };
+    let mut out: Vec<&'static str> = Vec::new();
+    for a in ACTIONS.iter().filter(|a| a.region == r) {
+        for &(i, _) in a.needs {
+            if value(i) > 0 && !ACTIONS.iter().any(|b| b.makes.0 == i) && dropped(i) && !out.contains(&i) {
+                out.push(i);
+            }
+        }
+    }
+    out.sort_by_key(|i| (value(i), *i));
+    out
+}
 
 /// What the shop pays for one of each item.
 #[rustfmt::skip]

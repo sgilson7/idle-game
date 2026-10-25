@@ -1331,6 +1331,18 @@ impl View<'_> {
                     ],
                 );
                 let buttons = match c::TOOL_TIERS.get(tier + 1) {
+                    Some(_) if !self.s.tool_tier_open(tier + 1) => vec![button(
+                        self.t.t(
+                            "tool_needs_rank",
+                            &[(
+                                "rank",
+                                self.t
+                                    .s(&format!("trader_{}", c::TRADER_RANKS[0][c::TOOL_TIER_RANK].id)),
+                            )],
+                        ),
+                        "tab",
+                        "trader",
+                    )],
                     Some(&(cost, pct)) => vec![button(
                         self.t.t(
                             "buy_for",
@@ -1365,6 +1377,69 @@ impl View<'_> {
             rows: self.seed_rows(),
             ..block("rows")
         });
+        out.extend(self.shelf_blocks());
+        out
+    }
+
+    /// The Trader's shelves (T18, IG-Q55 A): open ones to buy from, the
+    /// next shut one with what opens it.
+    fn shelf_blocks(&self) -> Vec<Block> {
+        let mut out = Vec::new();
+        let mut shown_shut = false;
+        for (r, rank, items, open) in self.s.shelves() {
+            if !self.s.region_open(r) && r > 0 {
+                continue;
+            }
+            let rank_name = self.t.s(&format!("trader_{}", c::TRADER_RANKS[r][rank].id));
+            let title = if r == 0 {
+                self.t.t("shelf_title", &[("rank", rank_name.clone())])
+            } else {
+                self.t.t(
+                    "shelf_region",
+                    &[("region", self.t.s(&format!("region_{}", c::REGIONS[r].0)))],
+                )
+            };
+            if !open {
+                if !shown_shut {
+                    shown_shut = true;
+                    out.push(Block {
+                        title,
+                        text: self.t.t(
+                            "shelf_opens",
+                            &[("rank", rank_name), ("n", items.len().to_string())],
+                        ),
+                        ..block("card")
+                    });
+                }
+                continue;
+            }
+            let rows = items
+                .iter()
+                .map(|&i| {
+                    let cost = c::shop_price(i) * c::SHOP_PACK;
+                    Row {
+                        icon: i.into(),
+                        title: self.t.item(i),
+                        sub: self.t.t("shelf_sub", &[("have", num(self.s.have(i)))]),
+                        buttons: vec![button(
+                            self.t.t(
+                                "shelf_buy",
+                                &[("n", c::SHOP_PACK.to_string()), ("cost", num(cost))],
+                            ),
+                            "buy.shelf",
+                            i,
+                        )
+                        .enabled(self.s.gold >= cost)],
+                        ..Row::default()
+                    }
+                })
+                .collect();
+            out.push(Block {
+                title,
+                rows,
+                ..block("rows")
+            });
+        }
         out
     }
 
