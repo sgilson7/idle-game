@@ -1,16 +1,86 @@
 [
   {
-    "name": "an empty title is refused",
-    "file": "crates/core/src/page.rs",
-    "find": "if strings.title.trim().is_empty() {",
-    "replace": "if false {",
-    "test": "an_empty_title_is_rejected_by_name"
+    "name": "time away counts for a day at most",
+    "file": "crates/core/src/api.rs",
+    "find": "let credited = elapsed.min(c::AWAY_CAP_MS);",
+    "replace": "let credited = elapsed;",
+    "test": "away_time_counts_for_a_day_at_most"
   },
   {
-    "name": "an unknown action is refused",
+    "name": "the return screen waits for ten minutes away",
     "file": "crates/core/src/api.rs",
-    "find": "other => return Err(format!(\"Unknown action \\\"{other}\\\".\")),",
-    "replace": "_ => {}",
-    "test": "act_refuses_an_unknown_action"
+    "find": "let away = elapsed >= c::RETURN_AFTER_MS;",
+    "replace": "let away = elapsed > c::RETURN_AFTER_MS * 2;",
+    "test": "coming_back_after_ten_minutes_shows_the_return_screen"
+  },
+  {
+    "name": "the bonfire adds gathering XP",
+    "file": "crates/core/src/game.rs",
+    "find": "pct += c::BONFIRE_XP_PCT;",
+    "replace": "pct += 0;",
+    "test": "the_bonfire_adds_ten_percent_to_gathering_while_it_burns"
+  },
+  {
+    "name": "mastery 25 is faster",
+    "file": "crates/core/src/game.rs",
+    "find": "ms -= c::MASTERY_FASTER_MS;",
+    "replace": "ms -= 0;",
+    "test": "mastery_25_takes_two_tenths_of_a_second_off"
+  },
+  {
+    "name": "picking by hand clears the plan",
+    "file": "crates/core/src/game.rs",
+    "find": "self.plan.clear();\n        self.begin(id);",
+    "replace": "self.begin(id);",
+    "test": "picking_an_action_by_hand_clears_the_plan"
+  },
+  {
+    "name": "out of food is a retreat, not a loss",
+    "file": "crates/core/src/game.rs",
+    "find": "self.hp = max_hp;\n            self.foe_hp = enemy.hp;\n            return Err(Stop::Food);",
+    "replace": "return Ok(());",
+    "test": "out_of_food_the_player_retreats_and_loses_nothing"
+  },
+  {
+    "name": "prestige multiplies XP",
+    "file": "crates/core/src/game.rs",
+    "find": "10_000 + c::PRESTIGE_STEP_BP * self.prestige as u64",
+    "replace": "10_000",
+    "test": "prestige_needs_600_then_625_and_multiplies_xp"
+  },
+  {
+    "name": "an unreadable save is kept",
+    "file": "crates/core/src/api.rs",
+    "find": "g.stash = true;",
+    "replace": "g.stash = false;",
+    "test": "the_save_round_trips_and_a_bad_save_starts_over_and_is_kept"
+  },
+  {
+    "name": "level-ups keep their game time",
+    "file": "crates/core/src/game.rs",
+    "find": "r.levels.push((skill, l, self.sim_ms));",
+    "replace": "r.levels.push((skill, l, 0));",
+    "test": "levels_reached_while_away_keep_the_game_time_they_came_at"
+  },
+  {
+    "name": "a flag lands in the playtest file",
+    "file": "crates/core/src/api.rs",
+    "find": "self.s.flags.push(f);",
+    "replace": "drop(f);",
+    "test": "a_flagged_moment_lands_in_the_playtest_file"
+  },
+  {
+    "name": "an action that cannot start spends no time",
+    "file": "crates/core/src/game.rs",
+    "find": "            if let Some(item) = self.missing(&id) {\n                r.stop",
+    "replace": "            if let Some(item) = self.missing(&id).filter(|_| false) {\n                r.stop",
+    "test": "a_plan_runs_its_steps_in_order"
+  },
+  {
+    "name": "an action that cannot start stops making",
+    "file": "crates/core/src/game.rs",
+    "find": "            if let Some(item) = self.missing(&id) {\n                r.stop",
+    "replace": "            if let Some(item) = self.missing(&id).filter(|_| false) {\n                r.stop",
+    "test": "making_uses_its_inputs_and_stops_when_they_run_out"
   }
 ]

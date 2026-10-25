@@ -111,6 +111,8 @@ pub struct Report {
     pub stop: Option<Stop>,
     pub stopped_on: String,
     pub checkpoints: Vec<(String, u32)>,
+    /// (skill, level, game time) for each level reached, at the moment it was reached.
+    pub levels: Vec<(usize, u32, u64)>,
 }
 
 fn add(map: &mut BTreeMap<String, u64>, k: &str, n: u64) {
@@ -307,9 +309,14 @@ impl State {
     // ---------- changing the state ----------
 
     pub fn note(&mut self, wall: u64, k: &str, a: &str, n: u64) {
+        self.note_at(wall, self.sim_ms, k, a, n);
+    }
+
+    /// An event at a given game time, for things that happened during an absence.
+    pub fn note_at(&mut self, wall: u64, at: u64, k: &str, a: &str, n: u64) {
         self.log.push(Event {
             w: wall,
-            s: self.sim_ms,
+            s: at,
             k: k.into(),
             a: a.into(),
             n,
@@ -336,8 +343,12 @@ impl State {
     }
 
     fn gain(&mut self, skill: usize, xp: u64, r: &mut Report) {
+        let before = xp::level(self.xp[skill]);
         self.xp[skill] += xp;
         r.xp[skill] += xp;
+        for l in (before + 1)..=xp::level(self.xp[skill]) {
+            r.levels.push((skill, l, self.sim_ms));
+        }
     }
 
     /// Starts an action or a fight by hand. A plan is cleared (P3).
@@ -441,9 +452,7 @@ impl State {
             return Err(Stop::Missing(String::new()));
         };
         let a = &c::ACTIONS[ai];
-        if let Some(item) = self.missing(id) {
-            return Err(Stop::Missing(item));
-        }
+        // `advance` checks the inputs before the wait starts (R3.6).
         r.m0.entry(a.id.to_string()).or_insert_with(|| self.mastery(a.id));
         let keep = self.keep_pct(a.id);
         if !a.needs.is_empty() && !(keep > 0 && self.rng.percent(keep)) {
@@ -483,9 +492,6 @@ impl State {
 
     fn swing(&mut self, e: usize, r: &mut Report) -> Result<(), Stop> {
         let enemy = &c::ENEMIES[e];
-        if let Some(item) = self.missing(enemy.id) {
-            return Err(Stop::Missing(item));
-        }
         let style = &c::STYLES[self.style];
         let (spent, _) = self.tier(style.spent);
         if !spent.is_empty() {
@@ -726,6 +732,9 @@ mod tests {
         assert_eq!(s.xp[c::FIREMAKING], 120);
         assert_eq!(r.steps, vec!["tree".to_string(), "burn_logs".to_string()]);
         assert_eq!(s.active.as_deref(), Some("tree"));
+        // 17 s − 9 s of chops − 6 s of burns: the failed fourth burn costs nothing,
+        // so the next chop is 2 s in.
+        assert_eq!(s.progress_ms, 2_000);
     }
 
     #[test]
@@ -887,6 +896,17 @@ mod tests {
         s.start("tree", 0);
         run(&mut s, 3_000);
         assert_eq!(s.xp[0], 12);
+    }
+
+    #[test]
+    fn levels_reached_while_away_keep_the_game_time_they_came_at() {
+        // Trees: 3 s and 10 XP. Level 2 needs 83 XP: the 9th chop, at 27 s.
+        // Level 3 needs 174: the 18th chop, at 54 s.
+        let mut s = State::new(1);
+        s.start("tree", 0);
+        let r = run(&mut s, 60_000);
+        assert_eq!(r.levels[0], (0, 2, 27_000));
+        assert_eq!(r.levels[1], (0, 3, 54_000));
     }
 
     #[test]

@@ -8,11 +8,25 @@ An ad-free idle game with twelve RuneScape-like skills that feed each other, com
 
 ## Rules that hold it up
 
-The rules that break silently if a later change ignores them, and the test that guards each.
+- Time is credited by one rule (`State::advance`); a split run equals a whole one (`one_long_step_equals_many_short_ones`).
+- An action that cannot start ends before its time is spent (`a_plan_runs_its_steps_in_order`).
+- Away time counts for 24 h at most; the return screen waits for 10 min away (`api.rs` tests).
+- Only `web/save.js` names storage (`no_storage.rs`); an unreadable save starts over and is kept.
+- The page holds no number and no rule (`boundary.rs`).
+- `tests/breaks.json`: 12 of 12 breaks caught.
 
 ## Shape of the code
 
-Where each kind of thing lives, in a short table.
+| Where | What |
+| --- | --- |
+| `crates/core/src/content.rs` | every tuning number and the content table |
+| `crates/core/src/game.rs` | state, time, actions, combat, plan, prestige |
+| `crates/core/src/view.rs` | the screens as blocks |
+| `crates/core/src/api.rs` | the `Game` the shim holds; save, import, export, playtest file |
+| `data/strings.json`, `GLOSSARY.md` | every word |
+| `web/app.js`, `web/save.js` | drawing; the one storage door |
+| `tools/icons/icons.py` | writes `web/icons.svg` |
+| `tools/playtest/readout.py` | reads a playtest file into a Markdown readout |
 
 ## Commands
 
@@ -20,9 +34,14 @@ Where each kind of thing lives, in a short table.
 
 ## What will bite within the hour
 
-What a new session gets wrong first.
+- Add content in `content.rs` and its name in `data/strings.json`, then run `python3 tools/icons/icons.py`; the browser check fails on a missing icon.
+- A key chosen by a condition (`weak_to` / `weak_to_yes`) escapes a simple key scan; `every_screen_and_sheet_finds_all_its_words` catches it.
+- Page JavaScript may hold no number but 0 and 1 and no template literal.
+- Playtest intake: save the friend's file, then `python3 tools/playtest/readout.py <file>`; a flag becomes a TRIAGE row only when the person says so.
 
 ## The journal
+
+Live game: https://sgilson7.github.io/idle-game/ (repository sgilson7/idle-game).
 
 `../idle-game-journal/index.html`, published privately at https://claude.ai/artifact/Sd1T2jh5mG3qaHbZQEA67N (republish from the same file to keep the link). Newest entry: the first mockups (2026-10-25).
 
@@ -46,7 +65,7 @@ By system, from `SECOND-ORDER.md`, with the rule each one produced.
 
 ## What passed
 
-The last lines of `./scripts/check.sh` and `./scripts/count-tests.sh`, with the date and commit.
+2026-10-25: `./scripts/check.sh` BUILDER CHECK PASSED (browser check in chromium, firefox, webkit, webkit-iphone, webkit-ipad); `./scripts/count-tests.sh` 81 passed, 0 failed; breaks 12 of 12; browser check against https://sgilson7.github.io/idle-game passed in all five.
 
 ## The next action
 

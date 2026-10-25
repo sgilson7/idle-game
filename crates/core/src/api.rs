@@ -263,10 +263,9 @@ impl Game {
     }
 
     fn log_report(&mut self, r: &Report, now: u64, away: bool) {
-        for (i, sk) in c::SKILLS.iter().enumerate() {
-            for l in (r.lv0[i] + 1)..=self.s.level(i) {
-                self.s.note(now, "level", sk.id, l as u64);
-            }
+        for &(skill, level, at) in &r.levels {
+            self.s
+                .note_at(now, at, "level", c::SKILLS[skill].id, level as u64);
         }
         for (id, cp) in &r.checkpoints {
             self.s.note(now, "mastery", id, *cp as u64);

@@ -33,6 +33,8 @@ One row per assumption, surprise or open item. **Kind** is *divergence* (what wa
 | R3.10 | worklist | | Real-device checks the emulator cannot make: Add to Home Screen and the save it keeps, the share sheet sending the playtest file, iPad fullscreen, how it feels in the hand. | First playtest on the co-designer's phone. | | person |
 | R3.11 | worklist | | Nothing is published. The co-designer needs an address to play. | Asked of the person: a GitHub Pages repository and permission to publish (IG-Q7). Granted: sgilson7/idle-game. | | person |
 | R3.12 | worklist | The README said MIT, as Builder is. | The template had no LICENSE file. | Added an MIT LICENSE ("the Idle Game contributors") before the repository went public; the licence is the person's to confirm or change. | | person |
+| R4.1 | finding | Level-ups during an absence were logged at the moment of return. | The first playtest file from the live site showed "0.0 minutes" per level: the pacing data tuning needs most was lost. | Each level-up carries the game time it came at. | test `levels_reached_while_away_keep_the_game_time_they_came_at`; a break row | done |
+| R4.2 | finding | Every new behaviour test was taken as able to fail. | Two of twelve breaks were missed: the plan test never checked that a failed step costs no time, and the inputs check inside one action was dead code behind the loop's check. | The plan test asserts the 2 s of progress; the dead checks are gone; 12 of 12 breaks caught. | `tests/breaks.json` | done |
 
 ## Strings written by the agent
 
