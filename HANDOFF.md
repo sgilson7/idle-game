@@ -70,7 +70,8 @@ Every `SECOND-ORDER.md` row with status *person*, by number, with what the perso
 - R7.11: approve or replace the engine names, strings and icons.
 - R9.3: about 400 region names are placeholders; keep, change or replace them in `data/strings.json` (or in `tools/content/regions.py` for ids).
 - R9.9: every region number is a formula's first guess; judge from playtest files.
-- R10.1, R10.2, R10.3: read the app-store review and answer IG-Q46 to IG-Q49 (journal, App stores tab); run a trademark and Google Play search on the chosen name.
+- R10.1, R10.2: read the app-store review (journal, App stores tab); run a trademark and Google Play search on Idlewright. IG-Q46 to IG-Q49 are answered (R10.3); the app build (T17) is paused for T18.
+- R11.1, R11.2, R11.3, R11.4, R11.5, R11.6, R11.7: answer IG-Q50 to IG-Q57 (journal, Next tab): what comes before launch, the art style, one engine in both versions, advanced plans, followers, the shop, and the bard.
 
 ## Mistakes so far
 

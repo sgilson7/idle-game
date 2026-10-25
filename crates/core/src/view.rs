@@ -250,6 +250,12 @@ pub struct Device {
     pub ua: String,
     pub w: u64,
     pub h: u64,
+    /// Running as the store app, not the web page (T17).
+    pub app: bool,
+    /// The store says the purchase is made (IG-Q46 B).
+    pub owned: bool,
+    /// The purchase's price as the store formats it for this player.
+    pub price: String,
 }
 
 /// The five groups of the bottom bar, and the tabs in each (P21): one tap

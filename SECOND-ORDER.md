@@ -75,7 +75,14 @@ One row per assumption, surprise or open item. **Kind** is *divergence* (what wa
 | R9.9 | worklist | | Every region number (levels, times, XP, values, enemy strength, rank costs) comes from a formula in `tools/content/regions.py`; they are first guesses for playtests to correct. | One place to change them, then rerun the script. | | person |
 | R10.1 | worklist | | The app-store review (LR-13 to LR-24) is the agent's reading of Apple's and Google's pages, the GEO paper and practitioner sources, read 25 October 2026; fees and rules change. | For the person to read (journal, App stores tab), and to recheck the fees on enrolling. | | person |
 | R10.2 | worklist | | The name shortlist and its checks are the agent's: the US App Store search API, a web search and .com DNS. No trademark search and no Google Play search were run. | Asked as IG-Q47; a USPTO and Play search come before any money is spent. | | person |
-| R10.3 | worklist | | Price, wrapper and the web version's future are open. | Asked as IG-Q46, IG-Q48 and IG-Q49. | | person |
+| R10.3 | worklist | | Price, wrapper and the web version's future are open. | Asked as IG-Q46, IG-Q48 and IG-Q49. IG-Q46 B, IG-Q47 A, IG-Q48 B, IG-Q49 A (T17). | | done |
+| R11.1 | worklist | | What the game needs to sell is the agent's judgement, ranked; the 2-hour and 35-hour figures are a lower bound from the XP table and the best Vale action at each level, with no tools, mastery or trips between skills. | Asked as IG-Q50. | | person |
+| R11.2 | finding | The art is good enough for the store. | Every enemy is one round face in a different colour (`enemy()` in `tools/icons/icons.py`), so colour alone tells them apart; the figure on each skill screen is a stick figure; there is no app icon. | Asked as IG-Q51. | | person |
+| R11.3 | divergence | IG-Q48 B: the core runs as native Rust in the app. | The person wants byte-identical engines in both versions. A native build cannot be the same bytes as the WebAssembly one. | Asked as IG-Q52: the same .wasm in the app's web view (default), or native with a screen-by-screen comparison test. | | person |
+| R11.4 | worklist | | Advanced plans (until, repeat, if; twelve steps) are the agent's design. | Asked as IG-Q53. | | person |
+| R11.5 | finding | Followers would be a new idea. | Servants (T11) already run one of your actions at half speed. | Followers are proposed as different: three at most, gathering only, free, growing, kept through prestige, from fame. Asked as IG-Q54. | | person |
+| R11.6 | worklist | | The Trader's shop shelves are the agent's design. | Asked as IG-Q55. | | person |
+| R11.7 | worklist | | The bard (Performance, Fame, opening at total level 50, its inputs and outputs) is the agent's design; the regions and prestige keep their total levels with 19 skills. | Asked as IG-Q56 and IG-Q57. | | person |
 ## Strings written by the agent
 
 Each reader-visible string the agent wrote, with its key, for the person to read.

@@ -37,6 +37,21 @@ pub struct Ui {
     /// The saved text could not be read: the page keeps a copy of it.
     pub stash: bool,
     pub hints: Vec<Hint>,
+    /// What the app tells the player while it is closed (T17): the device
+    /// schedules these when the page hides and drops them when it shows.
+    /// Empty on the web.
+    pub alerts: Vec<Alert>,
+}
+
+/// One notification for the device to schedule.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Alert {
+    /// The same kind of alert keeps the same id, so a new one replaces it.
+    pub id: u32,
+    /// Wall-clock milliseconds to show it at.
+    pub at: u64,
+    pub title: String,
+    pub body: String,
 }
 
 pub struct Game {
@@ -129,6 +144,7 @@ impl Game {
             search: String::new(),
             all: false,
         };
+        g.seal();
         if saved.trim().is_empty() {
             g.sheet = Some(g.welcome());
             return Ok(g);
@@ -136,6 +152,7 @@ impl Game {
         match read_save(saved) {
             Ok(s) => {
                 g.s = s;
+                g.seal();
                 g.s.note(now, "load", "", 0);
             }
             Err(why) => {
@@ -187,6 +204,7 @@ impl Game {
         match read_save(text) {
             Ok(s) => {
                 self.s = s;
+                self.seal();
                 self.s.last_wall = now;
                 self.s.note(now, "import", "", 0);
                 self.sheet = Some(self.notice("import_ok_title", self.text.s("import_ok_text")));
@@ -702,6 +720,29 @@ impl Game {
             "seen.show" => {
                 self.s.note(now, "show", "", 0);
             }
+            // The store's answers, as the device reports them (IG-Q46 B).
+            "store.owned" => {
+                let was = self.s.sealed;
+                self.device.owned = value == "1";
+                self.seal();
+                self.s.note(now, "store_owned", value, 0);
+                if was && !self.s.sealed {
+                    self.toasts = vec![self.text.s("toast_store_owned")];
+                }
+            }
+            "store.price" => {
+                self.device.price = value.into();
+            }
+            "store.pending" => {
+                self.toasts = vec![self.text.s("toast_store_pending")];
+            }
+            "store.failed" => {
+                self.s.note(now, "store_failed", value, 0);
+                self.toasts = vec![self.text.s("toast_store_failed")];
+            }
+            "store.none" => {
+                self.toasts = vec![self.text.s("toast_store_none")];
+            }
             "playtest.sent" => {
                 self.toasts = vec![self.text.s("toast_playtest")];
             }
@@ -850,9 +891,56 @@ impl Game {
             autosave_ms: c::AUTOSAVE_MS,
             stash: self.stash,
             hints: self.hints.clone(),
+            alerts: self.alerts(),
         };
         self.stash = false;
         ui
+    }
+
+    /// The regions past the Vale wait for the purchase in the app.
+    fn seal(&mut self) {
+        self.s.sealed = self.device.app && !self.device.owned;
+    }
+
+    /// One alert of each kind, for the first moment it happens: a crop
+    /// ripens, a caravan comes home, research finishes, and time away stops
+    /// counting. Worked out from the state as it is; what the player does
+    /// next can change them, so the device asks again on each hide.
+    pub fn alerts(&self) -> Vec<Alert> {
+        if !self.device.app {
+            return Vec::new();
+        }
+        let now = self.s.last_wall;
+        let crop = (0..self.s.patches_open())
+            .filter_map(|i| self.s.grow_left(i))
+            .filter(|&left| left > 0)
+            .min();
+        let caravan = self
+            .s
+            .caravans
+            .iter()
+            .map(|cv| cv.back.saturating_sub(self.s.sim_ms))
+            .filter(|&left| left > 0)
+            .min();
+        let research = self.s.research_need().filter(|&left| left > 0);
+        let cap = self.s.away_cap();
+        let hours = (cap / c::HOUR).to_string();
+        [
+            (1, "crop", crop, Vec::new()),
+            (2, "caravan", caravan, Vec::new()),
+            (3, "research", research, Vec::new()),
+            (4, "away", Some(cap), vec![("n", hours)]),
+        ]
+        .into_iter()
+        .filter_map(|(id, kind, left, args)| {
+            left.filter(|&l| l <= cap).map(|l| Alert {
+                id,
+                at: now + l,
+                title: self.text.s(&format!("alert_{kind}_title")),
+                body: self.text.t(&format!("alert_{kind}_text"), &args),
+            })
+        })
+        .collect()
     }
 
     fn ui_json(&mut self) -> String {
@@ -1427,5 +1515,105 @@ mod tests {
         assert_eq!(g.state().plan[0].n, 100);
         g.act("plan.count", "0:7", 0);
         assert_eq!(g.state().plan[0].n, 100);
+    }
+
+    // ---------- the app (T17) ----------
+
+    fn app(owned: bool, now: u64) -> Game {
+        let device = if owned {
+            r#"{"app":true,"owned":true,"price":"$0.99"}"#
+        } else {
+            r#"{"app":true,"price":"$0.99"}"#
+        };
+        Game::new(STRINGS, GLOSSARY, "", device, now).unwrap()
+    }
+
+    fn all_at(g: &mut Game, level: u32) {
+        for i in 0..c::SKILLS.len() {
+            g.state_mut().xp[i] = crate::xp::at(level);
+        }
+    }
+
+    #[test]
+    fn the_app_keeps_the_later_regions_shut_until_the_purchase() {
+        // Level 40 in every skill is past all three region gates.
+        let mut web = game(1);
+        all_at(&mut web, 40);
+        assert_eq!(web.state().regions_open(), 4);
+        let mut g = app(false, 1);
+        all_at(&mut g, 40);
+        assert_eq!(g.state().regions_open(), 1);
+        assert!(g.state().region_reached(1));
+        let v = ui(&g.act("store.owned", "1", 2));
+        assert_eq!(g.state().regions_open(), 4);
+        assert_eq!(v["toasts"][0], "Purchase made: the regions are open to you");
+        g.act("store.owned", "0", 3);
+        assert_eq!(g.state().regions_open(), 1);
+        let mut owned = app(true, 1);
+        all_at(&mut owned, 40);
+        assert_eq!(owned.state().regions_open(), 4);
+    }
+
+    #[test]
+    fn a_save_loaded_or_imported_into_the_app_stays_shut_without_the_purchase() {
+        let mut web = game(1);
+        all_at(&mut web, 40);
+        let text = web.save();
+        let g = Game::new(STRINGS, GLOSSARY, &text, r#"{"app":true}"#, 2).unwrap();
+        assert_eq!(g.state().regions_open(), 1);
+        let mut g = app(false, 1);
+        g.import(&text, 2);
+        assert_eq!(g.state().regions_open(), 1);
+    }
+
+    #[test]
+    fn the_regions_screen_offers_the_purchase_only_in_the_app_and_only_until_it_is_made() {
+        let labels = |v: &serde_json::Value| {
+            let mut t = Vec::new();
+            all_text(&v["blocks"], &mut t);
+            t
+        };
+        let mut g = app(false, 1);
+        let t = labels(&ui(&g.act("tab", "regions", 2)));
+        assert!(t.iter().any(|s| s == "Buy for $0.99"));
+        assert!(t.iter().any(|s| s == "Restore purchase"));
+        let t = labels(&ui(&g.act("store.owned", "1", 3)));
+        assert!(!t.iter().any(|s| s == "Restore purchase"));
+        let mut web = game(1);
+        let t = labels(&ui(&web.act("tab", "regions", 2)));
+        assert!(!t.iter().any(|s| s == "Restore purchase"));
+    }
+
+    #[test]
+    fn the_app_lists_one_alert_of_each_kind_within_time_away() {
+        let mut g = app(false, 1_000);
+        g.tick(1_000);
+        let s = g.state_mut();
+        let sim = s.sim_ms;
+        for back in [30 * c::HOUR, 2 * c::HOUR, 5 * c::HOUR] {
+            s.caravans.push(crate::game::Caravan {
+                back: sim + back,
+                ..Default::default()
+            });
+        }
+        let v = ui(&g.tick(1_000));
+        let alerts = v["alerts"].as_array().unwrap();
+        // The caravan home soonest (2 hours) and time away running out (24 hours).
+        assert_eq!(alerts.len(), 2);
+        assert_eq!(alerts[0]["id"], 2);
+        assert_eq!(alerts[0]["at"], 1_000 + 7_200_000);
+        assert_eq!(alerts[1]["id"], 4);
+        assert_eq!(alerts[1]["at"], 1_000 + 86_400_000);
+        assert_eq!(
+            alerts[1]["body"],
+            "Time away counts for 24 hours. Open the game to carry on."
+        );
+        // A caravan home only after time away runs out gets no alert.
+        g.state_mut().caravans.retain(|cv| cv.back == sim + 30 * c::HOUR);
+        let v = ui(&g.tick(1_000));
+        assert_eq!(v["alerts"].as_array().unwrap().len(), 1);
+        assert_eq!(v["alerts"][0]["id"], 4);
+        let mut web = game(1_000);
+        assert_eq!(ui(&web.tick(1_000))["alerts"].as_array().unwrap().len(), 0);
     }
 }

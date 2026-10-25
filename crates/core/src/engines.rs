@@ -56,7 +56,14 @@ impl State {
 
     /// A region is open while the total level is at its gate; prestige
     /// closes it again (IG-Q44 A).
+    /// Reached by total level, and in the app paid for past the Vale
+    /// (IG-Q46 B).
     pub fn region_open(&self, r: usize) -> bool {
+        (r == 0 || !self.sealed) && self.region_reached(r)
+    }
+
+    /// Reached by total level, whether or not the purchase has opened it.
+    pub fn region_reached(&self, r: usize) -> bool {
         c::REGIONS.get(r).is_some_and(|&(_, at)| self.total_level() >= at)
     }
 

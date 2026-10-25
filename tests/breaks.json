@@ -614,5 +614,33 @@
     "find": "            if self.all || k >= older || on {",
     "replace": "            if self.all || k >= older || on || true {",
     "test": "a_long_skill_shows_its_newest_eight_until_you_ask_for_all"
+  },
+  {
+    "name": "the app keeps the later regions shut until the purchase",
+    "file": "crates/core/src/engines.rs",
+    "find": "(r == 0 || !self.sealed) && self.region_reached(r)",
+    "replace": "self.region_reached(r)",
+    "test": "the_app_keeps_the_later_regions_shut_until_the_purchase"
+  },
+  {
+    "name": "a loaded save is sealed in the app",
+    "file": "crates/core/src/api.rs",
+    "find": "g.s = s;\n                g.seal();",
+    "replace": "g.s = s;",
+    "test": "a_save_loaded_or_imported_into_the_app_stays_shut_without_the_purchase"
+  },
+  {
+    "name": "the purchase is offered while the regions are shut",
+    "file": "crates/core/src/view_engines.rs",
+    "find": "        if !self.s.sealed {\n            return vec![Block {\n                text: self.t.s(\"store_owned\"),",
+    "replace": "        if self.s.sealed {\n            return vec![Block {\n                text: self.t.s(\"store_owned\"),",
+    "test": "the_regions_screen_offers_the_purchase_only_in_the_app_and_only_until_it_is_made"
+  },
+  {
+    "name": "alerts past time away are dropped",
+    "file": "crates/core/src/api.rs",
+    "find": "left.filter(|&l| l <= cap)",
+    "replace": "left.filter(|&l| l <= cap * 2)",
+    "test": "the_app_lists_one_alert_of_each_kind_within_time_away"
   }
 ]

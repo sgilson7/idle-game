@@ -1967,6 +1967,25 @@
   "room_library_does": "research 10% faster a level",
   "room_treasury_does": "estate income 10% more a level",
   "room_sun_garden_does": "one more farming patch a level",
-  "strong_vs_n": "strong vs {n} enemies"
+  "strong_vs_n": "strong vs {n} enemies",
+  "region_sealed": "Reached: opens with the purchase",
+  "store_title": "The Coast, the Peaks and the Wastes",
+  "store_offer": "The Vale is free to play in full. One purchase opens the other three regions, each at its total level, with their dungeons and engine tiers.",
+  "store_buy": "Buy for {price}",
+  "store_buy_plain": "Buy",
+  "store_restore": "Restore purchase",
+  "store_owned": "Purchase made: each region opens at its total level.",
+  "toast_store_owned": "Purchase made: the regions are open to you",
+  "toast_store_pending": "Purchase waiting for approval",
+  "toast_store_failed": "Purchase not made: try again from Regions",
+  "toast_store_none": "No purchase found to restore",
+  "alert_crop_title": "A crop is ready",
+  "alert_crop_text": "A farming patch is ready to harvest.",
+  "alert_caravan_title": "A caravan is home",
+  "alert_caravan_text": "Its gold is waiting at the Trader.",
+  "alert_research_title": "Research is done",
+  "alert_research_text": "The Workshop has finished a blueprint.",
+  "alert_away_title": "Time away has stopped counting",
+  "alert_away_text": "Time away counts for {n} hours. Open the game to carry on."
  }
 }

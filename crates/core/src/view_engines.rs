@@ -152,6 +152,7 @@ impl View<'_> {
             text: self.t.s("regions_intro"),
             ..block("note")
         });
+        out.extend(self.store());
         for (r, &(id, at)) in c::REGIONS.iter().enumerate() {
             let gathers = |a: &c::Action| matches!(a.skill, c::WOODCUTTING | c::MINING | c::FISHING);
             let gather = c::ACTIONS.iter().filter(|a| a.region == r && gathers(a)).count();
@@ -171,6 +172,8 @@ impl View<'_> {
                 icon: format!("region_{id}"),
                 title: if open {
                     self.t.s("region_is_open")
+                } else if self.s.region_reached(r) {
+                    self.t.s("region_sealed")
                 } else {
                     self.t.t("opens_at", &[("n", at.to_string())])
                 },
@@ -217,6 +220,34 @@ impl View<'_> {
             ..block("note")
         });
         out
+    }
+
+    /// The app's one purchase (IG-Q46 B): what it opens, a button to buy it
+    /// and one to restore it. Nothing on the web, which is whole (IG-Q49 A).
+    fn store(&self) -> Vec<Block> {
+        if !self.device.app {
+            return Vec::new();
+        }
+        if !self.s.sealed {
+            return vec![Block {
+                text: self.t.s("store_owned"),
+                ..block("note")
+            }];
+        }
+        let buy = if self.device.price.is_empty() {
+            self.t.s("store_buy_plain")
+        } else {
+            self.t.t("store_buy", &[("price", self.device.price.clone())])
+        };
+        vec![Block {
+            title: self.t.s("store_title"),
+            text: self.t.s("store_offer"),
+            buttons: vec![
+                button(buy, "page.buy", "").tone("primary"),
+                button(self.t.s("store_restore"), "page.restore", ""),
+            ],
+            ..block("buttons")
+        }]
     }
 
     // ---------- the recipe book (T10) ----------

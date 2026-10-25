@@ -163,6 +163,10 @@ pub struct State {
     /// The last game hour the estate was paid for.
     #[serde(default)]
     pub upkeep_hour: u64,
+    /// The app without the purchase: the regions past the Vale stay shut
+    /// (IG-Q46 B). The api sets it from the device on every load; not saved.
+    #[serde(skip)]
+    pub sealed: bool,
 }
 
 /// Why an action could not go on.
@@ -258,6 +262,7 @@ impl State {
             machine_ms: BTreeMap::new(),
             machines_off: Vec::new(),
             upkeep_hour: 0,
+            sealed: false,
         };
         s.hp = s.max_hp();
         s.note(now, "new", "", 0);

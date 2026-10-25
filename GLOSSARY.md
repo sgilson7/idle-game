@@ -66,6 +66,12 @@ Starting every skill again from the first level, in exchange for more XP from th
 
 Not: rebirth, ascension
 
+### Purchase
+
+The one payment in the app. It opens the Coast, the Peaks and the Wastes, each at its total level; the Vale and the web version are free.
+
+Not: DLC, expansion pack, in-app purchase
+
 ### Rank
 
 A step on an engine's ladder. Each rank asks for something and makes the engine better.
