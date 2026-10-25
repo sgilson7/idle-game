@@ -73,6 +73,9 @@ One row per assumption, surprise or open item. **Kind** is *divergence* (what wa
 | R9.7 | finding | The time loop would stay fast with more content. | A heavy 24-hour return (six servants, four machines, caravans) took 3.4 s natively: the total level was summed for every timer on every event. | The level lookup is a binary search, and each loop step works out what is open once. Now 0.36 s natively, 0.28 s in WebKit and 0.31 s in Chromium for the same day. | `open_now` and `timers` in `engines.rs` | done |
 | R9.8 | divergence | The plan's mechanics, as written. | Three were simplified to fit the rules: combination runes make two from one essence; a masterwork sells at once for twice its value; a ship is the Coast's vehicle, with storms as the Coast towns' bandit odds, not faster than a cart. | Each is in `content.rs` and the journal's Built tab. | | done |
 | R9.9 | worklist | | Every region number (levels, times, XP, values, enemy strength, rank costs) comes from a formula in `tools/content/regions.py`; they are first guesses for playtests to correct. | One place to change them, then rerun the script. | | person |
+| R10.1 | worklist | | The app-store review (LR-13 to LR-24) is the agent's reading of Apple's and Google's pages, the GEO paper and practitioner sources, read 25 October 2026; fees and rules change. | For the person to read (journal, App stores tab), and to recheck the fees on enrolling. | | person |
+| R10.2 | worklist | | The name shortlist and its checks are the agent's: the US App Store search API, a web search and .com DNS. No trademark search and no Google Play search were run. | Asked as IG-Q47; a USPTO and Play search come before any money is spent. | | person |
+| R10.3 | worklist | | Price, wrapper and the web version's future are open. | Asked as IG-Q46, IG-Q48 and IG-Q49. | | person |
 ## Strings written by the agent
 
 Each reader-visible string the agent wrote, with its key, for the person to read.

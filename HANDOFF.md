@@ -70,6 +70,7 @@ Every `SECOND-ORDER.md` row with status *person*, by number, with what the perso
 - R7.11: approve or replace the engine names, strings and icons.
 - R9.3: about 400 region names are placeholders; keep, change or replace them in `data/strings.json` (or in `tools/content/regions.py` for ids).
 - R9.9: every region number is a formula's first guess; judge from playtest files.
+- R10.1, R10.2, R10.3: read the app-store review and answer IG-Q46 to IG-Q49 (journal, App stores tab); run a trademark and Google Play search on the chosen name.
 
 ## Mistakes so far
 
