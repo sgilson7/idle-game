@@ -69,7 +69,7 @@ pub struct Chip {
     pub text: String,
 }
 
-fn chip(tone: &str, text: String) -> Chip {
+pub(crate) fn chip(tone: &str, text: String) -> Chip {
     Chip {
         tone: tone.into(),
         text,
@@ -174,7 +174,7 @@ pub struct Block {
     pub value: String,
 }
 
-fn block(kind: &str) -> Block {
+pub(crate) fn block(kind: &str) -> Block {
     Block {
         kind: kind.into(),
         ..Block::default()
@@ -215,6 +215,18 @@ pub struct Tab {
     pub running: bool,
     #[serde(skip_serializing_if = "is_false")]
     pub current: bool,
+    /// Not open yet: drawn dimmed, and its screen says what opens it.
+    #[serde(skip_serializing_if = "is_false")]
+    pub locked: bool,
+    /// In the group on screen: a phone shows only these, in the strip (P21).
+    #[serde(skip_serializing_if = "is_false")]
+    pub strip: bool,
+    /// The group's name, on the first tab of each group, for the wide rail.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub heading: String,
+    /// What a tap sends: `tab`, or `group` for the five group buttons.
+    pub act: String,
+    pub value: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -240,27 +252,53 @@ pub struct Device {
     pub h: u64,
 }
 
-pub const TABS: [&str; 16] = [
-    "woodcutting",
-    "mining",
-    "fishing",
-    "farming",
-    "firemaking",
-    "fletching",
-    "smithing",
-    "cooking",
-    "crafting",
-    "runecrafting",
-    "combat",
-    "bank",
-    "shop",
-    "plan",
-    "prestige",
-    "settings",
+/// The five groups of the bottom bar, and the tabs in each (P21): one tap
+/// to a group, one tap to a skill.
+#[rustfmt::skip]
+pub const GROUPS: [(&str, &[&str]); 5] = [
+    ("gather", &["woodcutting", "mining", "fishing", "farming"]),
+    ("make", &["firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction"]),
+    ("fight", &["combat", "recipes"]),
+    ("engines", &["trader", "estate", "workshop", "observatory"]),
+    ("more", &["bank", "shop", "plan", "prestige", "settings"]),
 ];
 
-/// The tabs that are skills (the rest are screens).
-pub const SKILL_TABS: usize = 11;
+#[rustfmt::skip]
+pub const TABS: [&str; 22] = [
+    "woodcutting", "mining", "fishing", "farming",
+    "firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction",
+    "combat", "recipes",
+    "trader", "estate", "workshop", "observatory",
+    "bank", "shop", "plan", "prestige", "settings",
+];
+
+/// The tabs whose skills or engines take things in and give things out,
+/// for the uses and feeds links.
+#[rustfmt::skip]
+pub const LINK_TABS: [&str; 16] = [
+    "woodcutting", "mining", "fishing", "farming",
+    "firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction",
+    "combat", "trader", "estate", "workshop", "observatory",
+];
+
+/// The tab where a skill's actions are: its own, or its engine's.
+pub fn tab_of_skill(skill: usize) -> &'static str {
+    match skill {
+        c::TRADING => "trader",
+        c::INVENTION => "workshop",
+        c::ATTUNEMENT => "observatory",
+        c::MELEE | c::RANGED | c::MAGIC | c::HITPOINTS => "combat",
+        i => c::SKILLS[i].id,
+    }
+}
+
+pub fn group_of(tab: &str) -> &'static str {
+    GROUPS
+        .iter()
+        .find(|(_, tabs)| tabs.contains(&tab))
+        .map(|(g, _)| *g)
+        .unwrap_or("more")
+}
 
 /// Everything the view needs to read.
 pub struct View<'a> {
@@ -277,11 +315,20 @@ impl View<'_> {
         }
     }
 
-    fn skill_name(&self, i: usize) -> String {
+    pub(crate) fn skill_name(&self, i: usize) -> String {
         self.t.skill(c::SKILLS[i].id).name.clone()
     }
 
-    fn xp_bar(&self, skill: usize) -> Bar {
+    /// A tab's name: a skill's, or a screen's.
+    pub(crate) fn tab_name(&self, id: &str) -> String {
+        if c::skill_index(id).is_some() || id == "combat" {
+            self.t.skill(id).name.clone()
+        } else {
+            self.t.s(&format!("tab_{id}"))
+        }
+    }
+
+    pub(crate) fn xp_bar(&self, skill: usize) -> Bar {
         let x = self.s.xp[skill];
         let l = xp::level(x);
         if l >= xp::MAX_LEVEL {
@@ -301,7 +348,7 @@ impl View<'_> {
         }
     }
 
-    fn mastery_bar(&self, id: &str) -> Bar {
+    pub(crate) fn mastery_bar(&self, id: &str) -> Bar {
         let m = self.s.mxp.get(id).copied().unwrap_or(0);
         let l = xp::mastery_level(m);
         if l >= xp::MAX_LEVEL {
@@ -347,14 +394,53 @@ impl View<'_> {
         }
     }
 
-    pub fn tabs(&self) -> Vec<Tab> {
-        let running = self.s.active.as_deref().map(|id| {
+    fn running_tab(&self) -> Option<&'static str> {
+        self.s.active.as_deref().map(|id| {
             if c::enemy_index(id).is_some() {
                 "combat"
             } else {
-                c::SKILLS[self.s.skill_of(id)].id
+                tab_of_skill(self.s.skill_of(id))
             }
-        });
+        })
+    }
+
+    /// The bottom bar's five groups (P21). A group opens on the running tab
+    /// when it holds it, and on its first tab otherwise.
+    pub fn groups(&self) -> Vec<Tab> {
+        let running = self.running_tab();
+        let here = group_of(&self.s.screen);
+        GROUPS
+            .iter()
+            .map(|(g, tabs)| {
+                let to = running.filter(|r| tabs.contains(r)).unwrap_or(tabs[0]);
+                Tab {
+                    id: (*g).into(),
+                    label: self.t.s(&format!("group_{g}")),
+                    short: self.t.s(&format!("group_{g}")),
+                    running: running.is_some_and(|r| tabs.contains(&r)),
+                    current: here == *g,
+                    act: "tab".into(),
+                    value: to.into(),
+                    ..Tab::default()
+                }
+            })
+            .collect()
+    }
+
+    /// Whether a tab is open yet, and the engine that opens it.
+    pub fn tab_locked(&self, id: &str) -> bool {
+        match id {
+            "construction" | "trader" => !self.s.engine_reached(c::Engine::Trader),
+            "estate" => !self.s.engine_reached(c::Engine::Nobility),
+            "workshop" => !self.s.engine_reached(c::Engine::Inventor),
+            "observatory" => !self.s.engine_reached(c::Engine::Cosmic),
+            _ => false,
+        }
+    }
+
+    pub fn tabs(&self) -> Vec<Tab> {
+        let running = self.running_tab();
+        let here = group_of(&self.s.screen);
         TABS.iter()
             .map(|&id| {
                 let (label, short, level) = match c::skill_index(id) {
@@ -373,27 +459,48 @@ impl View<'_> {
                     None => (
                         self.t.s(&format!("tab_{id}")),
                         self.t.s(&format!("tab_{id}_short")),
-                        if id == "prestige" && self.s.prestige > 0 {
-                            self.s.prestige.to_string()
-                        } else {
-                            String::new()
+                        match id {
+                            "prestige" if self.s.prestige > 0 => self.s.prestige.to_string(),
+                            "trader" => self.s.level(c::TRADING).to_string(),
+                            "workshop" => self.s.level(c::INVENTION).to_string(),
+                            "observatory" => self.s.level(c::ATTUNEMENT).to_string(),
+                            _ => String::new(),
                         },
                     ),
                 };
+                let group = group_of(id);
+                let first = GROUPS.iter().any(|(_, tabs)| tabs[0] == id);
                 Tab {
                     id: id.into(),
                     label,
                     short,
-                    level,
+                    level: if self.tab_locked(id) { String::new() } else { level },
                     running: running == Some(id),
                     current: self.s.screen == id,
+                    locked: self.tab_locked(id),
+                    strip: group == here,
+                    heading: if first {
+                        self.t.s(&format!("group_{group}"))
+                    } else {
+                        String::new()
+                    },
+                    act: "tab".into(),
+                    value: id.into(),
                 }
             })
             .collect()
     }
 
     pub fn screen(&self) -> Vec<Block> {
+        if self.tab_locked(&self.s.screen) {
+            return self.locked(&self.s.screen);
+        }
         match self.s.screen.as_str() {
+            "recipes" => self.recipes(),
+            "trader" => self.trader(),
+            "estate" => self.estate(),
+            "workshop" => self.workshop(),
+            "observatory" => self.observatory(),
             "combat" => self.combat(),
             "bank" => self.bank(),
             "shop" => self.shop(),
@@ -408,11 +515,11 @@ impl View<'_> {
     // ---------- skills ----------
 
     /// Skills that make what `ins` needs, and skills that use what `outs` makes.
-    fn links(&self, me: &str, ins: &[&str], outs: &[&str]) -> Block {
+    pub(crate) fn links(&self, me: &str, ins: &[&str], outs: &[&str]) -> Block {
         let mut uses: Vec<&str> = Vec::new();
         let mut feeds: Vec<&str> = Vec::new();
-        for tab in TABS.iter().take(SKILL_TABS) {
-            if *tab == me {
+        for tab in LINK_TABS.iter() {
+            if *tab == me || self.tab_locked(tab) {
                 continue;
             }
             let (t_in, t_out) = io_of(tab);
@@ -423,7 +530,7 @@ impl View<'_> {
                 feeds.push(tab);
             }
         }
-        let b = |id: &&str| button(self.t.skill(id).name.clone(), "tab", id).icon(id);
+        let b = |id: &&str| button(self.tab_name(id), "tab", id).icon(id);
         Block {
             kind: "links".into(),
             title: if uses.is_empty() {
@@ -438,7 +545,7 @@ impl View<'_> {
         }
     }
 
-    fn head(&self, icon: &str, title: String, tag: String, tone: &str) -> Block {
+    pub(crate) fn head(&self, icon: &str, title: String, tag: String, tone: &str) -> Block {
         Block {
             icon: icon.into(),
             title,
@@ -448,7 +555,7 @@ impl View<'_> {
         }
     }
 
-    fn scene(&self, icon: &str, caption: String, running: bool, ms: u64) -> Block {
+    pub(crate) fn scene(&self, icon: &str, caption: String, running: bool, ms: u64) -> Block {
         Block {
             icon: icon.into(),
             text: caption,
@@ -459,7 +566,7 @@ impl View<'_> {
         }
     }
 
-    fn skill(&self, i: usize) -> Vec<Block> {
+    pub(crate) fn skill(&self, i: usize) -> Vec<Block> {
         let sk = &c::SKILLS[i];
         let w = self.t.skill(sk.id);
         let active = self
@@ -509,7 +616,7 @@ impl View<'_> {
         let mut cards = Vec::new();
         let mut locked_shown = 0;
         let mut hidden = 0;
-        for a in c::ACTIONS.iter().filter(|a| a.skill == i) {
+        for a in c::ACTIONS.iter().filter(|a| a.skill == i && self.shown(a.id)) {
             if self.s.level(i) < a.level {
                 // LR-2: the next two locked ones show; the rest wait out of sight.
                 if locked_shown >= 2 {
@@ -533,7 +640,16 @@ impl View<'_> {
         out
     }
 
-    fn forecast(&self, a: &c::Action) -> Block {
+    /// Recipe actions show once the recipe is found, and build actions once
+    /// their blueprint is done and the thing is not built yet (T10, T14).
+    pub(crate) fn shown(&self, id: &str) -> bool {
+        if c::recipe_index(id).is_some() || c::BLUEPRINTS.iter().any(|b| b.build == id) {
+            return self.s.gate_open(id);
+        }
+        true
+    }
+
+    pub(crate) fn forecast(&self, a: &c::Action) -> Block {
         let ms = self.s.duration(a.id);
         let n = c::FORECAST_MS / ms.max(1);
         let per = self.s.xp_for(a);
@@ -582,13 +698,16 @@ impl View<'_> {
         }
     }
 
-    fn action_card(&self, a: &c::Action, on: bool) -> Card {
+    pub(crate) fn action_card(&self, a: &c::Action, on: bool) -> Card {
         let skill = &c::SKILLS[a.skill];
         let w = self.t.skill(skill.id);
-        let open = self.s.level(a.skill) >= a.level;
+        let gated = !self.s.gate_open(a.id);
+        let open = self.s.level(a.skill) >= a.level && !gated;
         let ml = self.s.mastery(a.id);
         let missing = self.s.missing(a.id);
-        let sub = if !open {
+        let sub = if gated {
+            self.t.s(&format!("gate_{}", a.id))
+        } else if !open {
             self.t.t(
                 "needs_level",
                 &[("skill", w.name.clone()), ("n", a.level.to_string())],
@@ -667,6 +786,8 @@ impl View<'_> {
             sub,
             tag: if open {
                 self.t.t("m_tag", &[("n", ml.to_string())])
+            } else if gated {
+                self.t.s("rank_tag")
             } else {
                 self.t.t("lock_tag", &[("n", a.level.to_string())])
             },
@@ -863,6 +984,7 @@ impl View<'_> {
         }
         let cards = c::ENEMIES
             .iter()
+            .filter(|en| self.s.unlocked(en.id))
             .map(|en| self.enemy_card(en, fighting == c::enemy_index(en.id)))
             .collect();
         out.push(Block {
@@ -901,6 +1023,29 @@ impl View<'_> {
         }
         if e.gold > 0 {
             chips.push(chip("g", self.t.t("gold_n", &[("n", num(e.gold))])));
+        }
+        for rc in c::RECIPES.iter().filter(|rc| rc.enemy == e.id) {
+            let known = self.s.recipes.iter().any(|k| k == rc.id);
+            chips.push(chip(
+                if known { "t" } else { "m" },
+                self.t.t(
+                    if known { "recipe_known_chip" } else { "recipe_chip" },
+                    &[("what", self.t.action(rc.id)), ("n", rc.one_in.to_string())],
+                ),
+            ));
+        }
+        if let Some(k) = c::CHAMPIONS.iter().position(|&ch| ch == e.id) {
+            chips.push(chip(
+                "p",
+                self.t.t(
+                    "champion_chip",
+                    &[(
+                        "rank",
+                        self.t
+                            .s(&format!("noble_{}", c::NOBLE_RANKS[k + c::DEED_FROM].id)),
+                    )],
+                ),
+            ));
         }
         let missing = self.s.missing(e.id);
         let main = if on {
@@ -1132,7 +1277,10 @@ impl View<'_> {
                 "patches_title",
                 &[
                     ("open", open.to_string()),
-                    ("max", c::PATCH_LEVELS.len().to_string()),
+                    (
+                        "max",
+                        (c::PATCH_LEVELS.len() as u64 + c::ROOMS[c::GARDEN].max).to_string(),
+                    ),
                 ],
             ),
             rows,
@@ -1184,7 +1332,7 @@ impl View<'_> {
                 locked: !unlocked,
                 dur: "0ms".into(),
                 chips: vec![
-                    chip("t", self.t.t("grows_in", &[("t", dur(cr.grow_ms))])),
+                    chip("t", self.t.t("grows_in", &[("t", dur(self.s.grow_ms(cr)))])),
                     chip(
                         "x",
                         self.t.t(
@@ -1229,6 +1377,33 @@ impl View<'_> {
         out.push(Block {
             text: self.t.s("farming_intro"),
             ..block("note")
+        });
+        let mut boost = vec![if self.s.have("ashes") > 0 {
+            chip(
+                "fire",
+                self.t.t(
+                    "compost_have",
+                    &[
+                        ("n", num(self.s.have("ashes"))),
+                        ("pct", (100 - c::COMPOST_GROW_PCT).to_string()),
+                    ],
+                ),
+            )
+        } else {
+            chip("t", self.t.s("compost_none"))
+        }];
+        if self.s.harvest_moon() {
+            boost.push(chip(
+                "p",
+                self.t.t(
+                    "harvest_moon_on",
+                    &[("pct", (100 - c::HARVEST_MOON_PCT).to_string())],
+                ),
+            ));
+        }
+        out.push(Block {
+            chips: boost,
+            ..block("chips")
         });
         out.push(Block {
             cards,
@@ -1322,7 +1497,10 @@ impl View<'_> {
             title: self.t.s("away_title"),
             text: self.t.t(
                 "away_text",
-                &[("cap", dur(c::AWAY_CAP_MS)), ("after", dur(c::RETURN_AFTER_MS))],
+                &[
+                    ("cap", dur(self.s.away_cap())),
+                    ("after", dur(c::RETURN_AFTER_MS)),
+                ],
             ),
             ..block("card")
         });
@@ -1380,6 +1558,7 @@ impl View<'_> {
             label2: self.t.s("starts_over"),
             list: vec![
                 self.t.t("keep_mult", &[("x", times(next_bp))]),
+                self.t.s("keep_recipes"),
                 self.t.s("keep_log"),
             ],
             list2: vec![
@@ -1388,6 +1567,7 @@ impl View<'_> {
                 self.t.s("lose_bank"),
                 self.t.s("lose_tools"),
                 self.t.s("lose_plan"),
+                self.t.s("lose_engines"),
             ],
             ..block("keep")
         });
@@ -1532,7 +1712,7 @@ impl View<'_> {
             });
             let new: Vec<&c::Action> = c::ACTIONS
                 .iter()
-                .filter(|a| a.skill == i && a.level > l0 && a.level <= l1)
+                .filter(|a| a.skill == i && a.level > l0 && a.level <= l1 && self.s.unlocked(a.id))
                 .collect();
             if let Some(best) = new.last() {
                 ready.push(Row {
@@ -1613,6 +1793,62 @@ impl View<'_> {
                 ..Row::default()
             });
         }
+        for id in &r.recipes {
+            gains.push(Row {
+                icon: id.clone(),
+                title: self.t.t("recipe_found", &[("what", self.t.action(id))]),
+                tone: "rare".into(),
+                ..Row::default()
+            });
+        }
+        for (t, gold, bandits) in &r.caravans {
+            gains.push(Row {
+                icon: "cart".into(),
+                title: self.t.t(
+                    if *bandits {
+                        "caravan_home_bandits"
+                    } else {
+                        "caravan_home"
+                    },
+                    &[("town", self.t.s(&format!("town_{}", c::TOWNS[*t].id)))],
+                ),
+                chip: self.t.t("plus_n", &[("n", num(*gold))]),
+                ..Row::default()
+            });
+        }
+        for id in &r.research {
+            ready.push(Row {
+                title: self
+                    .t
+                    .t("blueprint_done", &[("what", self.t.s(&format!("bp_{id}")))]),
+                buttons: vec![button(self.t.s("tab_workshop"), "tab", "workshop")],
+                ..Row::default()
+            });
+        }
+        if r.income > 0 {
+            gains.push(Row {
+                icon: "estate".into(),
+                title: self.t.s("estate_income"),
+                chip: self.t.t("plus_n", &[("n", num(r.income))]),
+                ..Row::default()
+            });
+        }
+        if r.wages > 0 {
+            gains.push(Row {
+                icon: "estate".into(),
+                title: self.t.s("wages_paid"),
+                chip: self.t.t("minus_n", &[("n", num(r.wages))]),
+                tone: "used".into(),
+                ..Row::default()
+            });
+        }
+        if r.unpaid {
+            ready.push(Row {
+                title: self.t.s("servants_unpaid"),
+                buttons: vec![button(self.t.s("tab_estate"), "tab", "estate")],
+                ..Row::default()
+            });
+        }
         if r.gold > 0 {
             gains.push(Row {
                 icon: "gold".into(),
@@ -1683,10 +1919,10 @@ impl View<'_> {
         }
         let mut notes = Vec::new();
         if r.capped > 0 {
-            notes.push(
-                self.t
-                    .t("capped", &[("cap", dur(c::AWAY_CAP_MS)), ("lost", dur(r.capped))]),
-            );
+            notes.push(self.t.t(
+                "capped",
+                &[("cap", dur(self.s.away_cap())), ("lost", dur(r.capped))],
+            ));
         }
         Sheet {
             kind: "return".into(),
@@ -1715,9 +1951,8 @@ impl View<'_> {
                 ..Row::default()
             },
             Stop::Missing(item) => {
-                let maker = TABS
+                let maker = LINK_TABS
                     .iter()
-                    .take(SKILL_TABS)
                     .find(|t| io_of(t).1.contains(&item.as_str()))
                     .copied();
                 Row {
@@ -1725,7 +1960,7 @@ impl View<'_> {
                     buttons: maker
                         .map(|m| {
                             vec![button(
-                                self.t.t("makes_more", &[("skill", self.t.skill(m).name.clone())]),
+                                self.t.t("makes_more", &[("skill", self.tab_name(m))]),
                                 "tab",
                                 m,
                             )]
@@ -1752,8 +1987,9 @@ fn first_action(skill: usize) -> usize {
 /// What a tab's skill takes in and gives out, for the uses and feeds links.
 pub fn io_of(tab: &str) -> (Vec<&'static str>, Vec<&'static str>) {
     if tab == "farming" {
+        // seeds, and ashes as compost (T8)
         return (
-            c::CROPS.iter().map(|cr| cr.seed).collect(),
+            c::CROPS.iter().map(|cr| cr.seed).chain(["ashes"]).collect(),
             c::CROPS.iter().map(|cr| cr.produce).collect(),
         );
     }
@@ -1770,15 +2006,39 @@ pub fn io_of(tab: &str) -> (Vec<&'static str>, Vec<&'static str>) {
             .collect();
         return (ins, outs);
     }
-    let Some(i) = c::skill_index(tab) else {
-        return (Vec::new(), Vec::new());
+    if tab == "trader" {
+        let ins = c::TOWNS.iter().flat_map(|t| t.wants.iter().copied()).collect();
+        let outs = c::TOWNS.iter().map(|t| t.sells).collect();
+        return (ins, outs);
+    }
+    if tab == "estate" {
+        let mut ins: Vec<&str> = c::ROOM_PLANKS.to_vec();
+        ins.extend(["nails", "limestone"]);
+        ins.extend(c::TRIBUTES.iter().flat_map(|t| t.iter().map(|(i, _)| *i)));
+        return (ins, Vec::new());
+    }
+    let i = match tab {
+        "workshop" => c::INVENTION,
+        "observatory" => c::ATTUNEMENT,
+        _ => match c::skill_index(tab) {
+            Some(i) => i,
+            None => return (Vec::new(), Vec::new()),
+        },
     };
     let acts = c::ACTIONS.iter().filter(|a| a.skill == i);
-    let ins = acts
+    let ins: Vec<&str> = acts
         .clone()
         .flat_map(|a| a.needs.iter().map(|(n, _)| *n))
         .collect();
-    let outs = acts.map(|a| a.makes.0).collect();
+    let mut ins: Vec<&str> = ins;
+    let mut outs: Vec<&str> = acts.map(|a| a.makes.0).filter(|m| !m.is_empty()).collect();
+    if i == c::INVENTION {
+        for m in &c::MACHINES {
+            ins.extend(m.needs.iter().map(|(n, _)| *n));
+            outs.push(m.makes.0);
+        }
+        ins.extend(c::FUEL);
+    }
     (ins, outs)
 }
 
@@ -1793,6 +2053,13 @@ mod tests {
         let (fl_in, _) = io_of("fletching");
         assert!(outs.iter().any(|o| fm_in.contains(o)));
         assert!(outs.iter().any(|o| fl_in.contains(o)));
+    }
+
+    #[test]
+    fn firemaking_feeds_farming_with_compost() {
+        let (_, fm_out) = io_of("firemaking");
+        let (farm_in, _) = io_of("farming");
+        assert!(fm_out.iter().any(|o| farm_in.contains(o)));
     }
 
     #[test]

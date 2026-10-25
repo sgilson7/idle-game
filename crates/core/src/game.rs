@@ -12,8 +12,9 @@ use crate::rng::Rng;
 use crate::xp;
 
 /// The save format's version (IG-5). A save from a newer version is not read.
-/// 2 added Crafting, Farming and patches (T5); a version-1 save is brought up to it.
-pub const SAVE_VERSION: u32 = 2;
+/// 2 added Crafting, Farming and patches (T5); 3 added the four engines and
+/// their skills (T10 to T14). An older save is brought up to it.
+pub const SAVE_VERSION: u32 = 3;
 
 /// What is running: an action id or an enemy id.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,6 +30,37 @@ pub struct Step {
 pub struct Patch {
     pub crop: String,
     pub planted: u64,
+    /// How long this crop takes, set at planting by compost and the harvest
+    /// moon (T8, T13); 0 in an older save means the crop's own time.
+    #[serde(default)]
+    pub ms: u64,
+}
+
+/// A servant (T11): runs `job` at half speed alongside you.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Servant {
+    pub job: String,
+    pub progress: u64,
+    /// No wage or no food at the last hour: the servant waits for the next.
+    pub unpaid: bool,
+}
+
+/// A caravan on the road (T12).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Caravan {
+    pub town: usize,
+    pub item: String,
+    pub n: u64,
+    /// Game time it comes back.
+    pub back: u64,
+    pub guards: bool,
+}
+
+/// Research in progress (T14).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Research {
+    pub id: String,
+    pub progress: u64,
 }
 
 /// One line of the playtest log (P12).
@@ -91,6 +123,39 @@ pub struct State {
     pub counts: BTreeMap<String, u64>,
     #[serde(default)]
     pub patches: Vec<Patch>,
+    // ---- the engines (T10 to T14); an older save has none of them ----
+    /// Recipes found (T10). Kept through prestige (IG-Q26 A).
+    #[serde(default)]
+    pub recipes: Vec<String>,
+    /// Game time the Goblin hot pot's extra gold lasts until.
+    #[serde(default)]
+    pub hot_pot_until: u64,
+    /// Rank on each engine's ladder: Trader, Nobility, Inventor, Cosmic.
+    #[serde(default)]
+    pub ranks: [usize; 4],
+    /// Each estate room's level, in `ROOMS` order.
+    #[serde(default)]
+    pub rooms: [u64; 6],
+    #[serde(default)]
+    pub servants: Vec<Servant>,
+    #[serde(default)]
+    pub caravans: Vec<Caravan>,
+    /// Orders filled, as "window:town:slot".
+    #[serde(default)]
+    pub filled: Vec<String>,
+    #[serde(default)]
+    pub blueprints: Vec<String>,
+    #[serde(default)]
+    pub research: Option<Research>,
+    /// Each machine's progress through its cycle.
+    #[serde(default)]
+    pub machine_ms: BTreeMap<String, u64>,
+    /// Machines the player switched off.
+    #[serde(default)]
+    pub machines_off: Vec<String>,
+    /// The last game hour the estate was paid for.
+    #[serde(default)]
+    pub upkeep_hour: u64,
 }
 
 /// Why an action could not go on.
@@ -122,6 +187,17 @@ pub struct Report {
     pub checkpoints: Vec<(String, u32)>,
     /// (skill, level, game time) for each level reached, at the moment it was reached.
     pub levels: Vec<(usize, u32, u64)>,
+    /// Recipes found.
+    pub recipes: Vec<String>,
+    /// Caravans home: (town, gold, bandits met).
+    pub caravans: Vec<(usize, u64, bool)>,
+    /// Blueprints finished.
+    pub research: Vec<String>,
+    /// Gold the estate paid, and wages paid.
+    pub income: u64,
+    pub wages: u64,
+    /// A servant went unpaid.
+    pub unpaid: bool,
 }
 
 fn add(map: &mut BTreeMap<String, u64>, k: &str, n: u64) {
@@ -157,6 +233,18 @@ impl State {
             flags: Vec::new(),
             counts: BTreeMap::new(),
             patches: Vec::new(),
+            recipes: Vec::new(),
+            hot_pot_until: 0,
+            ranks: [0; 4],
+            rooms: [0; 6],
+            servants: Vec::new(),
+            caravans: Vec::new(),
+            filled: Vec::new(),
+            blueprints: Vec::new(),
+            research: None,
+            machine_ms: BTreeMap::new(),
+            machines_off: Vec::new(),
+            upkeep_hour: 0,
         };
         s.hp = s.max_hp();
         s.note(now, "new", "", 0);
@@ -210,6 +298,15 @@ impl State {
         if let Some(t) = c::TOOL_SKILLS.iter().position(|&s| s == a.skill) {
             ms = ms * (100 - c::TOOL_TIERS[self.tools[t]].1) / 100;
         }
+        if c::GADGETS
+            .iter()
+            .any(|&(g, sk)| sk == a.skill && self.have(g) > 0)
+        {
+            ms = ms * (100 - c::GADGET_PCT) / 100;
+        }
+        if a.skill == c::COOKING {
+            ms = ms * (100 - c::KITCHEN_PCT * self.rooms[c::KITCHEN]) / 100;
+        }
         ms
     }
 
@@ -252,7 +349,7 @@ impl State {
     pub fn missing(&self, id: &str) -> Option<String> {
         if c::enemy_index(id).is_some() {
             let s = &c::STYLES[self.style];
-            if !s.held.is_empty() && !s.held.iter().any(|(i, _)| self.have(i) > 0) {
+            if !s.held_optional && !s.held.is_empty() && !s.held.iter().any(|(i, _)| self.have(i) > 0) {
                 return Some(s.held[s.held.len() - 1].0.to_string());
             }
             if !s.spent.is_empty() && !s.spent.iter().any(|(i, _)| self.have(i) > 0) {
@@ -267,11 +364,31 @@ impl State {
             .map(|(i, _)| i.to_string())
     }
 
+    /// Whether an action or enemy can be picked: its level, its engine, and
+    /// any recipe, blueprint or rank it needs.
     pub fn unlocked(&self, id: &str) -> bool {
         match c::action_index(id) {
-            Some(i) => self.level(c::ACTIONS[i].skill) >= c::ACTIONS[i].level,
+            Some(i) => {
+                let a = &c::ACTIONS[i];
+                self.level(a.skill) >= a.level && self.skill_open(a.skill) && self.gate_open(a.id)
+            }
+            None if c::is_champion(id) => self.engine_open(c::Engine::Nobility),
             None => c::enemy_index(id).is_some(),
         }
+    }
+
+    /// A recipe, blueprint or rank an action waits on (T10, T13, T14).
+    pub fn gate_open(&self, id: &str) -> bool {
+        if c::recipe_index(id).is_some() {
+            return self.recipes.iter().any(|r| r == id);
+        }
+        if let Some(b) = c::BLUEPRINTS.iter().find(|b| b.build == id) {
+            return self.blueprints.iter().any(|k| k == b.id) && self.have(b.id) == 0;
+        }
+        if id == "astral_runes" {
+            return self.engine_open(c::Engine::Cosmic) && self.ranks[3] >= c::ASTRAL_RANK;
+        }
+        true
     }
 
     /// The skill an action or enemy trains.
@@ -315,9 +432,10 @@ impl State {
 
     // ---------- farming (T5) ----------
 
+    /// Patches open: by Farming level, and one more for each Garden level (T11).
     pub fn patches_open(&self) -> usize {
         let l = self.level(c::FARMING);
-        c::PATCH_LEVELS.iter().filter(|&&need| l >= need).count()
+        c::PATCH_LEVELS.iter().filter(|&&need| l >= need).count() + self.rooms[c::GARDEN] as usize
     }
 
     /// The patch at `i` as it stands (patches not yet stored are empty).
@@ -329,7 +447,21 @@ impl State {
     pub fn grow_left(&self, i: usize) -> Option<u64> {
         let p = self.patch(i);
         let crop = &c::CROPS[c::crop_index(&p.crop)?];
-        Some((p.planted + crop.grow_ms).saturating_sub(self.sim_ms))
+        let ms = if p.ms > 0 { p.ms } else { crop.grow_ms };
+        Some((p.planted + ms).saturating_sub(self.sim_ms))
+    }
+
+    /// How long `crop` would take if planted now: compost (T8) and the
+    /// harvest moon (T13) each take a quarter off.
+    pub fn grow_ms(&self, crop: &c::Crop) -> u64 {
+        let mut ms = crop.grow_ms;
+        if self.have("ashes") > 0 {
+            ms = ms * c::COMPOST_GROW_PCT / 100;
+        }
+        if self.harvest_moon() {
+            ms = ms * c::HARVEST_MOON_PCT / 100;
+        }
+        ms
     }
 
     pub fn ready(&self, i: usize) -> bool {
@@ -348,13 +480,18 @@ impl State {
         if self.level(c::FARMING) < cr.level || self.have(cr.seed) == 0 {
             return false;
         }
+        let ms = self.grow_ms(cr);
         self.take(cr.seed, 1, r);
+        if self.have("ashes") > 0 {
+            self.take("ashes", 1, r);
+        }
         if self.patches.len() <= slot {
             self.patches.resize(slot + 1, Patch::default());
         }
         self.patches[slot] = Patch {
             crop: cr.id.into(),
             planted: self.sim_ms,
+            ms,
         };
         let xp = cr.xp_plant * self.mult_bp() / 10_000;
         self.gain(c::FARMING, xp, r);
@@ -408,18 +545,24 @@ impl State {
         add(&mut self.counts, k, n);
     }
 
-    fn take(&mut self, item: &str, n: u64, r: &mut Report) {
+    pub(crate) fn take(&mut self, item: &str, n: u64, r: &mut Report) {
+        if n == 0 {
+            return;
+        }
         let have = self.have(item);
         self.bank.insert(item.to_string(), have.saturating_sub(n));
         add(&mut r.used, item, n);
     }
 
-    fn put(&mut self, item: &str, n: u64, r: &mut Report, rare: bool) {
+    pub(crate) fn put(&mut self, item: &str, n: u64, r: &mut Report, rare: bool) {
+        if n == 0 || item.is_empty() {
+            return;
+        }
         add(&mut self.bank, item, n);
         add(if rare { &mut r.rare } else { &mut r.items }, item, n);
     }
 
-    fn gain(&mut self, skill: usize, xp: u64, r: &mut Report) {
+    pub(crate) fn gain(&mut self, skill: usize, xp: u64, r: &mut Report) {
         let before = xp::level(self.xp[skill]);
         self.xp[skill] += xp;
         r.xp[skill] += xp;
@@ -451,43 +594,113 @@ impl State {
     }
 
     /// Credits `ms` of time (P4). Every action that completes inside it is done
-    /// in order; time left over is progress toward the next one. Nothing in
-    /// here depends on how the time is split, which `one_long_step_equals_many_short_ones` holds.
+    /// in order; time left over is progress toward the next one. The engines'
+    /// timers (servants, machines, research, caravans, the estate's hours) run
+    /// alongside: the loop moves to whichever comes first, does it, and goes
+    /// on, so nothing depends on how the time is split, which
+    /// `one_long_step_equals_many_short_ones` holds.
     pub fn advance(&mut self, ms: u64, r: &mut Report) {
         let mut left = ms;
-        while let Some(id) = self.active.clone() {
-            // An action that cannot start ends here, before its time is spent.
-            if let Some(item) = self.missing(&id) {
-                r.stop = Some(Stop::Missing(item));
-                r.stopped_on = id.clone();
-                self.next_step(r);
-                continue;
-            }
-            let need = self.duration(&id).saturating_sub(self.progress_ms);
-            if left < need {
-                self.progress_ms += left;
-                self.sim_ms += left;
-                left = 0;
+        loop {
+            self.settle(r);
+            let dt = self.next_event().min(left);
+            self.pass(dt);
+            left -= dt;
+            self.fire(r);
+            if left == 0 {
+                self.settle(r);
                 break;
             }
-            left -= need;
-            self.sim_ms += need;
-            self.progress_ms = 0;
-            let skill = self.skill_of(&id);
-            self.count(&format!("ms:{}", c::SKILLS[skill].id), self.duration(&id));
-            match self.once(&id, r) {
-                Ok(()) => {
-                    r.actions += 1;
-                    self.step_done(&id, r);
-                }
-                Err(stop) => {
-                    r.stop = Some(stop);
-                    r.stopped_on = id.clone();
-                    self.next_step(r);
+        }
+    }
+
+    /// An action that cannot start ends here, before its time is spent (R3.6).
+    fn settle(&mut self, r: &mut Report) {
+        while let Some(id) = self.active.clone() {
+            let Some(item) = self.missing(&id) else {
+                break;
+            };
+            r.stop = Some(Stop::Missing(item));
+            r.stopped_on = id.clone();
+            self.next_step(r);
+        }
+    }
+
+    /// Game time until the next thing completes.
+    pub fn next_event(&self) -> u64 {
+        let mut next = u64::MAX;
+        if let Some(id) = &self.active {
+            next = next.min(self.duration(id).saturating_sub(self.progress_ms));
+        }
+        for i in 0..self.servants.len() {
+            if let Some(need) = self.servant_need(i) {
+                next = next.min(need.saturating_sub(self.servants[i].progress));
+            }
+        }
+        for m in &c::MACHINES {
+            if let Some(need) = self.machine_need(m) {
+                next = next.min(need.saturating_sub(self.machine_ms.get(m.id).copied().unwrap_or(0)));
+            }
+        }
+        if let Some(need) = self.research_need() {
+            next = next.min(need);
+        }
+        for cv in &self.caravans {
+            next = next.min(cv.back.saturating_sub(self.sim_ms));
+        }
+        if self.engine_open(c::Engine::Nobility) {
+            next = next
+                .min((self.upkeep_hour + 1) * c::HOUR - self.sim_ms.min((self.upkeep_hour + 1) * c::HOUR));
+        }
+        next
+    }
+
+    /// Moves every running timer on by `dt`.
+    fn pass(&mut self, dt: u64) {
+        self.sim_ms += dt;
+        if self.active.is_some() {
+            self.progress_ms += dt;
+        }
+        for i in 0..self.servants.len() {
+            if self.servant_need(i).is_some() {
+                self.servants[i].progress += dt;
+            }
+        }
+        for m in &c::MACHINES {
+            if self.machine_need(m).is_some() {
+                *self.machine_ms.entry(m.id.to_string()).or_insert(0) += dt;
+            }
+        }
+        if self.research_need().is_some() {
+            if let Some(rs) = self.research.as_mut() {
+                rs.progress += dt;
+            }
+        }
+    }
+
+    /// Does whatever is due now, in a fixed order: your action, servants,
+    /// machines, research, caravans, then the estate's hour.
+    fn fire(&mut self, r: &mut Report) {
+        if let Some(id) = self.active.clone() {
+            let ms = self.duration(&id);
+            if self.progress_ms >= ms {
+                self.progress_ms = 0;
+                let skill = self.skill_of(&id);
+                self.count(&format!("ms:{}", c::SKILLS[skill].id), ms);
+                match self.once(&id, r) {
+                    Ok(()) => {
+                        r.actions += 1;
+                        self.step_done(&id, r);
+                    }
+                    Err(stop) => {
+                        r.stop = Some(stop);
+                        r.stopped_on = id.clone();
+                        self.next_step(r);
+                    }
                 }
             }
         }
-        self.sim_ms += left;
+        self.fire_engines(r);
     }
 
     fn step_done(&mut self, id: &str, r: &mut Report) {
@@ -531,6 +744,14 @@ impl State {
         let a = &c::ACTIONS[ai];
         // `advance` checks the inputs before the wait starts (R3.6).
         r.m0.entry(a.id.to_string()).or_insert_with(|| self.mastery(a.id));
+        self.produce(ai, true, r);
+        Ok(())
+    }
+
+    /// One action's inputs, XP and goods. A servant's work (`yours` false)
+    /// trains no mastery and gathers no starlight.
+    pub(crate) fn produce(&mut self, ai: usize, yours: bool, r: &mut Report) {
+        let a = &c::ACTIONS[ai];
         let keep = self.keep_pct(a.id);
         if !a.needs.is_empty() && !(keep > 0 && self.rng.percent(keep)) {
             for (item, n) in a.needs {
@@ -540,7 +761,9 @@ impl State {
         let gained = self.xp_for(a);
         self.gain(a.skill, gained, r);
         let before = self.mastery(a.id);
-        add(&mut self.mxp, a.id, a.xp);
+        if yours {
+            add(&mut self.mxp, a.id, a.xp);
+        }
         let after = self.mastery(a.id);
         for cp in c::CHECKPOINTS {
             if before < cp && after >= cp {
@@ -548,6 +771,12 @@ impl State {
             }
         }
         let mut n = a.makes.1;
+        if a.id.starts_with("take_apart") {
+            n += c::INVENTOR_RANK_PARTS * self.ranks[2] as u64;
+            if self.rng.one_in(c::FINE_PARTS_ONE_IN) {
+                self.put("fine_parts", 1, r, true);
+            }
+        }
         if a.needs.is_empty() {
             if self.rng.percent(self.double_pct(a.id)) {
                 n += a.makes.1;
@@ -560,7 +789,13 @@ impl State {
         if a.skill == c::WOODCUTTING && self.rng.one_in(c::NEST_ONE_IN) {
             self.put("bird_nest", 1, r, true);
         }
-        Ok(())
+        if a.skill == c::MINING && self.engine_open(c::Engine::Cosmic) && self.rng.one_in(c::STARDUST_ONE_IN)
+        {
+            self.put("stardust", 1, r, true);
+        }
+        if yours {
+            self.starlight(a.skill, r);
+        }
     }
 
     fn swing(&mut self, e: usize, r: &mut Report) -> Result<(), Stop> {
@@ -591,19 +826,38 @@ impl State {
         if self.hp * 100 < max_hp * c::EAT_BELOW_PCT {
             if let Some((food, heal)) = self.food() {
                 self.take(food, 1, r);
+                let mut heal = heal;
+                if self.have("spices") > 0 {
+                    self.take("spices", 1, r);
+                    heal = heal * (100 + c::SPICE_HEAL_PCT) / 100;
+                }
+                if food == "goblin_hot_pot" {
+                    self.hot_pot_until = self.sim_ms + c::HOT_POT_MS;
+                }
                 self.hp = (self.hp + heal).min(max_hp);
             }
         }
         if self.foe_hp == 0 {
             add(&mut self.kills, enemy.id, 1);
             add(&mut r.kills, enemy.id, 1);
-            self.gold += enemy.gold;
-            r.gold += enemy.gold;
+            let gold = if self.sim_ms < self.hot_pot_until {
+                enemy.gold * (100 + c::HOT_POT_GOLD_PCT) / 100
+            } else {
+                enemy.gold
+            };
+            self.gold += gold;
+            r.gold += gold;
             for (item, n, one_in) in enemy.drops {
                 if self.rng.one_in(*one_in) {
                     self.put(item, *n, r, *one_in > 1);
                 }
             }
+            for rc in c::RECIPES.iter().filter(|rc| rc.enemy == enemy.id) {
+                if self.rng.one_in(rc.one_in) {
+                    self.find_recipe(rc, r);
+                }
+            }
+            self.starlight(style.skill, r);
             self.foe_hp = enemy.hp;
         }
         if self.hp <= enemy.hit && self.food().is_none() {
@@ -680,8 +934,10 @@ impl State {
     }
 
     /// Back to level 1 with a bigger multiplier, and nothing else from the game
-    /// kept: mastery and kill counts start over too (T6, IG-Q18 B). The
-    /// playtest log, flags and counts stay; they are about the player.
+    /// kept: mastery and kill counts start over too (T6, IG-Q18 B), and so do
+    /// the engines (IG-Q24 A). Recipes are kept: a recipe is something you
+    /// learned (IG-Q26 A). The playtest log, flags and counts stay; they are
+    /// about the player.
     pub fn do_prestige(&mut self, wall: u64) {
         let keep = self.clone();
         let mut s = State::new(wall);
@@ -693,6 +949,8 @@ impl State {
         s.exported_wall = keep.exported_wall;
         s.sim_ms = keep.sim_ms;
         s.rng = keep.rng;
+        s.recipes = keep.recipes;
+        s.upkeep_hour = keep.sim_ms / c::HOUR;
         s.screen = "woodcutting".into();
         *self = s;
         let p = self.prestige as u64;
@@ -727,8 +985,8 @@ mod tests {
         let s = State::new(5);
         assert_eq!(s.level(c::HITPOINTS), 10);
         assert_eq!(s.hp, 100);
-        // thirteen skills at 1, Hitpoints at 10
-        assert_eq!(s.total_level(), 23);
+        // seventeen skills at 1, Hitpoints at 10
+        assert_eq!(s.total_level(), 27);
     }
 
     #[test]

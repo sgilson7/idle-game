@@ -2,7 +2,7 @@
   {
     "name": "time away counts for a day at most",
     "file": "crates/core/src/api.rs",
-    "find": "let credited = elapsed.min(c::AWAY_CAP_MS);",
+    "find": "let credited = elapsed.min(self.s.away_cap());",
     "replace": "let credited = elapsed;",
     "test": "away_time_counts_for_a_day_at_most"
   },
@@ -65,15 +65,15 @@
   {
     "name": "an action that cannot start spends no time",
     "file": "crates/core/src/game.rs",
-    "find": "            if let Some(item) = self.missing(&id) {\n                r.stop",
-    "replace": "            if let Some(item) = self.missing(&id).filter(|_| false) {\n                r.stop",
+    "find": "            let Some(item) = self.missing(&id) else {",
+    "replace": "            let Some(item) = self.missing(&id).filter(|_| false) else {",
     "test": "a_plan_runs_its_steps_in_order"
   },
   {
     "name": "an action that cannot start stops making",
     "file": "crates/core/src/game.rs",
-    "find": "            if let Some(item) = self.missing(&id) {\n                r.stop",
-    "replace": "            if let Some(item) = self.missing(&id).filter(|_| false) {\n                r.stop",
+    "find": "            let Some(item) = self.missing(&id) else {",
+    "replace": "            let Some(item) = self.missing(&id).filter(|_| false) else {",
     "test": "making_uses_its_inputs_and_stops_when_they_run_out"
   },
   {
@@ -86,7 +86,7 @@
   {
     "name": "crops take their time to grow",
     "file": "crates/core/src/game.rs",
-    "find": "Some((p.planted + crop.grow_ms).saturating_sub(self.sim_ms))",
+    "find": "Some((p.planted + ms).saturating_sub(self.sim_ms))",
     "replace": "Some(0)",
     "test": "a_crop_grows_while_something_else_runs_and_waits_to_be_harvested"
   },
@@ -121,8 +121,302 @@
   {
     "name": "the page wakes for a ripening crop",
     "file": "crates/core/src/api.rs",
-    "find": "let next_ms = action.into_iter().chain(crop).min().unwrap_or(0);",
-    "replace": "let next_ms = action.into_iter().min().unwrap_or(0 + crop.map(|_| 0).unwrap_or(0));",
+    "find": "let next_ms = event.into_iter().chain(crop).min().unwrap_or(0);",
+    "replace": "let next_ms = event.into_iter().min().unwrap_or(0 + crop.map(|_| 0).unwrap_or(0));",
     "test": "with_nothing_running_the_page_still_wakes_for_a_ripening_crop"
+  },
+  {
+    "name": "ashes are compost",
+    "file": "crates/core/src/game.rs",
+    "find": "            ms = ms * c::COMPOST_GROW_PCT / 100;",
+    "replace": "",
+    "test": "ashes_are_compost_and_a_composted_crop_grows_in_three_quarters_of_its_time"
+  },
+  {
+    "name": "a plan holds four steps",
+    "file": "crates/core/src/content.rs",
+    "find": "pub const PLAN_STEPS: usize = 4;",
+    "replace": "pub const PLAN_STEPS: usize = 3;",
+    "test": "a_plan_holds_four_steps"
+  },
+  {
+    "name": "a recipe is learned from its enemy",
+    "file": "crates/core/src/engines.rs",
+    "find": "            self.recipes.push(rc.id.to_string());\n",
+    "replace": "",
+    "test": "a_recipe_drops_from_its_enemy_and_unlocks_its_action"
+  },
+  {
+    "name": "a recipe gates its action",
+    "file": "crates/core/src/game.rs",
+    "find": "            return self.recipes.iter().any(|r| r == id);",
+    "replace": "            return true;",
+    "test": "a_recipe_drops_from_its_enemy_and_unlocks_its_action"
+  },
+  {
+    "name": "a second recipe copy pays gold",
+    "file": "crates/core/src/engines.rs",
+    "find": "            self.gold += gold;\n            r.gold += gold;\n        } else {",
+    "replace": "        } else {",
+    "test": "a_second_copy_of_a_recipe_sells_for_gold"
+  },
+  {
+    "name": "prestige keeps recipes",
+    "file": "crates/core/src/game.rs",
+    "find": "        s.recipes = keep.recipes;\n",
+    "replace": "",
+    "test": "recipes_are_kept_through_prestige_and_engines_are_not"
+  },
+  {
+    "name": "engines open by total level",
+    "file": "crates/core/src/engines.rs",
+    "find": "        let reached = self.total_level() >= self.engine_at(e);",
+    "replace": "        let reached = true;",
+    "test": "engines_open_one_at_a_time_by_total_level"
+  },
+  {
+    "name": "the workshop room opens the inventor",
+    "file": "crates/core/src/engines.rs",
+    "find": "            Engine::Inventor => reached && self.rooms[c::WORKSHOP] > 0,",
+    "replace": "            Engine::Inventor => reached,",
+    "test": "engines_open_one_at_a_time_by_total_level"
+  },
+  {
+    "name": "prices cycle",
+    "file": "crates/core/src/engines.rs",
+    "find": "            c::PRICE_CYCLE_HOURS - phase\n",
+    "replace": "            phase\n",
+    "test": "prices_move_in_a_twelve_hour_cycle_each_town_three_hours_behind"
+  },
+  {
+    "name": "a caravan sells at its price",
+    "file": "crates/core/src/engines.rs",
+    "find": "        c::value(&cv.item) * cv.n * self.price_pct(cv.town, at) / 100 * rank / 100",
+    "replace": "        c::value(&cv.item) * cv.n * (at - at + 100) / 100 * rank / 100",
+    "test": "a_guarded_caravan_comes_back_with_gold_spices_and_trading_xp"
+  },
+  {
+    "name": "guards cost gold",
+    "file": "crates/core/src/engines.rs",
+    "find": "            self.gold -= self.guard_cost(t);",
+    "replace": "",
+    "test": "a_guarded_caravan_comes_back_with_gold_spices_and_trading_xp"
+  },
+  {
+    "name": "one cart, one caravan",
+    "file": "crates/core/src/engines.rs",
+    "find": "            || out >= most\n",
+    "replace": "",
+    "test": "a_guarded_caravan_comes_back_with_gold_spices_and_trading_xp"
+  },
+  {
+    "name": "bandits halve the pay",
+    "file": "crates/core/src/engines.rs",
+    "find": "            gold = gold * c::BANDIT_PAY_PCT / 100;",
+    "replace": "",
+    "test": "bandits_halve_what_a_caravan_earns_and_take_nothing"
+  },
+  {
+    "name": "an order is filled once",
+    "file": "crates/core/src/engines.rs",
+    "find": "        if self.order_filled(&o) || self.have(o.item) < o.n {",
+    "replace": "        if self.have(o.item) < o.n {",
+    "test": "an_order_is_filled_once_and_new_ones_come_every_six_hours"
+  },
+  {
+    "name": "the kitchen cooks faster",
+    "file": "crates/core/src/game.rs",
+    "find": "            ms = ms * (100 - c::KITCHEN_PCT * self.rooms[c::KITCHEN]) / 100;",
+    "replace": "",
+    "test": "a_room_costs_planks_nails_limestone_and_gold_and_the_kitchen_cooks_faster"
+  },
+  {
+    "name": "a room costs gold",
+    "file": "crates/core/src/engines.rs",
+    "find": "        self.gold -= g;\n",
+    "replace": "",
+    "test": "a_room_costs_planks_nails_limestone_and_gold_and_the_kitchen_cooks_faster"
+  },
+  {
+    "name": "a deed is needed from squire",
+    "file": "crates/core/src/engines.rs",
+    "find": "        if gold > 0 || rooms > 0 || !deed {",
+    "replace": "        if gold > 0 || rooms > 0 {",
+    "test": "a_noble_rank_from_squire_on_needs_a_deed_by_champion_or_tribute"
+  },
+  {
+    "name": "a servant is half speed",
+    "file": "crates/core/src/engines.rs",
+    "find": "        Some(self.duration(a.id) * c::SERVANT_SLOW)",
+    "replace": "        Some(self.duration(a.id))",
+    "test": "a_servant_works_at_half_speed_and_the_estate_pays_by_the_hour"
+  },
+  {
+    "name": "the estate pays income",
+    "file": "crates/core/src/engines.rs",
+    "find": "        self.gold += income;\n",
+    "replace": "",
+    "test": "a_servant_works_at_half_speed_and_the_estate_pays_by_the_hour"
+  },
+  {
+    "name": "a servant trains no mastery",
+    "file": "crates/core/src/game.rs",
+    "find": "        if yours {\n            add(&mut self.mxp, a.id, a.xp);\n        }",
+    "replace": "        add(&mut self.mxp, a.id, a.xp);",
+    "test": "a_servant_works_at_half_speed_and_the_estate_pays_by_the_hour"
+  },
+  {
+    "name": "an unpaid servant waits",
+    "file": "crates/core/src/engines.rs",
+    "find": "        if sv.unpaid || sv.job.is_empty()",
+    "replace": "        if sv.job.is_empty()",
+    "test": "an_unpaid_servant_waits_for_the_next_hour"
+  },
+  {
+    "name": "a machine burns fuel",
+    "file": "crates/core/src/engines.rs",
+    "find": "                    self.take(fuel, 1, r);",
+    "replace": "",
+    "test": "a_machine_works_alongside_you_and_burns_fuel"
+  },
+  {
+    "name": "the workshop speeds machines",
+    "file": "crates/core/src/engines.rs",
+    "find": "        m.ms * (100 - c::WORKSHOP_PCT * (w - 1)) / 100",
+    "replace": "        m.ms + (w - w)",
+    "test": "a_machine_works_alongside_you_and_burns_fuel"
+  },
+  {
+    "name": "a switched-off machine stops",
+    "file": "crates/core/src/engines.rs",
+    "find": "            || self.machines_off.iter().any(|k| k == m.id)\n",
+    "replace": "",
+    "test": "a_switched_off_machine_does_nothing"
+  },
+  {
+    "name": "research takes its time",
+    "file": "crates/core/src/engines.rs",
+    "find": "        Some(bp.ms.saturating_sub(rs.progress))",
+    "replace": "        Some(bp.ms.saturating_sub(rs.progress) / 2)",
+    "test": "research_finishes_a_blueprint_and_its_gadget_makes_a_skill_faster"
+  },
+  {
+    "name": "a gadget makes its skill faster",
+    "file": "crates/core/src/game.rs",
+    "find": "            ms = ms * (100 - c::GADGET_PCT) / 100;",
+    "replace": "",
+    "test": "research_finishes_a_blueprint_and_its_gadget_makes_a_skill_faster"
+  },
+  {
+    "name": "starlight under the sign",
+    "file": "crates/core/src/engines.rs",
+    "find": "        if self.engine_open(Engine::Cosmic) && c::SIGNS[self.sign()].1.contains(&skill) {",
+    "replace": "        if self.engine_open(Engine::Cosmic) {",
+    "test": "the_sky_turns_and_a_skill_under_its_sign_gathers_starlight"
+  },
+  {
+    "name": "the harvest moon",
+    "file": "crates/core/src/game.rs",
+    "find": "            ms = ms * c::HARVEST_MOON_PCT / 100;",
+    "replace": "",
+    "test": "the_harvest_moon_and_compost_together_grow_a_crop_in_nine_sixteenths"
+  },
+  {
+    "name": "cosmic ranks lengthen away time",
+    "file": "crates/core/src/engines.rs",
+    "find": "            c::AWAY_CAP_BY_COSMIC[self.rank(Engine::Cosmic)]",
+    "replace": "            c::AWAY_CAP_MS",
+    "test": "cosmic_ranks_lengthen_the_away_limit"
+  },
+  {
+    "name": "a cosmic rank needs lenses",
+    "file": "crates/core/src/engines.rs",
+    "find": "            && self.have(\"lens\") >= rk.lenses",
+    "replace": "",
+    "test": "a_cosmic_rank_spends_starlight_and_lenses"
+  },
+  {
+    "name": "astral runes need the rank",
+    "file": "crates/core/src/game.rs",
+    "find": "            return self.engine_open(c::Engine::Cosmic) && self.ranks[3] >= c::ASTRAL_RANK;",
+    "replace": "            return true;",
+    "test": "astral_runes_wait_for_the_astral_adept"
+  },
+  {
+    "name": "a trader rank needs orders",
+    "file": "crates/core/src/engines.rs",
+    "find": "            && orders >= rk.orders",
+    "replace": "",
+    "test": "a_trader_rank_needs_its_level_and_its_orders"
+  },
+  {
+    "name": "emberfall needs the charter",
+    "file": "crates/core/src/engines.rs",
+    "find": "            && (t != c::EMBERFALL || self.rank(Engine::Nobility) >= c::CHARTER_RANK)",
+    "replace": "",
+    "test": "emberfall_needs_an_earls_charter"
+  },
+  {
+    "name": "spices heal more",
+    "file": "crates/core/src/game.rs",
+    "find": "                    heal = heal * (100 + c::SPICE_HEAL_PCT) / 100;",
+    "replace": "",
+    "test": "spices_make_food_heal_more_and_are_used_up"
+  },
+  {
+    "name": "engines advance chunk-free",
+    "file": "crates/core/src/game.rs",
+    "find": "            let dt = self.next_event().min(left);",
+    "replace": "            let dt = left;",
+    "test": "engines_running_together_give_the_same_result_however_time_is_split"
+  },
+  {
+    "name": "a version-two save gains engine skills",
+    "file": "crates/core/src/api.rs",
+    "find": "    if (state.v == 1 && state.xp.len() == 12) || (state.v == 2 && state.xp.len() == 14) {",
+    "replace": "    if state.v == 1 && state.xp.len() == 12 {",
+    "test": "a_version_two_save_gains_the_engine_skills_and_is_paid_from_its_own_hour"
+  },
+  {
+    "name": "a group opens on its running tab",
+    "file": "crates/core/src/view.rs",
+    "find": "                let to = running.filter(|r| tabs.contains(r)).unwrap_or(tabs[0]);",
+    "replace": "                let to = tabs[0];",
+    "test": "the_bottom_bar_has_five_groups_and_a_group_opens_on_its_running_tab"
+  },
+  {
+    "name": "a locked engine tab says what opens it",
+    "file": "crates/core/src/view.rs",
+    "find": "        if self.tab_locked(&self.s.screen) {",
+    "replace": "        if self.s.screen.is_empty() {",
+    "test": "an_engine_tab_before_its_level_says_what_opens_it"
+  },
+  {
+    "name": "away time follows the cosmic cap",
+    "file": "crates/core/src/api.rs",
+    "find": "        let credited = elapsed.min(self.s.away_cap());",
+    "replace": "        let credited = elapsed.min(c::AWAY_CAP_MS);",
+    "test": "away_time_counts_for_longer_at_cosmic_ranks"
+  },
+  {
+    "name": "the page wakes for an engine's timer",
+    "file": "crates/core/src/api.rs",
+    "find": "        let event = Some(self.s.next_event())",
+    "replace": "        let event = self.s.active.as_ref().map(|_| self.s.next_event())",
+    "test": "engine_acts_go_through_the_door"
+  },
+  {
+    "name": "the rule of three",
+    "file": "crates/core/src/content.rs",
+    "find": "make(\"frame\", 14, 30, 5_000, 80, &[(\"oak_plank\", 2), (\"nails\", 10)]",
+    "replace": "make(\"frame\", 14, 30, 5_000, 80, &[(\"oak_plank\", 2), (\"nails\", 10), (\"shark\", 1), (\"leather\", 1)]",
+    "test": "no_new_skill_takes_from_or_feeds_more_than_three"
+  },
+  {
+    "name": "firemaking feeds farming",
+    "file": "crates/core/src/view.rs",
+    "find": "c::CROPS.iter().map(|cr| cr.seed).chain([\"ashes\"]).collect(),",
+    "replace": "c::CROPS.iter().map(|cr| cr.seed).collect(),",
+    "test": "firemaking_feeds_farming_with_compost"
   }
 ]

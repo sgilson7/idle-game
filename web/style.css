@@ -133,26 +133,38 @@ textarea { -webkit-user-select: text; user-select: text; }
 .info h2 { margin: 0 0 4px; font-size: 15px; }
 .info p { margin: 0; color: var(--muted); }
 
-/* tabs: two rows of seven on a phone, a rail on a wide screen */
-.tabs { background: #10141c; border-top: 1px solid var(--line); padding: 3px 3px calc(var(--safe-b) + 3px); display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 2px; }
+/* tabs (P21): on a phone, a strip of the group's tabs under the top bar and
+   five groups along the bottom; on a wide screen, every tab in a rail */
+.tabs { background: #10141c; border-bottom: 1px solid var(--line); padding: 3px; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs .tab { flex: 1 0 58px; }
+.tabs .tab:not(.in), .rail-h { display: none; }
+.groups { background: #10141c; border-top: 1px solid var(--line); padding: 3px 3px calc(var(--safe-b) + 3px); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; }
 .tab { min-height: 50px; border: 1px solid transparent; border-radius: 8px; background: none; display: grid; justify-items: center; align-content: center; gap: 1px; cursor: pointer; padding: 2px 0; position: relative; min-width: 0; }
 .tab .ic { width: 22px; height: 22px; }
 .tab-label { font-size: 9.5px; color: var(--muted); white-space: nowrap; overflow: hidden; max-width: 100%; }
 .tab .full { display: none; }
+.group .tab-label { font-size: 11px; }
 .tab[aria-current="page"] { background: var(--panel2); border-color: var(--line); }
 .tab[aria-current="page"] .tab-label { color: var(--fg); }
+.tab.locked { opacity: .45; }
 .tab .run { position: absolute; top: 4px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 6px var(--good); }
 .tab .lvl { position: absolute; top: 2px; left: 4px; font-size: 9px; color: var(--dim); font-weight: 700; }
+.app { grid-template-rows: auto auto minmax(0, 1fr) auto; }
 @media (min-width: 900px) {
   .app { grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
   .top { grid-column: 1 / -1; }
-  .tabs { grid-row: 2; grid-column: 1; grid-template-columns: 1fr; align-content: start; border-top: 0; border-right: 1px solid var(--line); overflow-y: auto; }
-  .tab { grid-template-columns: 24px 26px 1fr; justify-items: start; align-items: center; padding: 4px 22px 4px 8px; min-height: 40px; }
+  .groups { display: none; }
+  .tabs { grid-row: 2; grid-column: 1; display: grid; grid-template-columns: 1fr; align-content: start; border-bottom: 0; border-right: 1px solid var(--line); overflow-y: auto; }
+  .tabs .tab:not(.in) { display: grid; }
+  .rail-h { display: block; padding: 8px 8px 2px; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--dim); font-weight: 700; }
+  .tab { grid-template-columns: 24px 26px 1fr; justify-items: start; align-items: center; padding: 4px 22px 4px 8px; min-height: 38px; }
   .tab-label { font-size: 13px; } .tab .short { display: none; } .tab .full { display: inline; }
   .tab .lvl { position: static; font-size: 11px; }
   .tab .run { right: 8px; top: 50%; }
   .main { grid-row: 2; grid-column: 2; padding: 14px; }
 }
+.note.wide { flex-basis: 100%; }
 @media (max-height: 560px) and (orientation: landscape) { .scene { height: 80px; } }
 
 /* sheets */

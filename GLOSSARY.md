@@ -10,6 +10,28 @@ Where everything you gather and make is kept, with no limit on space. Tap a stac
 
 Not: inventory, stash
 
+### Blueprint
+
+A design the Inventor researches with parts and gold over game time. Once done, the workshop can build what it describes.
+
+### Caravan
+
+A cart-load of one of your goods sent to a town. It comes back on its own, with gold at that town's price and a little of what the town sells.
+
+Not: shipment
+
+### Compost
+
+Ashes used when you plant. A crop planted with compost grows faster.
+
+### Deed
+
+What a noble rank from Squire on asks besides gold and rooms: defeating that rank's champion, or a tribute of fine goods.
+
+### Engine
+
+A long ladder beside the skills that spends what they make and gives some back: combat, the Trader, the estate, the Inventor and the sky.
+
 ### Flag
 
 A playtest note: how a moment felt, the pace, and anything you want to say, saved with what you were doing.
@@ -24,6 +46,10 @@ Not: coins, gems
 
 A level for one tree, rock, fishing spot or recipe, rising to the same top level as a skill. Its checkpoints make that one action better.
 
+### Order
+
+A town's request for a number of one item, paying gold and Trading XP. Each town posts new ones every few hours.
+
 ### Plan
 
 A short list of actions that run in order, while you watch or while you are away.
@@ -36,9 +62,29 @@ Starting every skill again from the first level, in exchange for more XP from th
 
 Not: rebirth, ascension
 
+### Rank
+
+A step on an engine's ladder. Each rank asks for something and makes the engine better.
+
+### Recipe
+
+A rare drop from an enemy that unlocks one unique food, weapon or armour. Recipes stay through prestige.
+
+### Servant
+
+A worker on your estate who does one of your actions at half speed, alongside you, for food and a wage each hour.
+
+### Sign
+
+The part of the sky that is up now. Training a skill under its sign gathers starlight.
+
+### Starlight
+
+What training a skill under its sign gathers. Attunement spends it.
+
 ### Total level
 
-All twelve skill levels added together.
+All your skill levels added together. It opens the engines and prestige.
 
 ### XP
 

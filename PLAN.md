@@ -23,9 +23,11 @@ Stage 2. The MVP, built on the default of every open question (BRIEF.md, Autonom
 
 Not in the MVP: Crafting and Farming (IG-Q15 C), a mastery pool, more than three plan steps, sound.
 
-## Plan 2: recipes and four engines (2026-10-25, for review)
+## Plan 2: recipes and four engines (2026-10-25; answered in the journal and built the same day)
 
 Stage 2 for T8 to T14. The design is on the journal's Engines tabs, with diagrams, mockups and twelve questions (IG-Q24 to IG-Q35). **Not approved in advance: nothing is built until the person has read it.**
+
+The person answered on 2026-10-25: "all of the design decisions are in the design log as choices in each tab, please take those decisions and build it out." Every tapped answer was the default; the four left untapped (IG-Q22 to IG-Q25) take their defaults (R7.1).
 
 | # | Decision | Reason | Held by (once built) |
 | --- | --- | --- | --- |
@@ -34,4 +36,20 @@ Stage 2 for T8 to T14. The design is on the journal's Engines tabs, with diagram
 | P19 | Nine recipes drop from enemies (1 in 64 to 1 in 512) and unlock unique weapons, armour and food that need two or three skills' goods. | T10 | content tests: every recipe's inputs are made somewhere |
 | P20 | Four engines (Trader, Nobility, Inventor, Cosmic), each with a ladder, one timer alongside the action, and something to collect; one new skill each (Trading, Construction, Invention, Attunement). | T11 to T14 | a content test: no skill takes from or feeds more than three |
 | P21 | Navigation becomes five groups with a strip of skills or engines. | 18 skills and 5 engines do not fit 16 tabs | browser check |
-| P22 | Build order and prestige behaviour follow IG-Q24 and IG-Q25. | the person's | — |
+| P22 | Build order and prestige behaviour follow IG-Q24 and IG-Q25: recipes, Trader, Nobility, Inventor, Cosmic; the engines start over at prestige and recipes stay (IG-Q26 A). | the person's | tests `recipes_are_kept_through_prestige_and_engines_are_not` |
+
+## Plan 3: the full game (2026-10-25, for review)
+
+Stage 2 for T15: four times the length and content of every skill and engine. The design is on the journal's Full game tabs, with ten questions (IG-Q36 to IG-Q45). **Not approved in advance: nothing is built until the person has read it.** The rows below assume each question's default.
+
+| # | Decision | Reason | Held by (once built) |
+| --- | --- | --- | --- |
+| P23 | Content rows carry a region; content tests run per region. | four regions (IG-Q38) | content tests |
+| P24 | Save version 4: a game in progress carries over into the first region. | IG-5 | a migration test |
+| P25 | The Coast first, as the template: its skill rows, enemies, champions, recipes, crops, towns and engine tier. | IG-Q45 | content tests; a playtest |
+| P26 | The run to the first prestige about four times today's: prestige at total level 900. | IG-Q36, IG-Q37 (changes IG-Q19's 600) | a pace test from the model; playtest files |
+| P27 | The bank grouped by skill with a search box; skill screens for four times the rows. | IG-Q41 | browser check |
+| P28 | One new mechanic for each skill, and a dungeon in each new region. | IG-Q40, IG-Q42 | a test and a break row each |
+| P29 | The Peaks, then the Wastes, each from a written list the person has read. | IG-Q39 | as P25 |
+| P30 | A balance pass over all four regions from playtest files. | R7.6 | readout tool; triage rows |
+

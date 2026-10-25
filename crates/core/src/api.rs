@@ -24,6 +24,8 @@ pub struct Ui {
     pub title: String,
     pub top: Top,
     pub tabs: Vec<Tab>,
+    /// The bottom bar's five groups (P21).
+    pub groups: Vec<Tab>,
     pub screen: String,
     pub blocks: Vec<Block>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,9 +70,11 @@ fn read_save(text: &str) -> Result<State, String> {
         return Err("a save from a newer version".into());
     }
     let mut state = file.state;
-    // Version 1 had twelve skills; Crafting and Farming were added at the end (T5).
-    if state.v == 1 && state.xp.len() == 12 {
+    // Version 1 had twelve skills; Crafting and Farming were added at the end
+    // (T5). Version 2 had fourteen; the four engine skills follow (T11 to T14).
+    if (state.v == 1 && state.xp.len() == 12) || (state.v == 2 && state.xp.len() == 14) {
         state.xp.resize(c::SKILLS.len(), 0);
+        state.upkeep_hour = state.sim_ms / c::HOUR;
         state.v = SAVE_VERSION;
     }
     if state.xp.len() != c::SKILLS.len()
@@ -225,6 +229,16 @@ impl Game {
             "away_ms": aways.iter().map(|e| e.n).sum::<u64>(),
             "flags": self.s.flags.len(),
             "kills": self.s.kills,
+            "engines": {
+                "ranks": self.s.ranks,
+                "rooms": self.s.rooms,
+                "recipes": self.s.recipes,
+                "blueprints": self.s.blueprints,
+                "servants": self.s.servants.iter().filter(|s| !s.job.is_empty()).count(),
+                "orders": self.s.counts.get("orders").copied().unwrap_or(0),
+                "caravans": self.s.counts.get("caravans").copied().unwrap_or(0),
+                "income": self.s.counts.get("income").copied().unwrap_or(0),
+            },
             "skills": skills,
         });
         let doc = serde_json::json!({
@@ -251,7 +265,7 @@ impl Game {
         if elapsed == 0 {
             return;
         }
-        let credited = elapsed.min(c::AWAY_CAP_MS);
+        let credited = elapsed.min(self.s.away_cap());
         let mut r = Report::begin(&self.s, elapsed, elapsed - credited);
         let growing: Vec<usize> = (0..self.s.patches_open())
             .filter(|&i| self.s.grow_left(i).unwrap_or(0) > 0)
@@ -271,7 +285,7 @@ impl Game {
         self.log_report(&r, now, away);
         if away {
             self.s.count("away_ms", elapsed);
-            if r.actions > 0 || r.stop.is_some() || !ripe.is_empty() {
+            if r.actions > 0 || r.stop.is_some() || !ripe.is_empty() || r.gold > 0 || !r.research.is_empty() {
                 let sheet = self.view().return_sheet(&r);
                 self.sheet = Some(sheet);
             }
@@ -283,6 +297,58 @@ impl Game {
                     .push(self.text.t("toast_ripe", &[("what", self.text.action(crop))]));
             }
         }
+    }
+
+    /// An engine act: whatever it changes, its levels and finds are logged
+    /// like any action's, and it says so in a toast.
+    fn engine(&mut self, now: u64, name: &str, value: &str) {
+        let mut r = Report::begin(&self.s, 0, 0);
+        let (k, rest) = value.split_once(':').unwrap_or((value, ""));
+        let num_k = k.parse::<usize>().ok();
+        let done = match name {
+            "room.build" => num_k.is_some_and(|i| i < c::ROOMS.len() && self.s.build_room(i, &mut r)),
+            "rise.noble" => self.s.rise_noble(value == "tribute", &mut r),
+            "rise.trader" => self.s.rise_trader(),
+            "rise.inventor" => self.s.rise_inventor(&mut r),
+            "rise.cosmic" => self.s.rise_cosmic(&mut r),
+            "servant.set" => {
+                let job = self.s.active.clone().unwrap_or_default();
+                num_k.is_some_and(|i| self.s.set_servant(i, &job))
+            }
+            "servant.dismiss" => {
+                if let Some(i) = num_k {
+                    self.s.dismiss_servant(i);
+                }
+                num_k.is_some()
+            }
+            "order.fill" => match (num_k, rest.parse::<u64>()) {
+                (Some(t), Ok(slot)) if t < c::TOWNS.len() => self.s.fill_order(t, slot, &mut r),
+                _ => false,
+            },
+            "caravan.send" | "caravan.guarded" => {
+                let guards = name == "caravan.guarded";
+                match num_k {
+                    Some(t) if t < c::TOWNS.len() => self.s.send_caravan(t, rest, guards, &mut r),
+                    _ => false,
+                }
+            }
+            "research" => self.s.start_research(value, &mut r),
+            "machine.toggle" => {
+                self.s.toggle_machine(value);
+                true
+            }
+            _ => false,
+        };
+        if done {
+            self.s.note(now, name, value, 0);
+            let key = format!("toast_{}", name.replace('.', "_"));
+            if self.text.ui.contains_key(&key) {
+                self.toasts.push(self.text.s(&key));
+            }
+        }
+        self.log_report(&r, now, false);
+        let more = self.toasts_for(&r);
+        self.toasts.extend(more);
     }
 
     /// A farming act: plant or harvest, with its levels logged like any action's.
@@ -337,6 +403,23 @@ impl Game {
         for (item, n) in &r.rare {
             self.s.note(now, "rare", item, *n);
         }
+        for id in &r.recipes {
+            self.s.note(now, "recipe", id, 0);
+        }
+        for (t, gold, bandits) in &r.caravans {
+            self.s.note(
+                now,
+                if *bandits { "caravan_bandits" } else { "caravan" },
+                c::TOWNS[*t].id,
+                *gold,
+            );
+        }
+        for id in &r.research {
+            self.s.note(now, "blueprint", id, 0);
+        }
+        if r.income > 0 {
+            self.s.count("income", r.income);
+        }
         if let Some(stop) = &r.stop {
             let what = match stop {
                 Stop::Food => "food".to_string(),
@@ -375,6 +458,21 @@ impl Game {
         for item in r.rare.keys() {
             out.push(t.t("toast_rare", &[("item", t.item(item))]));
         }
+        for id in &r.recipes {
+            out.push(t.t("toast_recipe", &[("what", t.action(id))]));
+        }
+        for (town, gold, _) in &r.caravans {
+            out.push(t.t(
+                "toast_caravan",
+                &[
+                    ("town", t.s(&format!("town_{}", c::TOWNS[*town].id))),
+                    ("n", num(*gold)),
+                ],
+            ));
+        }
+        for id in &r.research {
+            out.push(t.t("toast_blueprint", &[("what", t.s(&format!("bp_{id}")))]));
+        }
         if !r.steps.is_empty() && self.s.active.is_some() {
             out.push(t.s("toast_plan"));
         }
@@ -404,7 +502,7 @@ impl Game {
                 } else if self.s.unlocked(value) && self.s.missing(value).is_none() {
                     self.s.start(value, now);
                     self.s.screen = match c::action_index(value) {
-                        Some(a) => c::SKILLS[c::ACTIONS[a].skill].id.into(),
+                        Some(a) => crate::view::tab_of_skill(c::ACTIONS[a].skill).into(),
                         None => "combat".into(),
                     };
                 }
@@ -467,6 +565,9 @@ impl Game {
                         .t("toast_sold", &[("item", self.text.item(value)), ("n", num(got))])];
                 }
             }
+            "room.build" | "rise.noble" | "rise.trader" | "rise.inventor" | "rise.cosmic" | "servant.set"
+            | "servant.dismiss" | "order.fill" | "caravan.send" | "caravan.guarded" | "research"
+            | "machine.toggle" => self.engine(now, name, value),
             "farm.plant" => self.farm(now, "plant", value),
             "farm.harvest" => self.farm(now, "harvest", value),
             "farm.harvest_all" => self.farm(now, "all", value),
@@ -587,7 +688,7 @@ impl Game {
             title: t.s("welcome_title"),
             lines: vec![
                 t.s("welcome_1"),
-                t.t("welcome_2", &[("cap", crate::text::dur(c::AWAY_CAP_MS))]),
+                t.t("welcome_2", &[("cap", crate::text::dur(self.s.away_cap()))]),
                 t.s("welcome_3"),
             ],
             buttons: vec![button(t.s("welcome_go"), "sheet.close", "").tone("primary")],
@@ -686,21 +787,21 @@ impl Game {
     pub fn ui(&mut self) -> Ui {
         let v = self.view();
         // The page's one timer wakes for whichever comes first: the running
-        // action, or the next crop to ripen (T5). 0 means nothing to wake for.
-        let action = self
-            .s
-            .active
-            .as_ref()
-            .map(|id| self.s.duration(id).saturating_sub(self.s.progress_ms).max(1));
+        // action, an engine's timer (T11 to T14), or the next crop to ripen
+        // (T5). 0 means nothing to wake for.
+        let event = Some(self.s.next_event())
+            .filter(|&n| n < u64::MAX)
+            .map(|n| n.max(1));
         let crop = (0..self.s.patches_open())
             .filter_map(|i| self.s.grow_left(i))
             .filter(|&left| left > 0)
             .min();
-        let next_ms = action.into_iter().chain(crop).min().unwrap_or(0);
+        let next_ms = event.into_iter().chain(crop).min().unwrap_or(0);
         let ui = Ui {
             title: self.text.title.clone(),
             top: v.top(),
             tabs: v.tabs(),
+            groups: v.groups(),
             screen: self.s.screen.clone(),
             blocks: v.screen(),
             sheet: self.sheet.clone(),
@@ -740,6 +841,13 @@ fn block(kind: &str) -> Block {
 fn tuning() -> serde_json::Value {
     serde_json::json!({
         "away_cap_ms": c::AWAY_CAP_MS,
+        "engine_at": c::ENGINE_AT.iter().map(|(_, at)| *at).collect::<Vec<_>>(),
+        "recipes": c::RECIPES.iter().map(|r| serde_json::json!([r.id, r.enemy, r.one_in])).collect::<Vec<_>>(),
+        "towns": c::TOWNS.iter().map(|t| serde_json::json!([t.id, t.level, t.trip_ms, t.danger])).collect::<Vec<_>>(),
+        "noble_ranks": c::NOBLE_RANKS.iter().map(|r| serde_json::json!([r.id, r.gold, r.rooms, r.income])).collect::<Vec<_>>(),
+        "blueprints": c::BLUEPRINTS.iter().map(|b| serde_json::json!([b.id, b.level, b.gold, b.ms])).collect::<Vec<_>>(),
+        "machines": c::MACHINES.iter().map(|m| serde_json::json!([m.id, m.ms])).collect::<Vec<_>>(),
+        "plan_steps": c::PLAN_STEPS,
         "return_after_ms": c::RETURN_AFTER_MS,
         "prestige_base": c::PRESTIGE_BASE,
         "prestige_step_bp": c::PRESTIGE_STEP_BP,
@@ -766,6 +874,38 @@ mod tests {
         Game::new(STRINGS, GLOSSARY, "", "{}", now).unwrap()
     }
 
+    /// Every skill at 30, every room built once, a rank on each ladder, a
+    /// recipe and a blueprint known, and goods for every screen to show.
+    fn engines_open(g: &mut Game) {
+        let s = g.state_mut();
+        for i in 0..c::SKILLS.len() {
+            s.xp[i] = crate::xp::at(30);
+        }
+        s.rooms = [1; 6];
+        s.ranks = [1, 2, 1, 1];
+        s.recipes.push("farmers_stew".into());
+        s.blueprints.push("sawmill".into());
+        s.gold = 50_000;
+        for (item, n) in [
+            ("logs", 500),
+            ("cart", 2),
+            ("shrimp", 50),
+            ("wood_parts", 100),
+            ("auto_smelter", 1),
+            ("axe_gadget", 1),
+            ("starlight", 50),
+            ("iron_ore", 20),
+            ("bronze_sword", 1),
+        ] {
+            s.bank.insert(item.into(), n);
+        }
+        s.servants.push(crate::game::Servant {
+            job: "copper".into(),
+            progress: 0,
+            unpaid: true,
+        });
+    }
+
     fn all_text(v: &serde_json::Value, out: &mut Vec<String>) {
         match v {
             serde_json::Value::String(s) => out.push(s.clone()),
@@ -781,7 +921,8 @@ mod tests {
         let v = ui(&g.tick(1_000));
         assert_eq!(v["screen"], "woodcutting");
         assert_eq!(v["sheet"]["kind"], "notice");
-        assert_eq!(v["tabs"].as_array().unwrap().len(), 16);
+        assert_eq!(v["tabs"].as_array().unwrap().len(), 22);
+        assert_eq!(v["groups"].as_array().unwrap().len(), 5);
         assert_eq!(v["next_ms"], 0);
     }
 
@@ -806,6 +947,31 @@ mod tests {
         }
         g.state_mut().start("tree", 3);
         all_text(&ui(&g.tick(3 + 2 * 3_600_000)), &mut texts);
+        // Every engine open, with something in each, and a return screen that
+        // has a caravan, a blueprint, a recipe and the estate's hours in it.
+        let mut g = game(1);
+        engines_open(&mut g);
+        for tab in TABS {
+            all_text(&ui(&g.act("tab", tab, 2)), &mut texts);
+        }
+        g.act("do", "tree", 2);
+        g.act("servant.set", "0", 2);
+        g.act("caravan.send", "0:logs", 2);
+        g.act("research", "axe_gadget", 2);
+        for tab in [
+            "trader",
+            "estate",
+            "workshop",
+            "observatory",
+            "farming",
+            "recipes",
+            "combat",
+        ] {
+            all_text(&ui(&g.act("tab", tab, 3)), &mut texts);
+        }
+        all_text(&ui(&g.tick(3 + 2 * 3_600_000)), &mut texts);
+        texts.sort();
+        texts.dedup();
         let missing: Vec<&String> = texts
             .iter()
             .filter(|s| s.starts_with('[') && s.ends_with(']'))
@@ -875,7 +1041,7 @@ mod tests {
         let v = ui(&g3.tick(0));
         assert_eq!(v["stash"], true);
         assert_eq!(g3.state().xp[0], 0);
-        let newer = saved.replace("\"v\":2", "\"v\":99");
+        let newer = saved.replace("\"v\":3", "\"v\":99");
         let mut g4 = Game::new(STRINGS, GLOSSARY, &newer, "{}", 0).unwrap();
         assert_eq!(ui(&g4.tick(0))["stash"], true);
     }
@@ -939,9 +1105,121 @@ mod tests {
         old["state"]["xp"].as_array_mut().unwrap().truncate(12);
         old["state"].as_object_mut().unwrap().remove("patches");
         let loaded = Game::new(STRINGS, GLOSSARY, &old.to_string(), "{}", 40_000).unwrap();
-        assert_eq!(loaded.state().xp.len(), 14);
+        assert_eq!(loaded.state().xp.len(), 18);
         assert_eq!(loaded.state().xp[0], 100);
         assert_eq!(loaded.state().xp[c::FARMING], 0);
+    }
+
+    #[test]
+    fn a_version_two_save_gains_the_engine_skills_and_is_paid_from_its_own_hour() {
+        let mut g = game(0);
+        g.act("do", "tree", 0);
+        g.tick(30_000);
+        let mut old: serde_json::Value = serde_json::from_str(&g.save()).unwrap();
+        old["v"] = 2.into();
+        old["state"]["v"] = 2.into();
+        old["state"]["sim_ms"] = (50 * c::HOUR).into();
+        old["state"]["xp"].as_array_mut().unwrap().truncate(14);
+        for k in ["recipes", "ranks", "rooms", "servants", "caravans", "upkeep_hour"] {
+            old["state"].as_object_mut().unwrap().remove(k);
+        }
+        let loaded = Game::new(STRINGS, GLOSSARY, &old.to_string(), "{}", 40_000).unwrap();
+        assert_eq!(loaded.state().xp.len(), 18);
+        assert_eq!(loaded.state().xp[0], 100);
+        assert_eq!(loaded.state().upkeep_hour, 50);
+        assert_eq!(loaded.state().rooms, [0; 6]);
+    }
+
+    #[test]
+    fn the_bottom_bar_has_five_groups_and_a_group_opens_on_its_running_tab() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        g.state_mut().bank.insert("copper_ore".into(), 5);
+        g.state_mut().bank.insert("tin_ore".into(), 5);
+        let v = ui(&g.act("do", "bronze_bar", 0));
+        let groups = v["groups"].as_array().unwrap();
+        let ids: Vec<&str> = groups.iter().map(|t| t["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["gather", "make", "fight", "engines", "more"]);
+        // Smithing runs, so Make opens on Smithing; Gather on its first tab.
+        assert_eq!(groups[1]["value"], "smithing");
+        assert_eq!(groups[1]["running"], true);
+        assert_eq!(groups[0]["value"], "woodcutting");
+        // the strip shows the group on screen
+        let strip: Vec<&str> = v["tabs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|t| t["strip"] == true)
+            .map(|t| t["id"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            strip,
+            [
+                "firemaking",
+                "fletching",
+                "smithing",
+                "cooking",
+                "crafting",
+                "runecrafting",
+                "construction"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_engine_tab_before_its_level_says_what_opens_it() {
+        let mut g = game(0);
+        let v = ui(&g.act("tab", "trader", 0));
+        let tab = v["tabs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["id"] == "trader")
+            .unwrap()
+            .clone();
+        assert_eq!(tab["locked"], true);
+        let text = v["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|b| b["text"].as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(text.contains("150"), "{text}");
+    }
+
+    #[test]
+    fn engine_acts_go_through_the_door() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        engines_open(&mut g);
+        g.state_mut().ranks = [0, 0, 0, 0];
+        g.state_mut().rooms = [0; 6];
+        g.state_mut().bank.insert("plank".into(), 10);
+        g.state_mut().bank.insert("nails".into(), 20);
+        g.state_mut().bank.insert("limestone".into(), 10);
+        g.act("room.build", "0", 0);
+        assert_eq!(g.state().rooms[c::KITCHEN], 1);
+        g.act("rise.noble", "", 0);
+        assert_eq!(g.state().ranks[1], 1);
+        let v = ui(&g.act("caravan.send", "0:logs", 0));
+        assert_eq!(g.state().caravans.len(), 1);
+        assert!(v["toasts"].as_array().unwrap().len() == 1);
+        // Nothing else runs: the page is told to wake in an hour, for the caravan.
+        assert_eq!(v["next_ms"], c::HOUR);
+        g.tick(c::HOUR);
+        assert!(g.state().caravans.is_empty());
+        assert_eq!(g.state().have("spices"), 10);
+    }
+
+    #[test]
+    fn away_time_counts_for_longer_at_cosmic_ranks() {
+        let mut g = game(0);
+        engines_open(&mut g);
+        g.state_mut().ranks[3] = 3;
+        g.act("do", "tree", 0);
+        g.tick(60 * c::HOUR);
+        assert_eq!(g.state().sim_ms, 48 * c::HOUR);
     }
 
     #[test]

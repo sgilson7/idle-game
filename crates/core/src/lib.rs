@@ -7,9 +7,11 @@
 
 pub mod api;
 pub mod content;
+pub mod engines;
 pub mod game;
 pub mod glossary;
 pub mod rng;
 pub mod text;
 pub mod view;
+pub mod view_engines;
 pub mod xp;

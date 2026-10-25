@@ -22,9 +22,11 @@ WOOD = {"tree": "#4f8a3c", "logs": "#4f8a3c", "oak": "#6a9a3a", "willow": "#8ab0
         "mahogany": "#8e3b2a", "yew": "#2f6a4a", "magic": "#5b7be0", "redwood": "#b5302a"}
 FISH = {"shrimp": "#e88a7a", "trout": "#a8b87a", "salmon": "#e8907a", "lobster": "#c8402a", "swordfish": "#6a8ac8",
         "monkfish": "#8a7a6a", "shark": "#8a9aa8"}
-RUNE = {"air": "#d8e2ee", "water": "#4f8ef7", "fire": "#f08a2a", "chaos": "#c84ac8", "death": "#e8e8e8"}
+RUNE = {"air": "#d8e2ee", "water": "#4f8ef7", "fire": "#f08a2a", "chaos": "#c84ac8", "death": "#e8e8e8", "astral": "#e8d070"}
 ENEMY = {"chicken": "#f2efe6", "cow": "#d8cbb8", "goblin": "#6aa84f", "spider": "#4a4a5a", "hill_giant": "#a07a5a",
-         "black_knight": "#2a2a34", "moss_giant": "#5a8a3a", "green_dragon": "#2f9a4a"}
+         "black_knight": "#2a2a34", "moss_giant": "#5a8a3a", "green_dragon": "#2f9a4a",
+         "goblin_warlord": "#4a8a2f", "broodmother": "#5a3a6a", "giant_chieftain": "#c08a5a", "black_knight_titan": "#14141c",
+         "elder_dragon": "#b8302a"}
 
 def first(word, table, default="#9aa4b8"):
     for k, v in table.items():
@@ -58,6 +60,15 @@ def produce(c, name):
     return f'<circle cx="20" cy="22" r="12" fill="{c}" stroke="#333"/><path d="M20 10l-3-5m3 5l4-4" stroke="#5a9a3a" stroke-width="2.5"/>'
 def seeds(c): return f'<path d="M9 12h22l-2 22H11z" fill="#c8a878" stroke="#5a4a2a"/><path d="M9 12q11-6 22 0" fill="#b0905a" stroke="#5a4a2a"/><circle cx="20" cy="24" r="5" fill="{c}" stroke="#333"/>'
 def body(c): return f'<path d="M12 6l-8 8 4 5 4-3v19h16V16l4 3 4-5-8-8-4 3h-8z" fill="{c}" stroke="#222"/>'
+def plank(c): return f'<rect x="4" y="12" width="32" height="6" rx="1" fill="{c}" stroke="#3a2a1a"/><rect x="4" y="21" width="32" height="6" rx="1" fill="{c}" stroke="#3a2a1a"/>'
+def parts(c): return f'<circle cx="14" cy="16" r="6" fill="{c}" stroke="#222"/><rect x="20" y="20" width="12" height="9" rx="2" fill="{c}" stroke="#222"/><path d="M8 30l6-6" stroke="#222" stroke-width="2.5"/>'
+def gear(c): return f'<circle cx="20" cy="20" r="10" fill="{c}" stroke="#222" stroke-width="5" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="8" fill="{c}" stroke="#222"/><circle cx="20" cy="20" r="3" fill="#222"/>'
+def machine(c): return f'<rect x="6" y="12" width="28" height="20" rx="2" fill="{c}" stroke="#222"/><rect x="11" y="6" width="6" height="7" fill="#6a7488" stroke="#222"/>' + gear("#cfd6e6").replace('cx="20" cy="20"', 'cx="24" cy="23"').replace('r="10"', 'r="5"').replace('r="8"', 'r="4"').replace('r="3"', 'r="1.5"')
+def star(c, r=13): return f'<path d="M20 {20-r}l{r*0.3:.1f} {r*0.7:.1f} {r*0.7:.1f} {r*0.3:.1f}-{r*0.7:.1f} {r*0.3:.1f}-{r*0.3:.1f} {r*0.7:.1f}-{r*0.3:.1f}-{r*0.7:.1f}-{r*0.7:.1f}-{r*0.3:.1f} {r*0.7:.1f}-{r*0.3:.1f}z" fill="{c}" stroke="#665"/>'
+def pot(c): return f'<path d="M7 18h26l-3 15H10z" fill="#5a5f6e" stroke="#222"/><ellipse cx="20" cy="18" rx="13" ry="4" fill="{c}" stroke="#222"/><path d="M14 13c0-3 3-3 3-6M22 13c0-3 3-3 3-6" stroke="#cfd6e6" stroke-width="2" fill="none"/>'
+def house(c, roof="#8e3b2a"): return f'<path d="M6 19L20 7l14 12z" fill="{roof}" stroke="#222"/><rect x="9" y="19" width="22" height="15" fill="{c}" stroke="#222"/><rect x="17" y="25" width="6" height="9" fill="#4a3018"/>'
+def sign(mark): return '<circle cx="20" cy="20" r="16" fill="#1d2440" stroke="#7a8ad0"/>' + mark
+
 def fire(): return '<path d="M20 4c4 7 10 10 10 18a10 10 0 0 1-20 0c0-6 4-8 5-13 2 4 3 5 5 5-1-4-1-7 0-10z" fill="#f08a2a"/><path d="M20 18c2 3 5 5 5 9a5 5 0 0 1-10 0c0-2 2-4 3-6z" fill="#ffd36a"/>'
 
 GENERIC = {
@@ -79,6 +90,34 @@ GENERIC = {
     "leather_body": body("#a0703a"), "hard_leather_body": body("#6a4a2a"), "silk_robe": body("#c8c8e8"), "dragonhide_body": body("#2f9a4a"),
     "baked_potato": '<ellipse cx="20" cy="23" rx="14" ry="10" fill="#8a5a2a" stroke="#3a2a1a"/><path d="M12 20q8 6 16 0" stroke="#f0e0a0" stroke-width="4" fill="none"/>',
     "cooked_sweetcorn": '<ellipse cx="20" cy="20" rx="7" ry="14" fill="#e8a020" stroke="#753"/><path d="M15 12h10M14 18h12M14 24h12M15 30h10" stroke="#a06010"/>',
+    # the engines (T10 to T14)
+    "limestone": rock("#e8e2cf"),
+    "nails": '<path d="M10 8h8M14 8v24M22 10h8M26 10v22" stroke="#9aa4b8" stroke-width="3" stroke-linecap="round"/>',
+    "gear": gear("#9aa4b8"),
+    "spring": '<path d="M12 8h16M12 32h16M14 8q12 3 0 6t0 6 0 6 12 6" stroke="#b8c2d6" stroke-width="2.5" fill="none"/>',
+    "lens": '<ellipse cx="20" cy="20" rx="9" ry="14" fill="#bfe6ff" stroke="#4a7aa0" stroke-width="2"/><path d="M16 12q-3 8 0 16" stroke="#fff" stroke-width="2" fill="none"/>',
+    "glass": '<path d="M12 6h16l-3 28H15z" fill="#bfe6ff" stroke="#4a7aa0" opacity=".9"/>',
+    "dye": '<path d="M14 8h12v6l5 6v14H9V20l5-6z" fill="#9a2fb0" stroke="#222"/><rect x="14" y="5" width="12" height="4" fill="#8a6a4a"/>',
+    "spices": '<ellipse cx="20" cy="28" rx="14" ry="6" fill="#c8402a" stroke="#622"/><circle cx="15" cy="24" r="3" fill="#e8a020"/><circle cx="23" cy="23" r="3" fill="#7a3a1a"/><circle cx="20" cy="19" r="3" fill="#e86020"/>',
+    "royal_robe": body("#6a2fb0"),
+    "farmers_stew": pot("#a0703a"), "goblin_hot_pot": pot("#6aa84f"), "dragon_pepper_feast": pot("#d8402a"),
+    "studded_leather": body("#7a5030") + '<circle cx="16" cy="20" r="1.6" fill="#ddd"/><circle cx="24" cy="20" r="1.6" fill="#ddd"/><circle cx="20" cy="27" r="1.6" fill="#ddd"/>',
+    "silkweave_vest": body("#e8e0f8") + '<path d="M14 18l12 10M26 18L14 28" stroke="#e8b42a" stroke-width="1.5"/>',
+    "mossplate": body("#3a6a4a") + '<path d="M13 18h14M13 24h14" stroke="#8ab0ff"/>',
+    "dragonfire_staff": '<path d="M9 35L26 12" stroke="#5b4ab8" stroke-width="3.5" stroke-linecap="round"/>' + fire().replace('M20 4', 'M28 2', 1),
+    "giants_maul": '<path d="M10 33L26 15" stroke="#8a6a4a" stroke-width="4" stroke-linecap="round"/><rect x="20" y="3" width="15" height="13" rx="2" transform="rotate(45 27 10)" fill="#b8c2d6" stroke="#222"/>',
+    "knights_longbow": bow("#7a4a9a") + '<path d="M13 4v32" stroke="#e8b42a" stroke-width="1.4"/>',
+    "plank": plank("#c89860"), "oak_plank": plank("#a8884a"), "teak_plank": plank("#b07a3a"), "mahogany_plank": plank("#8e3b2a"),
+    "frame": '<rect x="7" y="7" width="26" height="26" fill="none" stroke="#a8884a" stroke-width="4"/><path d="M7 7l26 26" stroke="#a8884a" stroke-width="3"/>',
+    "cart": '<path d="M4 14h28l-3 12H8z" fill="#a8884a" stroke="#3a2a1a"/><circle cx="12" cy="30" r="5" fill="#5a4a3a" stroke="#222"/><circle cx="27" cy="30" r="5" fill="#5a4a3a" stroke="#222"/><path d="M32 16l5-4" stroke="#8a6a4a" stroke-width="3"/>',
+    "wood_parts": parts("#a8884a"), "metal_parts": parts("#9aa4b8"), "cloth_parts": parts("#d8d0e8"), "magic_parts": parts("#7a8aff"),
+    "fine_parts": parts("#e8b42a"),
+    "axe_gadget": gear("#e8b42a") + '<path d="M8 34l10-10" stroke="#c8a070" stroke-width="3"/>',
+    "pick_gadget": gear("#e8b42a") + '<path d="M6 12q14-8 28 0" stroke="#b8c2d6" stroke-width="3" fill="none"/>',
+    "rod_gadget": gear("#e8b42a") + '<path d="M6 34L32 6" stroke="#c8a070" stroke-width="2"/>',
+    "sawmill": machine("#a8884a"), "auto_smelter": machine("#c8743a"), "fish_trap": machine("#4f8ef7"),
+    "starlight": star("#fff3b0"), "stardust": '<circle cx="12" cy="14" r="3" fill="#d8c8ff"/><circle cx="24" cy="10" r="2" fill="#fff3b0"/><circle cx="27" cy="24" r="3.5" fill="#d8c8ff"/><circle cx="15" cy="28" r="2.5" fill="#fff3b0"/>',
+    "star_core": '<circle cx="20" cy="20" r="14" fill="#2a2050" stroke="#7a8ad0"/>' + star("#fff3b0", 9),
 }
 UI = {
     "woodcutting": '<path d="M7 34l17-17" stroke="#c8a070" stroke-width="4" stroke-linecap="round"/><path d="M22 6c7 0 12 5 12 10l-10 2-5-5z" fill="#b8c2d6" stroke="#222"/>',
@@ -108,6 +147,31 @@ UI = {
     "save": '<rect x="6" y="6" width="28" height="28" rx="3" fill="#3d5bb8" stroke="#123"/><rect x="11" y="6" width="16" height="10" fill="#cfd6e6"/><rect x="11" y="22" width="18" height="12" fill="#e8ecf5"/>',
     "reset": '<path d="M30 14A12 12 0 1 0 32 22" stroke="#cfd6e6" stroke-width="3.5" fill="none"/><path d="M33 5v10H23" stroke="#cfd6e6" stroke-width="3.5" fill="none"/>',
     "gold": '<circle cx="20" cy="20" r="13" fill="#f0c040" stroke="#9c6a00" stroke-width="2"/><circle cx="20" cy="20" r="8" fill="none" stroke="#c89010" stroke-width="2"/>',
+    # groups of the bottom bar (P21)
+    "gather": '<path d="M7 34l17-17" stroke="#c8a070" stroke-width="4" stroke-linecap="round"/><path d="M22 6c7 0 12 5 12 10l-10 2-5-5z" fill="#6ac84a" stroke="#222"/>',
+    "make": '<path d="M4 18h20l6 6H11v5H4z" fill="#9aa4b8" stroke="#222"/><path d="M26 6l-6 9" stroke="#f08a2a" stroke-width="3"/>',
+    "fight": '<path d="M6 34L28 12l2-7-7 2L4 30" fill="#d8dee8" stroke="#222"/>',
+    "engines": gear("#e8b42a"),
+    "more": '<circle cx="10" cy="20" r="3.5" fill="#cfd6e6"/><circle cx="20" cy="20" r="3.5" fill="#cfd6e6"/><circle cx="30" cy="20" r="3.5" fill="#cfd6e6"/>',
+    # the engine tabs and their skills
+    "recipes": '<rect x="7" y="5" width="26" height="31" rx="2" fill="#8a5a2a" stroke="#222"/><rect x="11" y="9" width="18" height="23" fill="#f2e6c8"/><path d="M14 15h12M14 20h12M14 25h8" stroke="#8a5a2a" stroke-width="2"/>',
+    "trader": '<path d="M4 14h28l-3 12H8z" fill="#e8b42a" stroke="#3a2a1a"/><circle cx="12" cy="30" r="5" fill="#5a4a3a" stroke="#222"/><circle cx="27" cy="30" r="5" fill="#5a4a3a" stroke="#222"/>',
+    "trading": '<circle cx="14" cy="22" r="9" fill="#f0c040" stroke="#9c6a00"/><circle cx="26" cy="18" r="9" fill="#f0c040" stroke="#9c6a00"/>',
+    "estate": house("#cfc0a0"),
+    "construction": '<path d="M6 34L24 16" stroke="#c8a070" stroke-width="4" stroke-linecap="round"/><rect x="20" y="5" width="14" height="10" rx="2" fill="#9aa4b8" stroke="#222"/>',
+    "workshop": machine("#6a7488"), "invention": gear("#9aa4b8"),
+    "observatory": '<path d="M6 34h28v-12a14 14 0 0 0-28 0z" fill="#cfd6e6" stroke="#222"/><path d="M20 22L32 8" stroke="#3d5bb8" stroke-width="4"/>',
+    "attunement": star("#d8c8ff"),
+    "town": house("#c8b090", "#3d5bb8"), "rank": star("#e86fb0", 11), "rank_locked": star("#4a5068", 11),
+    "servant": '<circle cx="20" cy="12" r="6" fill="#e0b48a" stroke="#222"/><path d="M8 36c0-12 24-12 24 0z" fill="#3d5bb8" stroke="#222"/>',
+    "kitchen": pot("#cfd6e6"), "garden": '<path d="M3 26l7-10h20l7 10z" fill="#6b4a2a" stroke="#3a2a1a"/><path d="M14 18v-8M26 18v-8" stroke="#5a9a3a" stroke-width="3"/>',
+    "servants_quarters": house("#a0b0c8", "#5a4a3a"), "stables": house("#a8884a", "#6a4a2a"),
+    "sign_axe": sign('<path d="M12 30l13-13" stroke="#fff3b0" stroke-width="2.5"/><path d="M22 10c5 0 9 4 9 8l-7 1-4-4z" fill="#fff3b0"/>'),
+    "sign_anvil": sign('<path d="M10 16h16l5 5H16v4h-6z" fill="#fff3b0"/>'),
+    "sign_sprout": sign('<path d="M20 30V18" stroke="#fff3b0" stroke-width="2.5"/><path d="M20 22c-7 0-9-6-9-9 6 0 9 3 9 9zM20 19c6 0 8-4 8-7-5 0-8 2-8 7z" fill="#fff3b0"/>'),
+    "sign_blade": sign('<path d="M12 28L26 14l2-5-5 2-13 14" fill="#fff3b0"/>'),
+    "sign_scroll": sign('<rect x="12" y="11" width="16" height="18" rx="2" fill="#fff3b0"/><path d="M15 16h10M15 20h10M15 24h6" stroke="#1d2440"/>'),
+    "sign_moon": sign('<path d="M24 10a10 10 0 1 0 0 20 8 8 0 1 1 0-20z" fill="#fff3b0"/>'),
 }
 
 def item_icon(i):
@@ -127,6 +191,7 @@ def item_icon(i):
     raise SystemExit(f"no icon rule for item {i}")
 
 def action_icon(a, made):
+    if a.startswith("meditate_"): return rune(RUNE[a[len("meditate_"):]]) + star("#fff3b0", 6).replace('M20 14', 'M30 4', 1)
     if a in WOOD or a in ("magic_tree", "redwood", "mahogany", "teak"): return tree(first(a.replace("_tree", ""), WOOD))
     if a.endswith("_spot"): return water() + f'<g transform="translate(4 -6) scale(.8)">{fish(first(a, FISH))}</g>'
     if a in ("essence", "copper", "tin", "iron", "coal", "gold_rock", "mithril", "adamantite", "runite"):

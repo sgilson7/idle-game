@@ -220,6 +220,7 @@ const blocks = {
   },
   buttons: (b) => {
     const box = h("div", "button-row");
+    if (b.text) box.append(h("p", "note wide", b.text));
     b.buttons.forEach((x) => box.append(btn(x)));
     return box;
   },
@@ -282,21 +283,32 @@ function drawTop(top) {
   if (top.screen) box.append(btn(top.screen, "icon-btn"));
 }
 
-function drawTabs(tabs) {
-  el("tabs").replaceChildren(
-    ...tabs.map((t) => {
-      const node = h("button", "tab");
-      node.dataset.tab = t.id;
-      if (t.current) node.setAttribute("aria-current", "page");
-      node.append(h("span", "lvl", t.level), icon(t.id));
-      const label = h("span", "tab-label");
-      label.append(h("span", "short", t.short), h("span", "full", t.label));
-      node.append(label);
-      if (t.running) node.append(h("i", "run"));
-      node.addEventListener("click", () => draw(game.act("tab", t.id, now())));
-      return node;
-    })
-  );
+// One button per tab or group. On a phone the strip shows only the tabs of
+// the group on screen (the core marks them) and the bottom bar the five
+// groups; on a wide screen the rail shows every tab under its group's name.
+function tabButton(t, cls) {
+  const node = h("button", cls + (t.strip ? " in" : "") + (t.locked ? " locked" : ""));
+  node.dataset.tab = t.id;
+  if (t.current) node.setAttribute("aria-current", "page");
+  node.append(h("span", "lvl", t.level), icon(t.id));
+  const label = h("span", "tab-label");
+  label.append(h("span", "short", t.short), h("span", "full", t.label));
+  node.append(label);
+  if (t.running) node.append(h("i", "run"));
+  node.addEventListener("click", () => draw(game.act(t.act, t.value, now())));
+  return node;
+}
+
+function drawTabs(tabs, groups) {
+  const rail = [];
+  tabs.forEach((t) => {
+    if (t.heading) rail.push(h("span", "rail-h", t.heading));
+    rail.push(tabButton(t, "tab"));
+  });
+  el("tabs").replaceChildren(...rail);
+  el("groups").replaceChildren(...groups.map((g) => tabButton(g, "tab group")));
+  const here = el("tabs").querySelector('[aria-current="page"]');
+  if (here && here.scrollIntoView) here.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 let lastSheet = "";
@@ -365,7 +377,7 @@ function draw(json) {
   if (ui.stash) stash(saved);
   document.title = ui.title;
   drawTop(ui.top);
-  drawTabs(ui.tabs);
+  drawTabs(ui.tabs, ui.groups);
   const main = el("main");
   const keep = lastScreen === ui.screen ? main.scrollTop : 0;
   const frag = document.createDocumentFragment();

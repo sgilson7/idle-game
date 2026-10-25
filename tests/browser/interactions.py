@@ -18,13 +18,38 @@ SPRITE = set(re.findall(r'<symbol id="([^"]+)"', (ROOT / "web" / "icons.svg").re
 UI = STRINGS["ui"]
 
 
+# The bottom bar's groups (view.rs GROUPS, P21), written out by hand.
+GROUPS = {
+    "gather": ["woodcutting", "mining", "fishing", "farming"],
+    "make": ["firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction"],
+    "fight": ["combat", "recipes"],
+    "engines": ["trader", "estate", "workshop", "observatory"],
+    "more": ["bank", "shop", "plan", "prestige", "settings"],
+}
+
+
+def open_tab(page, tab):
+    """A tap on the tab; on a phone, first a tap on its group, as a player would."""
+    if page.locator(f'#tabs .tab[data-tab="{tab}"]').is_hidden():
+        group = next(g for g, tabs in GROUPS.items() if tab in tabs)
+        page.locator(f'#groups .tab[data-tab="{group}"]').click()
+    page.locator(f'#tabs .tab[data-tab="{tab}"]').click()
+    page.wait_for_selector(f"body[data-screen='{tab}']", state="attached")
+
+
 def icons_on(page):
     return set(page.evaluate("() => [...document.querySelectorAll('use')].map(u => (u.getAttribute('href') || '').split('#')[1])"))
 
 
 def run(page, check, engine):
     phone = engine.endswith("iphone")
-    check(page.locator("#tabs .tab").count() == 16, "sixteen tabs drawn: ten skills, combat and five screens")
+    check(page.locator("#tabs .tab").count() == 22, "twenty-two tabs drawn: skills, combat, recipes, four engines and five screens")
+    check(page.locator("#groups .tab").count() == 5, "five groups drawn")
+    if phone:
+        check(page.locator("#tabs .tab:visible").count() == 4, "iPhone: the strip shows the Gather group's four tabs")
+        check(page.locator("#groups").is_visible(), "iPhone: the groups sit along the bottom")
+    else:
+        check(page.locator("#tabs .tab:visible").count() in (4, 22), "the rail or the strip shows its tabs")
     check(page.inner_text(".sheet h2") == UI["welcome_title"], "a new game opens with the welcome")
     page.locator(".sheet .btn.primary").click()
     check(page.locator("#shade").is_hidden(), "Start closes the welcome")
@@ -41,7 +66,8 @@ def run(page, check, engine):
     # One chop: a tree is 3 s and 10 XP (content.rs), worked by hand.
     page.locator('button[data-act="do"][data-value="tree"]').click()
     page.wait_for_selector(".card.active")
-    check(page.locator('.tab[data-tab="woodcutting"] .run').count() == 1, "the running skill's tab shows a dot")
+    check(page.locator('#tabs .tab[data-tab="woodcutting"] .run').count() == 1, "the running skill's tab shows a dot")
+    check(page.locator('#groups .tab[data-tab="gather"] .run').count() == 1, "and so does its group")
     page.wait_for_function("() => document.querySelector('.bar span b').textContent.startsWith('10 /')", timeout=10000)
     check(True, "one chop gives 10 XP")
     check(page.locator(".forecast").count() == 1, "the 20-minute forecast shows while something runs")
@@ -55,11 +81,15 @@ def run(page, check, engine):
     check(not xp.startswith("0 /"), f"the save survives a reload ({xp})")
 
     # Every tab draws, with no icon missing.
-    for tab in ["mining", "fishing", "farming", "firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "combat", "bank", "shop", "plan", "prestige", "settings"]:
-        page.locator(f'.tab[data-tab="{tab}"]').click()
-        page.wait_for_selector(f"body[data-screen='{tab}']", state="attached")
+    for tab in [t for tabs in GROUPS.values() for t in tabs][1:]:
+        open_tab(page, tab)
         missing = icons_on(page) - SPRITE
         check(not missing, f"the {tab} screen draws and its icons exist {missing}")
+
+    # An engine before its total level: the Trader opens at 150 (content.rs ENGINE_AT).
+    open_tab(page, "trader")
+    check(UI["opens_at"].replace("{n}", "150") in page.inner_text("#main"), "the Trader tab says it opens at total level 150")
+    check(page.locator('#tabs .tab[data-tab="trader"].locked').count() == 1, "a tab not open yet is drawn dimmed")
 
     # Flag a moment.
     page.locator('#top button[data-act="flag.open"]').click()
@@ -70,11 +100,11 @@ def run(page, check, engine):
 
     # Files: the export and the playtest file download where there is no share sheet.
     if engine in ("chromium", "firefox"):
-        page.locator('.tab[data-tab="settings"]').click()
+        open_tab(page, "settings")
         with page.expect_download() as d:
             page.locator('button[data-act="page.export"]').click()
         saved = json.loads(pathlib.Path(d.value.path()).read_text())
-        check(saved["game"] == "idle-game" and len(saved["state"]["xp"]) == 14, "Export downloads a save with fourteen skills")
+        check(saved["game"] == "idle-game" and len(saved["state"]["xp"]) == 18, "Export downloads a save with eighteen skills")
         with page.expect_download() as d:
             page.locator('button[data-act="page.playtest"]').click()
         report = json.loads(pathlib.Path(d.value.path()).read_text())
@@ -86,7 +116,7 @@ def run(page, check, engine):
     other.clock.install()
     other.goto(page.url)
     other.wait_for_selector("body[data-ready='true']", state="attached")
-    other.locator('.tab[data-tab="woodcutting"]').click()
+    open_tab(other, "woodcutting")
     # The save from the first tab may already be chopping; a tap would stop it.
     if other.locator(".card.active").count() == 0:
         other.locator('button[data-act="do"][data-value="tree"]').click()
