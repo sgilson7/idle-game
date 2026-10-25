@@ -1,36 +1,24 @@
-# A Builder tool
+# Idle Game
 
-Replace this file with your tool's README once `BRIEF.md` is written. `crates/core/tests/copy.rs` reads it against `TONE.md`.
+An ad-free idle game in the browser with RuneScape-like skills. Twelve skills level to 99 and feed each other: logs go to Firemaking or Fletching, ore to Smithing, fish to Cooking, and swords, arrows, runes and food go to combat in three styles. Every tree, rock, fishing spot and recipe has its own mastery to 99. The game keeps going while the page is closed, for up to a day, and shows what happened when you come back. Prestige starts every skill again for more XP.
 
-This directory is a copy of the Builder template. Its rules are in `BUILDER-SPEC.md`, a coding agent's instructions are in `CLAUDE.md` and `AGENTS.md`, the meaning of each term is in `GLOSSARY.md`, and the rules for every string are in `TONE.md`.
+Play it at https://sgilson7.github.io/idle-game/ on a phone, a tablet or a desktop. On an iPhone, Add to Home Screen gives a full-screen game.
 
-## Build, test and serve
+It saves in your browser, and Settings exports and imports a save file. Nothing leaves your device unless you send a file yourself: there are no ads, accounts, servers or analytics.
+
+## Playtesting
+
+Tap **Flag** at the top whenever something feels slow, fast, confusing or fun. **Settings → Send playtest file** makes one file with your save, a log of what happened and when, and your flags, and opens the share sheet on a phone.
+
+## How it is built
+
+Built with [Builder](https://github.com/sgilson7/builder-setting): every rule of the game is in a Rust library (`crates/core`) that does no input or output, a WebAssembly shim passes values to the page, and the page draws what the library describes. The tuning numbers are in `crates/core/src/content.rs`; the words are in `data/strings.json`.
 
 ```bash
-./scripts/setup.sh              # once: Python venv with Playwright and three browsers
-cargo test --workspace          # the core, boundary, copy and storage tests, in seconds
-./scripts/build.sh              # release WebAssembly build into dist/
-python3 scripts/serve.py        # http://127.0.0.1:8000/
-./scripts/check.sh              # everything, before publishing
-python3 scripts/break_tests.py  # each row of tests/breaks.json must make its test fail
-./scripts/count-tests.sh        # the test count to quote in a document
-./scripts/publish.sh            # stage 8: push dist/ to gh-pages, from a clean tree
-python3 tools/journal/new_journal.py  # once: start the design journal beside this folder
+./scripts/setup.sh    # once: Playwright and the browser engines
+./scripts/check.sh    # format, lint, tests, build, and the browser check
 ```
 
-Needs Rust (pinned in `rust-toolchain.toml`), `wasm-bindgen-cli` 0.2.127, and Python 3. Rendering art needs `pdflatex` and `pdftocairo`; the check does not.
+## License
 
-## Layout
-
-| Path | Holds |
-| --- | --- |
-| `crates/core` | every application rule; no input or output; `api.rs` is the door: `start`, and `act(name, value)` |
-| `crates/shim` | the `wasm-bindgen` functions the page calls; each is one call into the core |
-| `web/` | the static page: a generic renderer for the core's view model |
-| `data/` | reader-visible text, presentation numbers, shaders |
-| `GLOSSARY.md`, `TONE.md` | what each term means; how every string is written |
-| `tools/art/`, `styles/default/` | the art pipeline and its fallback style pack |
-| `tools/journal/` | the design journal's page, its entry kinds, and the script that starts it in `../<this folder>-journal/` |
-| `tests/browser/` | the browser check and this tool's interactions |
-| `tests/breaks.json` | one deliberate break per rule, for `scripts/break_tests.py` |
-| `scripts/` | build, check, serve, publish, import audit, mutation audit, test count |
+MIT. See `LICENSES.md`.

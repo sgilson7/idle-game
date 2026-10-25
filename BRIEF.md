@@ -68,6 +68,8 @@ Skill, level, experience (XP), mastery, action, resource, offline progress, as d
 
 ## Autonomy
 
+On 2026-10-25, asked "May I publish the MVP to GitHub Pages so your friend can play it?", the person chose: "Yes: sgilson7/idle-game (Recommended)". So the agent may create the public repository `sgilson7/idle-game`, push to it, and publish with `./scripts/publish.sh` once `./scripts/check.sh` passes, then run the browser check against the live address. The design journal is never pushed. This grant covers this repository until withdrawn.
+
 On 2026-10-25 the person wrote: "so my friend cant submit till later, so for now build the mvp version of the game using your default selections, and then get yourself ready to take in his playtesting feedback / make it so he can easily download and send me a file that contains any content that would help influence gameplay / numbers tuning / fun". So the plan for the MVP is approved in advance, built on the default of every open question (IG-Q1 to IG-Q20); an answer that differs later becomes a TRIAGE row citing the question.
 
 Earlier: the plan was not approved in advance: after the opening entry, the literature review and the mockups, the agent stops for the person. Where this brief is silent, the agent decides, records the decision in `SECOND-ORDER.md`, and continues. The agent may not loosen a Builder requirement or a boundary test, and may not add a server, an account, analytics, ads or any off-origin request. The agent may not create a repository, push or publish until the person names the repository and says so.

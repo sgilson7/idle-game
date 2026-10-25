@@ -371,7 +371,7 @@
   "plan_start": "Start plan",
   "plan_step": "{k}. {verb} {what}",
   "playtest_send": "Send playtest file",
-  "playtest_sub": "Your save, what happened and when, and your flags, in one file to send to Sam.",
+  "playtest_sub": "Your save, what happened and when, and your flags, in one file to send to whoever asked you to playtest.",
   "playtest_title": "Playtesting",
   "plus_item": "+{n} {item}",
   "plus_n": "+{n}",
