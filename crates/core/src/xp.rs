@@ -38,7 +38,10 @@ pub fn level(xp: u64) -> u32 {
 pub const MASTERY_SCALE: u64 = 2;
 
 pub fn mastery_level(mxp: u64) -> u32 {
-    TABLE.iter().take_while(|&&need| need * MASTERY_SCALE <= mxp).count() as u32
+    TABLE
+        .iter()
+        .take_while(|&&need| need * MASTERY_SCALE <= mxp)
+        .count() as u32
 }
 
 pub fn mastery_at(level: u32) -> u64 {

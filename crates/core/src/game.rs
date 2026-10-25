@@ -257,7 +257,10 @@ impl State {
             return None;
         }
         let a = &c::ACTIONS[c::action_index(id)?];
-        a.needs.iter().find(|(i, n)| self.have(i) < *n).map(|(i, _)| i.to_string())
+        a.needs
+            .iter()
+            .find(|(i, n)| self.have(i) < *n)
+            .map(|(i, _)| i.to_string())
     }
 
     pub fn unlocked(&self, id: &str) -> bool {
@@ -286,8 +289,15 @@ impl State {
     pub fn max_hit(&self, enemy: &c::Enemy) -> u64 {
         let s = &c::STYLES[self.style];
         let tiers = self.tier(s.held).1 + self.tier(s.spent).1;
-        let strong = if enemy.weak == s.skill { c::MAX_HIT_STRONG } else { 0 };
-        c::MAX_HIT_BASE + self.level(s.skill) as u64 * c::MAX_HIT_PER_LEVEL + tiers * c::MAX_HIT_PER_TIER + strong
+        let strong = if enemy.weak == s.skill {
+            c::MAX_HIT_STRONG
+        } else {
+            0
+        };
+        c::MAX_HIT_BASE
+            + self.level(s.skill) as u64 * c::MAX_HIT_PER_LEVEL
+            + tiers * c::MAX_HIT_PER_TIER
+            + strong
     }
 
     pub fn food(&self) -> Option<(&'static str, u64)> {
@@ -297,7 +307,13 @@ impl State {
     // ---------- changing the state ----------
 
     pub fn note(&mut self, wall: u64, k: &str, a: &str, n: u64) {
-        self.log.push(Event { w: wall, s: self.sim_ms, k: k.into(), a: a.into(), n });
+        self.log.push(Event {
+            w: wall,
+            s: self.sim_ms,
+            k: k.into(),
+            a: a.into(),
+            n,
+        });
         if self.log.len() > c::LOG_CAP {
             let extra = self.log.len() - c::LOG_CAP;
             self.log.drain(0..extra);
@@ -525,7 +541,11 @@ impl State {
         if self.plan.len() >= c::PLAN_STEPS || !self.unlocked(id) {
             return false;
         }
-        self.plan.push(Step { id: id.into(), n: 0, done: 0 });
+        self.plan.push(Step {
+            id: id.into(),
+            n: 0,
+            done: 0,
+        });
         true
     }
 

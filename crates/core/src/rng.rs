@@ -11,11 +11,13 @@ pub struct Rng {
 
 impl Rng {
     pub fn new(seed: u64) -> Rng {
-        Rng { s: seed ^ 0x9E37_79B9_7F4A_7C15 | 1 }
+        Rng {
+            s: seed ^ 0x9E37_79B9_7F4A_7C15 | 1,
+        }
     }
 
     /// xorshift64*.
-    pub fn next(&mut self) -> u64 {
+    pub fn roll(&mut self) -> u64 {
         let mut x = self.s;
         x ^= x >> 12;
         x ^= x << 25;
@@ -26,7 +28,7 @@ impl Rng {
 
     /// A whole number in `0..n` (`n` > 0).
     pub fn below(&mut self, n: u64) -> u64 {
-        self.next() % n.max(1)
+        self.roll() % n.max(1)
     }
 
     /// True `pct` times in a hundred.
@@ -56,7 +58,7 @@ mod tests {
     #[test]
     fn a_zero_seed_still_rolls() {
         let mut r = Rng::new(0x9E37_79B9_7F4A_7C15);
-        assert_ne!(r.next(), 0);
+        assert_ne!(r.roll(), 0);
     }
 
     #[test]

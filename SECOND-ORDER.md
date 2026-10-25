@@ -21,6 +21,17 @@ One row per assumption, surprise or open item. **Kind** is *divergence* (what wa
 | R2.5 | finding | A rising prestige requirement keeps runs from collapsing. | Modelled on RuneScape's curve: +25% per prestige with +75 levels per prestige makes run 9 about 42 times run 1; a flat requirement shrinks runs from 41 h to 14 h; +25 levels per prestige keeps runs between 40 h and 71 h. | Default A in IG-Q19 (card 6); the model is illustrative (twelve skills, 30,000 XP an hour). | | person |
 | R2.6 | worklist | | The meta-progression timeline's times (week 1, first prestige at total 600) are the agent's guess. | Asked as IG-Q20 (card 7); final times wait on IG-Q9. | | person |
 | R2.7 | finding | The journal is read on a phone at work. | The co-designer reviews in short bursts. | Round 2 is seven cards, each with one picture and one tap-to-answer decision; answers save to the published page's store, or stay on the device with a copy button. | | done |
+| R3.1 | divergence | The plan was approved in advance on 2026-10-25 ("build the mvp version of the game using your default selections"). | Every open question IG-Q1 to IG-Q20 is built on its default. | `BRIEF.md` Autonomy records it; an answer that differs becomes a TRIAGE row. | | done |
+| R3.2 | divergence | The template's browser check runs Chromium, Firefox and WebKit. | The game is played on phones and tablets. | `webkit-iphone` and `webkit-ipad` (iPad Pro 11 landscape) run by default; CSP adds `manifest-src 'self'` (D4, D7, recorded in BUILDER-SPEC.md). | browser check | done |
+| R3.3 | finding | The page scan reads every file under `web/` as text. | It stopped on the home-screen PNGs ("stream did not contain valid UTF-8"). | The icons moved to `data/icons/` instead of loosening the scan. | | done |
+| R3.4 | divergence | The template passes the whole state through the page on every call. | An idle game calls the core on every action; copying the state each time costs the phone. | The shim holds one `Game` (after Level Twenty); the page keeps only the save text. | `boundary.rs` still holds the shim to no branches | done |
+| R3.5 | finding | A test's expected bonfire value was wrong, not the code: mastery 25 arrives at burn 393 of 400, so the last burns are shorter. | The rule was right; my hand count used the wrong row of the table. | The test now states the 1.4 s left over. | | done |
+| R3.6 | divergence | An action whose inputs run out would spend its time and then fail. | That wastes a step's time and makes split and whole runs disagree. | The inputs are checked before the wait starts. | `one_long_step_equals_many_short_ones` | done |
+| R3.7 | finding | The release module was 624 KB. | `codegen-units = 1`, `panic = "abort"` and `strip` bring it to 383 KB (130 KB gzipped). | Change to D11 in `Cargo.toml`. | | done |
+| R3.8 | worklist | | Every number in `crates/core/src/content.rs` (times, XP, levels, drops, prices, tool costs, prestige) is the agent's first guess. | The playtest file carries the tuning table and XP per hour per skill, so the person and co-designer can say which number to move. | | person |
+| R3.9 | worklist | | Every name in `data/strings.json` (skills, trees, items, enemies, tools) and every icon in `web/icons.svg` was written by the agent. | For the person to approve or replace (IG-11). | | person |
+| R3.10 | worklist | | Real-device checks the emulator cannot make: Add to Home Screen and the save it keeps, the share sheet sending the playtest file, iPad fullscreen, how it feels in the hand. | First playtest on the co-designer's phone. | | person |
+| R3.11 | worklist | | Nothing is published. The co-designer needs an address to play. | Asked of the person: a GitHub Pages repository and permission to publish (IG-Q7). | | person |
 
 ## Strings written by the agent
 
@@ -28,3 +39,6 @@ Each reader-visible string the agent wrote, with its key, for the person to read
 
 | Key | String |
 | --- | --- |
+| `data/strings.json` → `ui` | All 211 interface strings: the welcome, return screen, flag sheet, plan, prestige, settings and toasts. Written by the agent for the MVP (R3.9). |
+| `data/strings.json` → `skills`, `actions`, `items`, `enemies`, `tools` | Every content name. Written by the agent (R3.9). |
+

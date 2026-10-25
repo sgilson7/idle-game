@@ -150,7 +150,9 @@ mod tests {
             items: BTreeMap::new(),
             enemies: BTreeMap::new(),
             tools: BTreeMap::new(),
-            ui: [("lvl".to_string(), "Level {n}".to_string())].into_iter().collect(),
+            ui: [("lvl".to_string(), "Level {n}".to_string())]
+                .into_iter()
+                .collect(),
         };
         assert_eq!(t.t("lvl", &[("n", "4".into())]), "Level 4");
         assert_eq!(t.s("nope"), "[nope]");

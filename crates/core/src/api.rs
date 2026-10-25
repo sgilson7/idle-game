@@ -67,7 +67,10 @@ fn read_save(text: &str) -> Result<State, String> {
     if file.v > SAVE_VERSION || file.state.v > SAVE_VERSION {
         return Err("a save from a newer version".into());
     }
-    if file.state.xp.len() != c::SKILLS.len() || file.state.tools.len() != c::TOOL_SKILLS.len() || file.state.style >= c::STYLES.len() {
+    if file.state.xp.len() != c::SKILLS.len()
+        || file.state.tools.len() != c::TOOL_SKILLS.len()
+        || file.state.style >= c::STYLES.len()
+    {
         return Err("a save with the wrong shape".into());
     }
     Ok(file.state)
@@ -77,15 +80,33 @@ impl Game {
     /// Starts from the saved text, or a new game when there is none. A save
     /// that cannot be read starts a new game and asks the page to keep the
     /// old text (IG-5).
-    pub fn new(strings_json: &str, glossary_md: &str, saved: &str, device_json: &str, now: u64) -> Result<Game, String> {
+    pub fn new(
+        strings_json: &str,
+        glossary_md: &str,
+        saved: &str,
+        device_json: &str,
+        now: u64,
+    ) -> Result<Game, String> {
         let text = Text::parse(strings_json)?;
         let hints = glossary::parse(glossary_md)
             .map_err(|e| e.message())?
             .into_iter()
-            .map(|e| Hint { term: e.term, definition: e.definition })
+            .map(|e| Hint {
+                term: e.term,
+                definition: e.definition,
+            })
             .collect();
         let device: Device = serde_json::from_str(device_json).unwrap_or_default();
-        let mut g = Game { text, hints, s: State::new(now), device, sheet: None, toasts: Vec::new(), draft: Flag::default(), stash: false };
+        let mut g = Game {
+            text,
+            hints,
+            s: State::new(now),
+            device,
+            sheet: None,
+            toasts: Vec::new(),
+            draft: Flag::default(),
+            stash: false,
+        };
         if saved.trim().is_empty() {
             g.sheet = Some(g.welcome());
             return Ok(g);
@@ -120,14 +141,24 @@ impl Game {
     }
 
     pub fn save(&self) -> String {
-        serde_json::to_string(&SaveFile { game: GAME_ID.into(), v: SAVE_VERSION, state: self.s.clone() }).unwrap_or_default()
+        serde_json::to_string(&SaveFile {
+            game: GAME_ID.into(),
+            v: SAVE_VERSION,
+            state: self.s.clone(),
+        })
+        .unwrap_or_default()
     }
 
     /// The save as a file to keep (long-term save).
     pub fn export(&mut self, now: u64) -> String {
         self.s.exported_wall = now;
         self.s.note(now, "export", "", 0);
-        serde_json::to_string_pretty(&SaveFile { game: GAME_ID.into(), v: SAVE_VERSION, state: self.s.clone() }).unwrap_or_default()
+        serde_json::to_string_pretty(&SaveFile {
+            game: GAME_ID.into(),
+            v: SAVE_VERSION,
+            state: self.s.clone(),
+        })
+        .unwrap_or_default()
     }
 
     pub fn import(&mut self, text: &str, now: u64) -> String {
@@ -139,7 +170,10 @@ impl Game {
                 self.sheet = Some(self.notice("import_ok_title", self.text.s("import_ok_text")));
             }
             Err(why) => {
-                self.sheet = Some(self.notice("import_bad_title", self.text.t("import_bad_text", &[("why", why)])));
+                self.sheet = Some(self.notice(
+                    "import_bad_title",
+                    self.text.t("import_bad_text", &[("why", why)]),
+                ));
             }
         }
         self.ui_json()
@@ -168,7 +202,7 @@ impl Game {
                         "level": self.s.level(i),
                         "xp": self.s.xp[i],
                         "ms_spent": ms,
-                        "xp_per_hour": if ms > 0 { self.s.xp[i] * 3_600_000 / ms } else { 0 },
+                        "xp_per_hour": (self.s.xp[i] * 3_600_000).checked_div(ms).unwrap_or(0),
                         "level_ups": times,
                     }),
                 )
@@ -251,7 +285,12 @@ impl Game {
             self.s.note(now, "plan_step", st, 0);
         }
         if away {
-            self.s.note(now, "away", self.s.active.clone().unwrap_or_default().as_str(), r.elapsed);
+            self.s.note(
+                now,
+                "away",
+                self.s.active.clone().unwrap_or_default().as_str(),
+                r.elapsed,
+            );
         }
     }
 
@@ -261,7 +300,10 @@ impl Game {
         for (i, sk) in c::SKILLS.iter().enumerate() {
             let l = self.s.level(i);
             if l > r.lv0[i] {
-                out.push(t.t("toast_level", &[("skill", t.skill(sk.id).name.clone()), ("n", l.to_string())]));
+                out.push(t.t(
+                    "toast_level",
+                    &[("skill", t.skill(sk.id).name.clone()), ("n", l.to_string())],
+                ));
             }
         }
         for (id, cp) in &r.checkpoints {
@@ -318,7 +360,9 @@ impl Game {
             }
             "plan.add" => {
                 if self.s.plan_add(value) {
-                    self.toasts = vec![self.text.t("toast_planned", &[("n", self.s.plan.len().to_string())])];
+                    self.toasts = vec![self
+                        .text
+                        .t("toast_planned", &[("n", self.s.plan.len().to_string())])];
                 }
             }
             "plan.count" => {
@@ -337,20 +381,38 @@ impl Game {
             }
             "plan.start" => {
                 self.s.plan_start();
-                self.s.note(now, "plan", &self.s.plan.iter().map(|p| p.id.clone()).collect::<Vec<_>>().join(","), 0);
+                self.s.note(
+                    now,
+                    "plan",
+                    &self
+                        .s
+                        .plan
+                        .iter()
+                        .map(|p| p.id.clone())
+                        .collect::<Vec<_>>()
+                        .join(","),
+                    0,
+                );
             }
             "plan.clear" => self.s.plan.clear(),
             "sell" => {
                 let got = self.s.sell(value);
                 if got > 0 {
                     self.s.note(now, "sell", value, got);
-                    self.toasts = vec![self.text.t("toast_sold", &[("item", self.text.item(value)), ("n", num(got))])];
+                    self.toasts = vec![self
+                        .text
+                        .t("toast_sold", &[("item", self.text.item(value)), ("n", num(got))])];
                 }
             }
             "buy" => {
                 if let Ok(line) = value.parse::<usize>() {
                     if self.s.buy(line) {
-                        self.s.note(now, "buy", c::SKILLS[c::TOOL_SKILLS[line]].id, self.s.tools[line] as u64);
+                        self.s.note(
+                            now,
+                            "buy",
+                            c::SKILLS[c::TOOL_SKILLS[line]].id,
+                            self.s.tools[line] as u64,
+                        );
                     }
                 }
             }
@@ -358,7 +420,9 @@ impl Game {
             "prestige.do" if self.s.can_prestige() => {
                 self.s.do_prestige(now);
                 self.sheet = None;
-                self.toasts = vec![self.text.t("toast_prestige", &[("n", self.s.prestige.to_string())])];
+                self.toasts = vec![self
+                    .text
+                    .t("toast_prestige", &[("n", self.s.prestige.to_string())])];
             }
             "sheet.close" => self.sheet = None,
             "help.home" => self.sheet = Some(self.home_help()),
@@ -367,12 +431,20 @@ impl Game {
                     kind: "notice".into(),
                     title: self.text.s("reset_title"),
                     lines: vec![self.text.s("reset_text")],
-                    buttons: vec![button(self.text.s("cancel"), "sheet.close", ""), button(self.text.s("reset"), "reset.do", "").tone("stop")],
+                    buttons: vec![
+                        button(self.text.s("cancel"), "sheet.close", ""),
+                        button(self.text.s("reset"), "reset.do", "").tone("stop"),
+                    ],
                     ..Sheet::default()
                 })
             }
             "reset.do" => {
-                let keep = (self.s.log.clone(), self.s.flags.clone(), self.s.counts.clone(), self.s.first_wall);
+                let keep = (
+                    self.s.log.clone(),
+                    self.s.flags.clone(),
+                    self.s.counts.clone(),
+                    self.s.first_wall,
+                );
                 self.s = State::new(now);
                 (self.s.log, self.s.flags, self.s.counts, self.s.first_wall) = keep;
                 self.s.note(now, "reset", "", 0);
@@ -404,7 +476,9 @@ impl Game {
                 self.s.note(now, "flag", "", self.s.flags.len() as u64);
                 self.draft = Flag::default();
                 self.sheet = None;
-                self.toasts = vec![self.text.t("toast_flagged", &[("n", self.s.flags.len().to_string())])];
+                self.toasts = vec![self
+                    .text
+                    .t("toast_flagged", &[("n", self.s.flags.len().to_string())])];
             }
             "seen.hide" => {
                 self.s.note(now, "hide", "", 0);
@@ -422,7 +496,11 @@ impl Game {
     // ---------- sheets ----------
 
     fn view(&self) -> View<'_> {
-        View { t: &self.text, s: &self.s, device: &self.device }
+        View {
+            t: &self.text,
+            s: &self.s,
+            device: &self.device,
+        }
     }
 
     fn welcome(&self) -> Sheet {
@@ -430,7 +508,11 @@ impl Game {
         Sheet {
             kind: "notice".into(),
             title: t.s("welcome_title"),
-            lines: vec![t.s("welcome_1"), t.t("welcome_2", &[("cap", crate::text::dur(c::AWAY_CAP_MS))]), t.s("welcome_3")],
+            lines: vec![
+                t.s("welcome_1"),
+                t.t("welcome_2", &[("cap", crate::text::dur(c::AWAY_CAP_MS))]),
+                t.s("welcome_3"),
+            ],
             buttons: vec![button(t.s("welcome_go"), "sheet.close", "").tone("primary")],
             ..Sheet::default()
         }
@@ -463,27 +545,61 @@ impl Game {
         Sheet {
             kind: "notice".into(),
             title: t.t("prestige_q", &[("n", (self.s.prestige + 1).to_string())]),
-            big: t.t("mult_change", &[("a", crate::text::times(self.s.mult_bp())), ("b", crate::text::times(next))]),
+            big: t.t(
+                "mult_change",
+                &[
+                    ("a", crate::text::times(self.s.mult_bp())),
+                    ("b", crate::text::times(next)),
+                ],
+            ),
             lines: vec![t.s("prestige_warn")],
-            buttons: vec![button(t.s("not_yet"), "sheet.close", ""), button(t.s("tab_prestige"), "prestige.do", "").tone("pres")],
+            buttons: vec![
+                button(t.s("not_yet"), "sheet.close", ""),
+                button(t.s("tab_prestige"), "prestige.do", "").tone("pres"),
+            ],
             ..Sheet::default()
         }
     }
 
     fn flag_sheet(&self) -> Sheet {
         let t = &self.text;
-        let fun = (1..=4u8).map(|k| button(t.s(&format!("fun_{k}")), "flag.fun", &k.to_string()).pressed(self.draft.fun == k)).collect();
-        let pace = (1..=3u8).map(|k| button(t.s(&format!("pace_{k}")), "flag.pace", &k.to_string()).pressed(self.draft.pace == k)).collect();
+        let fun = (1..=4u8)
+            .map(|k| {
+                button(t.s(&format!("fun_{k}")), "flag.fun", &k.to_string()).pressed(self.draft.fun == k)
+            })
+            .collect();
+        let pace = (1..=3u8)
+            .map(|k| {
+                button(t.s(&format!("pace_{k}")), "flag.pace", &k.to_string()).pressed(self.draft.pace == k)
+            })
+            .collect();
         Sheet {
             kind: "flag".into(),
             title: t.s("flag_title"),
             lines: vec![t.s("flag_intro")],
             blocks: vec![
-                Block { title: t.s("flag_fun"), buttons: fun, ..block("choice") },
-                Block { title: t.s("flag_pace"), buttons: pace, ..block("choice") },
-                Block { title: t.s("flag_note"), act: "flag.note".into(), value: self.draft.note.clone(), text: t.s("flag_note_hint"), ..block("input") },
+                Block {
+                    title: t.s("flag_fun"),
+                    buttons: fun,
+                    ..block("choice")
+                },
+                Block {
+                    title: t.s("flag_pace"),
+                    buttons: pace,
+                    ..block("choice")
+                },
+                Block {
+                    title: t.s("flag_note"),
+                    act: "flag.note".into(),
+                    value: self.draft.note.clone(),
+                    text: t.s("flag_note_hint"),
+                    ..block("input")
+                },
             ],
-            buttons: vec![button(t.s("cancel"), "sheet.close", ""), button(t.s("flag_save"), "flag.save", "").tone("primary")],
+            buttons: vec![
+                button(t.s("cancel"), "sheet.close", ""),
+                button(t.s("flag_save"), "flag.save", "").tone("primary"),
+            ],
             ..Sheet::default()
         }
     }
@@ -528,7 +644,10 @@ impl Game {
 }
 
 fn block(kind: &str) -> Block {
-    Block { kind: kind.into(), ..Block::default() }
+    Block {
+        kind: kind.into(),
+        ..Block::default()
+    }
 }
 
 /// The tuning numbers the playtest file carries, so a reader can match a
@@ -594,14 +713,26 @@ mod tests {
         for tab in TABS {
             all_text(&ui(&g.act("tab", tab, 2)), &mut texts);
         }
-        for (name, value) in [("do", "tree"), ("flag.open", ""), ("help.home", ""), ("reset.ask", ""), ("do", "chicken")] {
+        for (name, value) in [
+            ("do", "tree"),
+            ("flag.open", ""),
+            ("help.home", ""),
+            ("reset.ask", ""),
+            ("do", "chicken"),
+        ] {
             all_text(&ui(&g.act(name, value, 3)), &mut texts);
         }
         g.state_mut().start("tree", 3);
         all_text(&ui(&g.tick(3 + 2 * 3_600_000)), &mut texts);
-        let missing: Vec<&String> = texts.iter().filter(|s| s.starts_with('[') && s.ends_with(']')).collect();
+        let missing: Vec<&String> = texts
+            .iter()
+            .filter(|s| s.starts_with('[') && s.ends_with(']'))
+            .collect();
         assert!(missing.is_empty(), "{missing:?}");
-        assert!(!texts.iter().any(|s| s.contains('{') && s.contains('}')), "an unfilled placeholder");
+        assert!(
+            !texts.iter().any(|s| s.contains('{') && s.contains('}')),
+            "an unfilled placeholder"
+        );
     }
 
     #[test]
@@ -622,7 +753,11 @@ mod tests {
         g.act("sheet.close", "", 0);
         let v = ui(&g.tick(9 * 60_000));
         assert!(v.get("sheet").is_none());
-        assert!(v["toasts"].as_array().unwrap().iter().any(|t| t.as_str().unwrap().contains("Woodcutting")));
+        assert!(v["toasts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t.as_str().unwrap().contains("Woodcutting")));
     }
 
     #[test]
@@ -694,8 +829,19 @@ mod tests {
         assert_eq!(p["flags"][0]["note"], "logs come in slowly at the start");
         assert_eq!(p["flags"][0]["doing"], "tree");
         assert_eq!(p["summary"]["returns"], 1);
-        assert!(p["summary"]["skills"]["woodcutting"]["level_ups"].as_array().unwrap().len() >= 10);
-        assert!(p["summary"]["skills"]["woodcutting"]["xp_per_hour"].as_u64().unwrap() > 0);
+        assert!(
+            p["summary"]["skills"]["woodcutting"]["level_ups"]
+                .as_array()
+                .unwrap()
+                .len()
+                >= 10
+        );
+        assert!(
+            p["summary"]["skills"]["woodcutting"]["xp_per_hour"]
+                .as_u64()
+                .unwrap()
+                > 0
+        );
         assert!(p["save"]["state"]["xp"].is_array());
     }
 

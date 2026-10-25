@@ -21,18 +21,54 @@ pub struct Skill {
 
 /// The twelve skills, in the order the save stores their experience (P1).
 pub const SKILLS: [Skill; 12] = [
-    Skill { id: "woodcutting", kind: Kind::Gather },
-    Skill { id: "mining", kind: Kind::Gather },
-    Skill { id: "fishing", kind: Kind::Gather },
-    Skill { id: "firemaking", kind: Kind::Make },
-    Skill { id: "fletching", kind: Kind::Make },
-    Skill { id: "smithing", kind: Kind::Make },
-    Skill { id: "cooking", kind: Kind::Make },
-    Skill { id: "runecrafting", kind: Kind::Make },
-    Skill { id: "melee", kind: Kind::Fight },
-    Skill { id: "ranged", kind: Kind::Fight },
-    Skill { id: "magic", kind: Kind::Fight },
-    Skill { id: "hitpoints", kind: Kind::Fight },
+    Skill {
+        id: "woodcutting",
+        kind: Kind::Gather,
+    },
+    Skill {
+        id: "mining",
+        kind: Kind::Gather,
+    },
+    Skill {
+        id: "fishing",
+        kind: Kind::Gather,
+    },
+    Skill {
+        id: "firemaking",
+        kind: Kind::Make,
+    },
+    Skill {
+        id: "fletching",
+        kind: Kind::Make,
+    },
+    Skill {
+        id: "smithing",
+        kind: Kind::Make,
+    },
+    Skill {
+        id: "cooking",
+        kind: Kind::Make,
+    },
+    Skill {
+        id: "runecrafting",
+        kind: Kind::Make,
+    },
+    Skill {
+        id: "melee",
+        kind: Kind::Fight,
+    },
+    Skill {
+        id: "ranged",
+        kind: Kind::Fight,
+    },
+    Skill {
+        id: "magic",
+        kind: Kind::Fight,
+    },
+    Skill {
+        id: "hitpoints",
+        kind: Kind::Fight,
+    },
 ];
 pub const WOODCUTTING: usize = 0;
 pub const FIREMAKING: usize = 3;
@@ -60,7 +96,15 @@ pub struct Action {
 }
 
 const fn gather(id: &'static str, skill: usize, level: u32, ms: u64, xp: u64, item: &'static str) -> Action {
-    Action { id, skill, level, ms, xp, needs: &[], makes: (item, 1) }
+    Action {
+        id,
+        skill,
+        level,
+        ms,
+        xp,
+        needs: &[],
+        makes: (item, 1),
+    }
 }
 
 const fn make(
@@ -72,7 +116,15 @@ const fn make(
     needs: &'static [(&'static str, u64)],
     makes: (&'static str, u64),
 ) -> Action {
-    Action { id, skill, level, ms, xp, needs, makes }
+    Action {
+        id,
+        skill,
+        level,
+        ms,
+        xp,
+        needs,
+        makes,
+    }
 }
 
 #[rustfmt::skip]
@@ -237,7 +289,14 @@ pub const HP_XP_THOUSANDTHS: u64 = 133;
 /// Tools (P10): one line per gathering skill, six tiers each.
 pub const TOOL_SKILLS: [usize; 3] = [0, 1, 2];
 /// (cost in gold, percent faster)
-pub const TOOL_TIERS: [(u64, u64); 6] = [(0, 0), (500, 5), (4_000, 10), (25_000, 15), (120_000, 20), (600_000, 25)];
+pub const TOOL_TIERS: [(u64, u64); 6] = [
+    (0, 0),
+    (500, 5),
+    (4_000, 10),
+    (25_000, 15),
+    (120_000, 20),
+    (600_000, 25),
+];
 
 /// What the shop pays for one of each item.
 #[rustfmt::skip]
@@ -259,7 +318,11 @@ pub const VALUES: &[(&str, u64)] = &[
 ];
 
 pub fn value(item: &str) -> u64 {
-    VALUES.iter().find(|(i, _)| *i == item).map(|(_, v)| *v).unwrap_or(0)
+    VALUES
+        .iter()
+        .find(|(i, _)| *i == item)
+        .map(|(_, v)| *v)
+        .unwrap_or(0)
 }
 
 /// Mastery checkpoints (P6): the levels where an action's numbers change.
@@ -309,12 +372,17 @@ mod tests {
     use super::*;
 
     fn makers(item: &str) -> bool {
-        ACTIONS.iter().any(|a| a.makes.0 == item) || ENEMIES.iter().any(|e| e.drops.iter().any(|d| d.0 == item))
+        ACTIONS.iter().any(|a| a.makes.0 == item)
+            || ENEMIES.iter().any(|e| e.drops.iter().any(|d| d.0 == item))
     }
 
     #[test]
     fn ids_are_unique() {
-        let mut ids: Vec<&str> = ACTIONS.iter().map(|a| a.id).chain(ENEMIES.iter().map(|e| e.id)).collect();
+        let mut ids: Vec<&str> = ACTIONS
+            .iter()
+            .map(|a| a.id)
+            .chain(ENEMIES.iter().map(|e| e.id))
+            .collect();
         let n = ids.len();
         ids.sort();
         ids.dedup();
@@ -341,7 +409,11 @@ mod tests {
     #[test]
     fn every_item_has_a_value_entry() {
         for a in ACTIONS {
-            assert!(VALUES.iter().any(|(i, _)| *i == a.makes.0), "{} has no value", a.makes.0);
+            assert!(
+                VALUES.iter().any(|(i, _)| *i == a.makes.0),
+                "{} has no value",
+                a.makes.0
+            );
         }
         for e in ENEMIES {
             for d in e.drops {
