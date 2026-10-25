@@ -12,7 +12,8 @@ use crate::rng::Rng;
 use crate::xp;
 
 /// The save format's version (IG-5). A save from a newer version is not read.
-pub const SAVE_VERSION: u32 = 1;
+/// 2 added Crafting, Farming and patches (T5); a version-1 save is brought up to it.
+pub const SAVE_VERSION: u32 = 2;
 
 /// What is running: an action id or an enemy id.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -21,6 +22,13 @@ pub struct Step {
     /// How many to do; 0 means until the inputs run out, or until you come back.
     pub n: u64,
     pub done: u64,
+}
+
+/// A farming patch: empty, or a crop and the game time it was planted (T5).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Patch {
+    pub crop: String,
+    pub planted: u64,
 }
 
 /// One line of the playtest log (P12).
@@ -81,6 +89,8 @@ pub struct State {
     pub log: Vec<Event>,
     pub flags: Vec<Flag>,
     pub counts: BTreeMap<String, u64>,
+    #[serde(default)]
+    pub patches: Vec<Patch>,
 }
 
 /// Why an action could not go on.
@@ -146,6 +156,7 @@ impl State {
             log: Vec::new(),
             flags: Vec::new(),
             counts: BTreeMap::new(),
+            patches: Vec::new(),
         };
         s.hp = s.max_hp();
         s.note(now, "new", "", 0);
@@ -291,6 +302,81 @@ impl State {
             + self.level(s.skill) as u64 * c::MAX_HIT_PER_LEVEL
             + tiers * c::MAX_HIT_PER_TIER
             + strong
+    }
+
+    /// The best armour in the bank, and its tier (T5).
+    pub fn armour(&self) -> (&'static str, u64) {
+        c::ARMOUR
+            .iter()
+            .copied()
+            .find(|(i, _)| self.have(i) > 0)
+            .unwrap_or(("", 0))
+    }
+
+    // ---------- farming (T5) ----------
+
+    pub fn patches_open(&self) -> usize {
+        let l = self.level(c::FARMING);
+        c::PATCH_LEVELS.iter().filter(|&&need| l >= need).count()
+    }
+
+    /// The patch at `i` as it stands (patches not yet stored are empty).
+    pub fn patch(&self, i: usize) -> Patch {
+        self.patches.get(i).cloned().unwrap_or_default()
+    }
+
+    /// Game time left before the crop in patch `i` is ready; `None` when empty.
+    pub fn grow_left(&self, i: usize) -> Option<u64> {
+        let p = self.patch(i);
+        let crop = &c::CROPS[c::crop_index(&p.crop)?];
+        Some((p.planted + crop.grow_ms).saturating_sub(self.sim_ms))
+    }
+
+    pub fn ready(&self, i: usize) -> bool {
+        self.grow_left(i) == Some(0)
+    }
+
+    /// Plants a seed of `crop` in the first empty open patch.
+    pub fn plant(&mut self, crop: &str, r: &mut Report) -> bool {
+        let Some(ci) = c::crop_index(crop) else {
+            return false;
+        };
+        let cr = &c::CROPS[ci];
+        let Some(slot) = (0..self.patches_open()).find(|&i| self.patch(i).crop.is_empty()) else {
+            return false;
+        };
+        if self.level(c::FARMING) < cr.level || self.have(cr.seed) == 0 {
+            return false;
+        }
+        self.take(cr.seed, 1, r);
+        if self.patches.len() <= slot {
+            self.patches.resize(slot + 1, Patch::default());
+        }
+        self.patches[slot] = Patch {
+            crop: cr.id.into(),
+            planted: self.sim_ms,
+        };
+        let xp = cr.xp_plant * self.mult_bp() / 10_000;
+        self.gain(c::FARMING, xp, r);
+        true
+    }
+
+    /// Harvests patch `i` if its crop is ready: three to six of it, and XP for each.
+    pub fn harvest(&mut self, i: usize, r: &mut Report) -> u64 {
+        if !self.ready(i) {
+            return 0;
+        }
+        let cr = &c::CROPS[c::crop_index(&self.patch(i).crop).unwrap_or(0)];
+        let n = cr.yield_min + self.rng.below(cr.yield_max - cr.yield_min + 1);
+        self.put(cr.produce, n, r, false);
+        let xp = cr.xp_each * n * self.mult_bp() / 10_000;
+        self.gain(c::FARMING, xp, r);
+        self.patches[i] = Patch::default();
+        n
+    }
+
+    pub fn harvest_all(&mut self, r: &mut Report) -> u64 {
+        (0..self.patches.len()).map(|i| self.harvest(i, r)).sum()
     }
 
     pub fn food(&self) -> Option<(&'static str, u64)> {
@@ -498,7 +584,7 @@ impl State {
             self.gain(c::HITPOINTS, dmg * c::HP_XP_THOUSANDTHS * m / 10_000_000, r);
         }
         if self.rng.percent(c::ENEMY_HIT_PCT) {
-            let hit = self.rng.below(enemy.hit + 1);
+            let hit = self.rng.below(enemy.hit + 1) * (100 - self.armour().1 * c::ARMOUR_PCT_PER_TIER) / 100;
             self.hp = self.hp.saturating_sub(hit);
         }
         let max_hp = self.max_hp();
@@ -641,7 +727,8 @@ mod tests {
         let s = State::new(5);
         assert_eq!(s.level(c::HITPOINTS), 10);
         assert_eq!(s.hp, 100);
-        assert_eq!(s.total_level(), 21);
+        // thirteen skills at 1, Hitpoints at 10
+        assert_eq!(s.total_level(), 23);
     }
 
     #[test]
@@ -880,6 +967,77 @@ mod tests {
         let r = run(&mut s, 60_000);
         assert_eq!(r.levels[0], (0, 2, 27_000));
         assert_eq!(r.levels[1], (0, 3, 54_000));
+    }
+
+    #[test]
+    fn a_crop_grows_while_something_else_runs_and_waits_to_be_harvested() {
+        // Potato: 10 minutes, 8 XP to plant, 9 XP each of three to six.
+        let mut s = State::new(5);
+        s.bank.insert("potato_seed".into(), 2);
+        let mut r = Report::begin(&s, 0, 0);
+        assert!(s.plant("potato", &mut r));
+        assert_eq!(s.xp[c::FARMING], 8);
+        assert_eq!(s.have("potato_seed"), 1);
+        s.start("tree", 0);
+        run(&mut s, 9 * 60_000);
+        assert!(!s.ready(0));
+        assert_eq!(s.grow_left(0), Some(60_000));
+        run(&mut s, 5 * 60 * 60_000);
+        assert!(s.ready(0));
+        let n = s.harvest(0, &mut r);
+        assert!((3..=6).contains(&n));
+        assert_eq!(s.have("potato"), n);
+        assert_eq!(s.xp[c::FARMING], 8 + 9 * n);
+        assert_eq!(s.patch(0).crop, "");
+    }
+
+    #[test]
+    fn three_patches_open_at_first_and_more_at_farming_40_and_70() {
+        let mut s = State::new(5);
+        assert_eq!(s.patches_open(), 3);
+        s.bank.insert("potato_seed".into(), 9);
+        let mut r = Report::begin(&s, 0, 0);
+        assert!(s.plant("potato", &mut r) && s.plant("potato", &mut r) && s.plant("potato", &mut r));
+        assert!(!s.plant("potato", &mut r));
+        s.xp[c::FARMING] = xp::at(40);
+        assert_eq!(s.patches_open(), 4);
+        assert!(s.plant("potato", &mut r));
+        s.xp[c::FARMING] = xp::at(70);
+        assert_eq!(s.patches_open(), 5);
+    }
+
+    #[test]
+    fn a_crop_above_your_level_cannot_be_planted() {
+        let mut s = State::new(5);
+        s.bank.insert("tomato_seed".into(), 1);
+        let mut r = Report::begin(&s, 0, 0);
+        assert!(!s.plant("tomato", &mut r));
+        assert_eq!(s.have("tomato_seed"), 1);
+    }
+
+    #[test]
+    fn armour_takes_ten_percent_a_tier_off_each_hit() {
+        let mut s = State::new(1);
+        assert_eq!(s.armour().1, 0);
+        s.bank.insert("leather_body".into(), 1);
+        s.bank.insert("silk_robe".into(), 1);
+        assert_eq!(s.armour(), ("silk_robe", 3));
+    }
+
+    #[test]
+    fn armour_means_less_food_eaten_in_the_same_fight() {
+        // Same seed, same swings: only the damage taken differs.
+        let fight = |armour: bool| {
+            let mut s = State::new(21);
+            s.bank.insert("bronze_sword".into(), 1);
+            s.bank.insert("shark".into(), 10_000);
+            if armour {
+                s.bank.insert("dragonhide_body".into(), 1);
+            }
+            s.start("hill_giant", 0);
+            run(&mut s, 30 * 60_000).used.get("shark").copied().unwrap_or(0)
+        };
+        assert!(fight(true) < fight(false), "{} vs {}", fight(true), fight(false));
     }
 
     #[test]

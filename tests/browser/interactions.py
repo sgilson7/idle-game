@@ -24,7 +24,7 @@ def icons_on(page):
 
 def run(page, check, engine):
     phone = engine.endswith("iphone")
-    check(page.locator("#tabs .tab").count() == 14, "fourteen tabs drawn: eight skills, combat and five screens")
+    check(page.locator("#tabs .tab").count() == 16, "sixteen tabs drawn: ten skills, combat and five screens")
     check(page.inner_text(".sheet h2") == UI["welcome_title"], "a new game opens with the welcome")
     page.locator(".sheet .btn.primary").click()
     check(page.locator("#shade").is_hidden(), "Start closes the welcome")
@@ -55,7 +55,7 @@ def run(page, check, engine):
     check(not xp.startswith("0 /"), f"the save survives a reload ({xp})")
 
     # Every tab draws, with no icon missing.
-    for tab in ["mining", "fishing", "firemaking", "fletching", "smithing", "cooking", "runecrafting", "combat", "bank", "shop", "plan", "prestige", "settings"]:
+    for tab in ["mining", "fishing", "farming", "firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "combat", "bank", "shop", "plan", "prestige", "settings"]:
         page.locator(f'.tab[data-tab="{tab}"]').click()
         page.wait_for_selector(f"body[data-screen='{tab}']", state="attached")
         missing = icons_on(page) - SPRITE

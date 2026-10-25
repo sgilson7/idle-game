@@ -134,7 +134,7 @@ textarea { -webkit-user-select: text; user-select: text; }
 .info p { margin: 0; color: var(--muted); }
 
 /* tabs: two rows of seven on a phone, a rail on a wide screen */
-.tabs { background: #10141c; border-top: 1px solid var(--line); padding: 3px 3px calc(var(--safe-b) + 3px); display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.tabs { background: #10141c; border-top: 1px solid var(--line); padding: 3px 3px calc(var(--safe-b) + 3px); display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 2px; }
 .tab { min-height: 50px; border: 1px solid transparent; border-radius: 8px; background: none; display: grid; justify-items: center; align-content: center; gap: 1px; cursor: pointer; padding: 2px 0; position: relative; min-width: 0; }
 .tab .ic { width: 22px; height: 22px; }
 .tab-label { font-size: 9.5px; color: var(--muted); white-space: nowrap; overflow: hidden; max-width: 100%; }

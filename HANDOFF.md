@@ -58,6 +58,8 @@ Every `SECOND-ORDER.md` row with status *person*, by number, with what the perso
 - R3.10: real-device checks on a phone.
 - R3.11: granted 2026-10-25 (sgilson7/idle-game).
 - R3.12: confirm the MIT licence.
+- R5.2, R5.3: the co-designer checks the Farming and Crafting designs.
+- R5.5: what Firemaking should feed (IG-Q21).
 
 ## Mistakes so far
 

@@ -49,6 +49,15 @@ def arrow(c, shaft=False, head_only=False):
 def sword(c): return f'<path d="M9 31L30 10l3-5-5 3L7 29" fill="{c}" stroke="#222"/><path d="M6 24l10 10" stroke="#8a6a4a" stroke-width="3.5" stroke-linecap="round"/>'
 def rune(c): return f'<circle cx="20" cy="20" r="14" fill="#5a5f70" stroke="#222"/><circle cx="20" cy="20" r="7" fill="{c}"/>'
 def enemy(c): return f'<ellipse cx="20" cy="24" rx="14" ry="11" fill="{c}" stroke="#111"/><circle cx="15" cy="21" r="2.2" fill="#111"/><circle cx="25" cy="21" r="2.2" fill="#111"/><path d="M15 29q5 3 10 0" stroke="#111" fill="none"/>'
+CROP = {"potato": "#c8a060", "onion": "#e8d0b0", "cabbage": "#7ac85a", "tomato": "#e04a3a", "sweetcorn": "#f0c830",
+        "strawberry": "#e83a5a", "watermelon": "#3a9a4a"}
+def produce(c, name):
+    if name == "watermelon": return f'<ellipse cx="20" cy="22" rx="15" ry="11" fill="{c}" stroke="#123"/><path d="M8 22q12-6 24 0" stroke="#9ad89a" fill="none"/>'
+    if name == "sweetcorn": return f'<ellipse cx="20" cy="20" rx="7" ry="14" fill="{c}" stroke="#753"/><path d="M13 30q-6-8 2-20M27 30q6-8-2-20" stroke="#5a9a3a" stroke-width="3" fill="none"/>'
+    if name == "strawberry": return f'<path d="M20 35C8 26 9 14 20 14s12 12 0 21z" fill="{c}" stroke="#611"/><path d="M14 12l6 4 6-4-6-6z" fill="#5a9a3a"/>'
+    return f'<circle cx="20" cy="22" r="12" fill="{c}" stroke="#333"/><path d="M20 10l-3-5m3 5l4-4" stroke="#5a9a3a" stroke-width="2.5"/>'
+def seeds(c): return f'<path d="M9 12h22l-2 22H11z" fill="#c8a878" stroke="#5a4a2a"/><path d="M9 12q11-6 22 0" fill="#b0905a" stroke="#5a4a2a"/><circle cx="20" cy="24" r="5" fill="{c}" stroke="#333"/>'
+def body(c): return f'<path d="M12 6l-8 8 4 5 4-3v19h16V16l4 3 4-5-8-8-4 3h-8z" fill="{c}" stroke="#222"/>'
 def fire(): return '<path d="M20 4c4 7 10 10 10 18a10 10 0 0 1-20 0c0-6 4-8 5-13 2 4 3 5 5 5-1-4-1-7 0-10z" fill="#f08a2a"/><path d="M20 18c2 3 5 5 5 9a5 5 0 0 1-10 0c0-2 2-4 3-6z" fill="#ffd36a"/>'
 
 GENERIC = {
@@ -62,6 +71,14 @@ GENERIC = {
     "bird_nest": '<ellipse cx="20" cy="26" rx="15" ry="7" fill="#8a6a3a" stroke="#4a3a1a"/><circle cx="15" cy="22" r="4" fill="#d8e2ee"/><circle cx="23" cy="21" r="4" fill="#cfe0c8"/>',
     "ashes": '<ellipse cx="20" cy="27" rx="13" ry="6" fill="#777"/><ellipse cx="20" cy="24" rx="8" ry="4" fill="#999"/>',
     "arrow_shafts": arrow("#c8a070", shaft=True),
+    "leather": '<path d="M7 9l26 2-3 20-22 1z" fill="#a0703a" stroke="#4a2a1a"/>',
+    "leather_gloves": '<path d="M10 34V14l3-6 3 6V8l3-2 3 2v6l3-5 3 3v25z" fill="#a0703a" stroke="#4a2a1a"/>',
+    "silk_cloth": '<path d="M6 10h28v20H6z" fill="#eeeef6" stroke="#888"/><path d="M6 16h28M6 22h28" stroke="#ccd"/>',
+    "gold_ring": '<circle cx="20" cy="22" r="10" fill="none" stroke="#e8b42a" stroke-width="5"/><circle cx="20" cy="11" r="4" fill="#7ad8f0"/>',
+    "gold_amulet": '<path d="M8 6q12 22 24 0" fill="none" stroke="#e8b42a" stroke-width="2.5"/><circle cx="20" cy="27" r="7" fill="#e8b42a" stroke="#9c6a00"/><circle cx="20" cy="27" r="3" fill="#e04a6a"/>',
+    "leather_body": body("#a0703a"), "hard_leather_body": body("#6a4a2a"), "silk_robe": body("#c8c8e8"), "dragonhide_body": body("#2f9a4a"),
+    "baked_potato": '<ellipse cx="20" cy="23" rx="14" ry="10" fill="#8a5a2a" stroke="#3a2a1a"/><path d="M12 20q8 6 16 0" stroke="#f0e0a0" stroke-width="4" fill="none"/>',
+    "cooked_sweetcorn": '<ellipse cx="20" cy="20" rx="7" ry="14" fill="#e8a020" stroke="#753"/><path d="M15 12h10M14 18h12M14 24h12M15 30h10" stroke="#a06010"/>',
 }
 UI = {
     "woodcutting": '<path d="M7 34l17-17" stroke="#c8a070" stroke-width="4" stroke-linecap="round"/><path d="M22 6c7 0 12 5 12 10l-10 2-5-5z" fill="#b8c2d6" stroke="#222"/>',
@@ -71,6 +88,9 @@ UI = {
     "fletching": bow("#c8a070") + '<path d="M5 20h28" stroke="#b8c2d6" stroke-width="2"/>',
     "smithing": '<path d="M4 14h20l6 6H11v5H4z" fill="#9aa4b8" stroke="#222"/><rect x="12" y="25" width="10" height="9" fill="#6a7488"/>',
     "cooking": '<ellipse cx="18" cy="24" rx="14" ry="7" fill="#6a7488" stroke="#222"/><path d="M32 23h6" stroke="#9aa4b8" stroke-width="3"/><path d="M13 15c0-3 3-3 3-7M20 15c0-3 3-3 3-7" stroke="#cfd6e6" stroke-width="2" fill="none"/>',
+    "crafting": '<path d="M8 32L26 14" stroke="#c8a070" stroke-width="3"/><path d="M24 6l10 10-4 4-10-10z" fill="#b8c2d6" stroke="#222"/><path d="M6 24q6-4 12 2" stroke="#a0703a" stroke-width="4" fill="none"/>',
+    "farming": '<path d="M20 35V16" stroke="#5a9a3a" stroke-width="3"/><path d="M20 22c-10 0-13-8-13-12 8 0 13 4 13 12zM20 18c8 0 12-6 12-10-7 0-12 3-12 10z" fill="#6ac84a" stroke="#2a5a1a"/><path d="M6 35h28" stroke="#6b4a2a" stroke-width="4"/>',
+    "patch": '<path d="M3 26l7-10h20l7 10z" fill="#6b4a2a" stroke="#3a2a1a"/><path d="M8 22h24M6 25h28" stroke="#4a3018"/>',
     "runecrafting": '<path d="M20 3l14 8v18l-14 8-14-8V11z" fill="#5b4ab8" stroke="#222"/><path d="M20 11v18M13 15l14 10M27 15l-14 10" stroke="#d8e2ee" stroke-width="2"/>',
     "combat": '<path d="M6 34L28 12l2-7-7 2L4 30" fill="#d8dee8" stroke="#222"/><path d="M34 34L12 12l-2-7 7 2 19 23" fill="#c8a070" stroke="#222"/>',
     "melee": sword("#d8dee8"),
@@ -92,6 +112,8 @@ UI = {
 
 def item_icon(i):
     if i in GENERIC: return GENERIC[i]
+    if i.endswith("_seed"): return seeds(CROP[i[:-5]])
+    if i in CROP: return produce(CROP[i], i)
     if i.endswith("_logs") or i == "logs": return log(first(i, WOOD))
     if i.endswith("_ore") or i in ("coal", "rune_essence"): return rock(first(i, MAT), dark=(i == "coal"))
     if i.startswith("raw_"): return fish(first(i, FISH))
@@ -123,6 +145,8 @@ for kind, a, rest in acts:
     sym[a] = action_icon(a, made)
 for i in STR["items"]:
     sym.setdefault(i, item_icon(i))
+for crop in CROP:
+    sym[crop] = produce(CROP[crop], crop)
 for e in STR["enemies"]:
     sym[e] = enemy(ENEMY[e])
 for s in STR["skills"]:

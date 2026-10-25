@@ -67,13 +67,19 @@ fn read_save(text: &str) -> Result<State, String> {
     if file.v > SAVE_VERSION || file.state.v > SAVE_VERSION {
         return Err("a save from a newer version".into());
     }
-    if file.state.xp.len() != c::SKILLS.len()
-        || file.state.tools.len() != c::TOOL_SKILLS.len()
-        || file.state.style >= c::STYLES.len()
+    let mut state = file.state;
+    // Version 1 had twelve skills; Crafting and Farming were added at the end (T5).
+    if state.v == 1 && state.xp.len() == 12 {
+        state.xp.resize(c::SKILLS.len(), 0);
+        state.v = SAVE_VERSION;
+    }
+    if state.xp.len() != c::SKILLS.len()
+        || state.tools.len() != c::TOOL_SKILLS.len()
+        || state.style >= c::STYLES.len()
     {
         return Err("a save with the wrong shape".into());
     }
-    Ok(file.state)
+    Ok(state)
 }
 
 impl Game {
@@ -247,19 +253,77 @@ impl Game {
         }
         let credited = elapsed.min(c::AWAY_CAP_MS);
         let mut r = Report::begin(&self.s, elapsed, elapsed - credited);
+        let growing: Vec<usize> = (0..self.s.patches_open())
+            .filter(|&i| self.s.grow_left(i).unwrap_or(0) > 0)
+            .collect();
         self.s.advance(credited, &mut r);
+        let mut ripe: Vec<String> = growing
+            .into_iter()
+            .filter(|&i| self.s.ready(i))
+            .map(|i| self.s.patch(i).crop)
+            .collect();
+        ripe.sort();
+        ripe.dedup();
+        for crop in &ripe {
+            self.s.note(now, "crop_ready", crop, 0);
+        }
         let away = elapsed >= c::RETURN_AFTER_MS;
         self.log_report(&r, now, away);
         if away {
             self.s.count("away_ms", elapsed);
-            if r.actions > 0 || r.stop.is_some() {
+            if r.actions > 0 || r.stop.is_some() || !ripe.is_empty() {
                 let sheet = self.view().return_sheet(&r);
                 self.sheet = Some(sheet);
             }
         } else {
             self.s.count("seen_ms", elapsed);
             self.toasts = self.toasts_for(&r);
+            for crop in &ripe {
+                self.toasts
+                    .push(self.text.t("toast_ripe", &[("what", self.text.action(crop))]));
+            }
         }
+    }
+
+    /// A farming act: plant or harvest, with its levels logged like any action's.
+    fn farm(&mut self, now: u64, what: &str, value: &str) {
+        let mut r = Report::begin(&self.s, 0, 0);
+        match what {
+            "plant" => {
+                if self.s.plant(value, &mut r) {
+                    self.s.note(now, "plant", value, 0);
+                }
+            }
+            "harvest" => {
+                let crop = value
+                    .parse::<usize>()
+                    .map(|i| self.s.patch(i).crop)
+                    .unwrap_or_default();
+                let n = value
+                    .parse::<usize>()
+                    .map(|i| self.s.harvest(i, &mut r))
+                    .unwrap_or(0);
+                if n > 0 {
+                    self.s.note(now, "harvest", &crop, n);
+                    self.toasts.push(self.text.t(
+                        "toast_harvest",
+                        &[("n", n.to_string()), ("item", self.text.item(&crop))],
+                    ));
+                }
+            }
+            _ => {
+                let n = self.s.harvest_all(&mut r);
+                if n > 0 {
+                    self.s.note(now, "harvest", "all", n);
+                    self.toasts
+                        .push(self.text.t("toast_harvest_all", &[("n", n.to_string())]));
+                }
+                self.sheet = None;
+            }
+        }
+        self.log_report(&r, now, false);
+        let more = self.toasts_for(&r);
+        self.toasts.extend(more);
     }
 
     fn log_report(&mut self, r: &Report, now: u64, away: bool) {
@@ -401,6 +465,20 @@ impl Game {
                     self.toasts = vec![self
                         .text
                         .t("toast_sold", &[("item", self.text.item(value)), ("n", num(got))])];
+                }
+            }
+            "farm.plant" => self.farm(now, "plant", value),
+            "farm.harvest" => self.farm(now, "harvest", value),
+            "farm.harvest_all" => self.farm(now, "all", value),
+            "buy.seed" => {
+                if let Some(ci) = c::crop_index(value) {
+                    let cr = &c::CROPS[ci];
+                    let cost = cr.seed_cost * c::SEED_PACK;
+                    if self.s.gold >= cost && self.s.level(c::FARMING) >= cr.level {
+                        self.s.gold -= cost;
+                        *self.s.bank.entry(cr.seed.to_string()).or_insert(0) += c::SEED_PACK;
+                        self.s.note(now, "buy", cr.seed, c::SEED_PACK);
+                    }
                 }
             }
             "buy" => {
@@ -607,10 +685,18 @@ impl Game {
 
     pub fn ui(&mut self) -> Ui {
         let v = self.view();
-        let next_ms = match &self.s.active {
-            Some(id) => self.s.duration(id).saturating_sub(self.s.progress_ms).max(1),
-            None => 0,
-        };
+        // The page's one timer wakes for whichever comes first: the running
+        // action, or the next crop to ripen (T5). 0 means nothing to wake for.
+        let action = self
+            .s
+            .active
+            .as_ref()
+            .map(|id| self.s.duration(id).saturating_sub(self.s.progress_ms).max(1));
+        let crop = (0..self.s.patches_open())
+            .filter_map(|i| self.s.grow_left(i))
+            .filter(|&left| left > 0)
+            .min();
+        let next_ms = action.into_iter().chain(crop).min().unwrap_or(0);
         let ui = Ui {
             title: self.text.title.clone(),
             top: v.top(),
@@ -695,7 +781,7 @@ mod tests {
         let v = ui(&g.tick(1_000));
         assert_eq!(v["screen"], "woodcutting");
         assert_eq!(v["sheet"]["kind"], "notice");
-        assert_eq!(v["tabs"].as_array().unwrap().len(), 14);
+        assert_eq!(v["tabs"].as_array().unwrap().len(), 16);
         assert_eq!(v["next_ms"], 0);
     }
 
@@ -789,7 +875,7 @@ mod tests {
         let v = ui(&g3.tick(0));
         assert_eq!(v["stash"], true);
         assert_eq!(g3.state().xp[0], 0);
-        let newer = saved.replace("\"v\":1", "\"v\":99");
+        let newer = saved.replace("\"v\":2", "\"v\":99");
         let mut g4 = Game::new(STRINGS, GLOSSARY, &newer, "{}", 0).unwrap();
         assert_eq!(ui(&g4.tick(0))["stash"], true);
     }
@@ -839,6 +925,76 @@ mod tests {
                 > 0
         );
         assert!(p["save"]["state"]["xp"].is_array());
+    }
+
+    #[test]
+    fn a_version_one_save_gains_crafting_and_farming() {
+        let mut g = game(0);
+        g.act("do", "tree", 0);
+        g.tick(30_000);
+        let v2 = g.save();
+        let mut old: serde_json::Value = serde_json::from_str(&v2).unwrap();
+        old["v"] = 1.into();
+        old["state"]["v"] = 1.into();
+        old["state"]["xp"].as_array_mut().unwrap().truncate(12);
+        old["state"].as_object_mut().unwrap().remove("patches");
+        let loaded = Game::new(STRINGS, GLOSSARY, &old.to_string(), "{}", 40_000).unwrap();
+        assert_eq!(loaded.state().xp.len(), 14);
+        assert_eq!(loaded.state().xp[0], 100);
+        assert_eq!(loaded.state().xp[c::FARMING], 0);
+    }
+
+    #[test]
+    fn seeds_bought_planted_grown_and_harvested_through_the_door() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        g.state_mut().gold = 25;
+        g.act("buy.seed", "potato", 0);
+        assert_eq!(g.state().gold, 5);
+        assert_eq!(g.state().have("potato_seed"), 10);
+        g.act("farm.plant", "potato", 0);
+        g.act("farm.plant", "potato", 0);
+        assert_eq!(g.state().have("potato_seed"), 8);
+        // Potatoes take 10 minutes. Watching (ticks under 10 minutes apart),
+        // the second tick finds them ripe and says so.
+        g.tick(5 * 60_000);
+        let v = ui(&g.tick(10 * 60_000));
+        assert!(v.get("sheet").is_none());
+        assert!(v["toasts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|t| t.as_str().unwrap().contains("Potato")));
+        g.act("farm.harvest_all", "", 10 * 60_000);
+        assert!(g.state().have("potato") >= 6);
+        assert!(g.state().patch(0).crop.is_empty());
+    }
+
+    #[test]
+    fn with_nothing_running_the_page_still_wakes_for_a_ripening_crop() {
+        // Potato: 10 minutes. Planted at 0, nothing else running.
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        g.state_mut().bank.insert("potato_seed".into(), 1);
+        let v = ui(&g.act("farm.plant", "potato", 0));
+        assert_eq!(v["next_ms"], 600_000);
+    }
+
+    #[test]
+    fn crops_that_ripen_while_away_open_the_return_screen() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        g.state_mut().bank.insert("potato_seed".into(), 1);
+        g.act("farm.plant", "potato", 0);
+        let v = ui(&g.tick(60 * 60_000));
+        assert_eq!(v["sheet"]["kind"], "return");
+        let ready: Vec<String> = v["sheet"]["ready"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["title"].as_str().unwrap().to_string())
+            .collect();
+        assert!(ready.iter().any(|t| t.contains("potato")), "{ready:?}");
     }
 
     #[test]

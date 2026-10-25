@@ -12,6 +12,8 @@ pub enum Kind {
     Make,
     /// Trained by fighting (Melee, Ranged, Magic) or alongside it (Hitpoints).
     Fight,
+    /// Seeds grow in patches while other actions run (T5).
+    Farm,
 }
 
 pub struct Skill {
@@ -20,7 +22,8 @@ pub struct Skill {
 }
 
 /// The twelve skills, in the order the save stores their experience (P1).
-pub const SKILLS: [Skill; 12] = [
+/// Crafting and Farming came later (T5) and go at the end, so older saves still line up.
+pub const SKILLS: [Skill; 14] = [
     Skill {
         id: "woodcutting",
         kind: Kind::Gather,
@@ -69,6 +72,14 @@ pub const SKILLS: [Skill; 12] = [
         id: "hitpoints",
         kind: Kind::Fight,
     },
+    Skill {
+        id: "crafting",
+        kind: Kind::Make,
+    },
+    Skill {
+        id: "farming",
+        kind: Kind::Farm,
+    },
 ];
 pub const WOODCUTTING: usize = 0;
 pub const FIREMAKING: usize = 3;
@@ -76,6 +87,8 @@ pub const MELEE: usize = 8;
 pub const RANGED: usize = 9;
 pub const MAGIC: usize = 10;
 pub const HITPOINTS: usize = 11;
+pub const CRAFTING: usize = 12;
+pub const FARMING: usize = 13;
 /// Hitpoints starts here, as in RuneScape.
 pub const HITPOINTS_START_LEVEL: u32 = 10;
 
@@ -207,6 +220,19 @@ pub const ACTIONS: &[Action] = &[
     make("fire_runes", 7, 14, 3_000, 7, &[("rune_essence", 1)], ("fire_rune", 1)),
     make("chaos_runes", 7, 35, 3_500, 9, &[("rune_essence", 1)], ("chaos_rune", 1)),
     make("death_runes", 7, 65, 4_000, 10, &[("rune_essence", 1)], ("death_rune", 1)),
+    // Cooking what Farming grows (T5)
+    make("cook_potato", 6, 7, 2_500, 40, &[("potato", 1)], ("baked_potato", 1)),
+    make("cook_sweetcorn", 6, 28, 2_800, 85, &[("sweetcorn", 1)], ("cooked_sweetcorn", 1)),
+    // Crafting (T5): hides, silk, gold and scales into armour and jewellery
+    make("tan_hide", 12, 1, 2_000, 5, &[("cowhide", 1)], ("leather", 1)),
+    make("leather_gloves", 12, 1, 2_500, 14, &[("leather", 1)], ("leather_gloves", 1)),
+    make("leather_body", 12, 14, 3_000, 25, &[("leather", 3)], ("leather_body", 1)),
+    make("silk_cloth", 12, 20, 2_500, 15, &[("spider_silk", 1)], ("silk_cloth", 1)),
+    make("gold_ring", 12, 25, 3_000, 40, &[("gold_bar", 1)], ("gold_ring", 1)),
+    make("hard_leather_body", 12, 30, 3_500, 60, &[("leather", 5)], ("hard_leather_body", 1)),
+    make("silk_robe", 12, 45, 4_000, 100, &[("silk_cloth", 4)], ("silk_robe", 1)),
+    make("gold_amulet", 12, 50, 4_000, 80, &[("gold_bar", 2)], ("gold_amulet", 1)),
+    make("dragonhide_body", 12, 70, 5_000, 250, &[("dragon_scale", 3), ("leather", 2)], ("dragonhide_body", 1)),
 ];
 
 pub fn action_index(id: &str) -> Option<usize> {
@@ -227,14 +253,14 @@ pub struct Enemy {
 
 #[rustfmt::skip]
 pub const ENEMIES: &[Enemy] = &[
-    Enemy { id: "chicken", level: 1, hp: 30, hit: 10, weak: MELEE, drops: &[("feathers", 5, 1), ("bones", 1, 1)], gold: 0 },
-    Enemy { id: "cow", level: 1, hp: 80, hit: 10, weak: RANGED, drops: &[("cowhide", 1, 1), ("bones", 1, 1)], gold: 0 },
-    Enemy { id: "goblin", level: 5, hp: 50, hit: 20, weak: MAGIC, drops: &[("bones", 1, 1), ("feathers", 10, 4)], gold: 12 },
+    Enemy { id: "chicken", level: 1, hp: 30, hit: 10, weak: MELEE, drops: &[("feathers", 5, 1), ("bones", 1, 1), ("potato_seed", 2, 3)], gold: 0 },
+    Enemy { id: "cow", level: 1, hp: 80, hit: 10, weak: RANGED, drops: &[("cowhide", 1, 1), ("bones", 1, 1), ("sweetcorn_seed", 1, 6)], gold: 0 },
+    Enemy { id: "goblin", level: 5, hp: 50, hit: 20, weak: MAGIC, drops: &[("bones", 1, 1), ("feathers", 10, 4), ("onion_seed", 2, 3), ("cabbage_seed", 1, 4)], gold: 12 },
     Enemy { id: "spider", level: 20, hp: 220, hit: 40, weak: MELEE, drops: &[("spider_silk", 1, 4)], gold: 30 },
-    Enemy { id: "hill_giant", level: 30, hp: 350, hit: 60, weak: MAGIC, drops: &[("big_bones", 1, 1), ("iron_ore", 3, 3), ("coal", 2, 4)], gold: 60 },
+    Enemy { id: "hill_giant", level: 30, hp: 350, hit: 60, weak: MAGIC, drops: &[("big_bones", 1, 1), ("iron_ore", 3, 3), ("coal", 2, 4), ("tomato_seed", 2, 4)], gold: 60 },
     Enemy { id: "black_knight", level: 45, hp: 420, hit: 80, weak: RANGED, drops: &[("steel_bar", 1, 3)], gold: 120 },
-    Enemy { id: "moss_giant", level: 60, hp: 600, hit: 100, weak: MELEE, drops: &[("big_bones", 1, 1), ("mithril_ore", 2, 3)], gold: 200 },
-    Enemy { id: "green_dragon", level: 80, hp: 1_200, hit: 180, weak: MAGIC, drops: &[("dragon_bones", 1, 1), ("dragon_scale", 1, 20)], gold: 600 },
+    Enemy { id: "moss_giant", level: 60, hp: 600, hit: 100, weak: MELEE, drops: &[("big_bones", 1, 1), ("mithril_ore", 2, 3), ("strawberry_seed", 1, 4)], gold: 200 },
+    Enemy { id: "green_dragon", level: 80, hp: 1_200, hit: 180, weak: MAGIC, drops: &[("dragon_bones", 1, 1), ("dragon_scale", 1, 20), ("watermelon_seed", 2, 5)], gold: 600 },
 ];
 
 pub fn enemy_index(id: &str) -> Option<usize> {
@@ -262,15 +288,86 @@ pub const STYLES: [Style; 3] = [
 ];
 
 /// Food, best first, and how much it heals.
-pub const FOOD: [(&str, u64); 7] = [
+pub const FOOD: [(&str, u64); 9] = [
     ("shark", 200),
     ("monkfish", 160),
     ("swordfish", 140),
     ("lobster", 120),
     ("salmon", 90),
     ("trout", 70),
+    ("cooked_sweetcorn", 60),
+    ("baked_potato", 50),
     ("shrimp", 30),
 ];
+
+/// Armour Crafting makes (T5), best first, by tier. Each tier takes this
+/// many percent off every hit an enemy lands.
+pub const ARMOUR: [(&str, u64); 4] = [
+    ("dragonhide_body", 4),
+    ("silk_robe", 3),
+    ("hard_leather_body", 2),
+    ("leather_body", 1),
+];
+pub const ARMOUR_PCT_PER_TIER: u64 = 10;
+
+/// A crop (T5): a seed planted in a patch grows for `grow_ms` of game time,
+/// whatever else is running, and waits until it is harvested.
+pub struct Crop {
+    pub id: &'static str,
+    pub level: u32,
+    pub grow_ms: u64,
+    pub seed: &'static str,
+    pub produce: &'static str,
+    pub xp_plant: u64,
+    pub xp_each: u64,
+    pub yield_min: u64,
+    pub yield_max: u64,
+    /// Gold for one seed in the shop.
+    pub seed_cost: u64,
+}
+
+const fn crop(
+    id: &'static str,
+    level: u32,
+    minutes: u64,
+    seed: &'static str,
+    xp_plant: u64,
+    xp_each: u64,
+    cost: u64,
+) -> Crop {
+    Crop {
+        id,
+        level,
+        grow_ms: minutes * 60_000,
+        seed,
+        produce: id,
+        xp_plant,
+        xp_each,
+        yield_min: 3,
+        yield_max: 6,
+        seed_cost: cost,
+    }
+}
+
+#[rustfmt::skip]
+pub const CROPS: &[Crop] = &[
+    crop("potato", 1, 10, "potato_seed", 8, 9, 2),
+    crop("onion", 5, 15, "onion_seed", 10, 11, 4),
+    crop("cabbage", 9, 20, "cabbage_seed", 12, 14, 6),
+    crop("tomato", 20, 30, "tomato_seed", 15, 18, 12),
+    crop("sweetcorn", 28, 45, "sweetcorn_seed", 20, 24, 20),
+    crop("strawberry", 40, 60, "strawberry_seed", 26, 31, 40),
+    crop("watermelon", 55, 90, "watermelon_seed", 48, 55, 90),
+];
+
+pub fn crop_index(id: &str) -> Option<usize> {
+    CROPS.iter().position(|c| c.id == id)
+}
+
+/// The Farming level that opens each patch.
+pub const PATCH_LEVELS: [u32; 5] = [1, 1, 1, 40, 70];
+/// The shop sells seeds in packs of this many.
+pub const SEED_PACK: u64 = 10;
 
 /// Combat tuning (P8).
 pub const HP_PER_LEVEL: u64 = 10;
@@ -315,6 +412,12 @@ pub const VALUES: &[(&str, u64)] = &[
     ("bronze_arrows", 1), ("iron_arrows", 3), ("steel_arrows", 6), ("mithril_arrows", 12),
     ("shortbow", 12), ("oak_shortbow", 30), ("willow_shortbow", 70), ("maple_shortbow", 150), ("yew_shortbow", 320), ("magic_shortbow", 700),
     ("air_rune", 3), ("water_rune", 3), ("fire_rune", 4), ("chaos_rune", 12), ("death_rune", 30),
+    ("leather", 20), ("leather_gloves", 30), ("leather_body", 80), ("hard_leather_body", 160), ("silk_cloth", 40),
+    ("silk_robe", 220), ("gold_ring", 150), ("gold_amulet", 320), ("dragonhide_body", 2_000),
+    ("potato", 2), ("onion", 3), ("cabbage", 4), ("tomato", 8), ("sweetcorn", 12), ("strawberry", 25), ("watermelon", 60),
+    ("baked_potato", 6), ("cooked_sweetcorn", 25),
+    ("potato_seed", 1), ("onion_seed", 2), ("cabbage_seed", 3), ("tomato_seed", 6), ("sweetcorn_seed", 10),
+    ("strawberry_seed", 20), ("watermelon_seed", 45),
 ];
 
 pub fn value(item: &str) -> u64 {
@@ -368,6 +471,7 @@ mod tests {
     fn makers(item: &str) -> bool {
         ACTIONS.iter().any(|a| a.makes.0 == item)
             || ENEMIES.iter().any(|e| e.drops.iter().any(|d| d.0 == item))
+            || CROPS.iter().any(|c| c.produce == item)
     }
 
     #[test]
@@ -398,6 +502,9 @@ mod tests {
         for (item, _) in FOOD {
             assert!(makers(item), "food {item} is made by nothing");
         }
+        for (item, _) in ARMOUR {
+            assert!(makers(item), "armour {item} is made by nothing");
+        }
     }
 
     #[test]
@@ -417,9 +524,22 @@ mod tests {
     }
 
     #[test]
-    fn each_skill_has_a_level_one_action_unless_it_fights() {
+    fn each_farm_crop_has_a_seed_some_enemy_drops_and_a_value() {
+        for c in CROPS {
+            assert!(
+                ENEMIES.iter().any(|e| e.drops.iter().any(|d| d.0 == c.seed)),
+                "{}",
+                c.seed
+            );
+            assert!(value(c.produce) > 0 && value(c.seed) > 0, "{}", c.id);
+        }
+        assert_eq!(CROPS[0].level, 1);
+    }
+
+    #[test]
+    fn each_skill_has_a_level_one_action_unless_it_fights_or_farms() {
         for (i, s) in SKILLS.iter().enumerate() {
-            if s.kind != Kind::Fight {
+            if s.kind != Kind::Fight && s.kind != Kind::Farm {
                 assert!(ACTIONS.iter().any(|a| a.skill == i && a.level == 1), "{}", s.id);
             }
         }

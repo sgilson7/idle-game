@@ -82,5 +82,47 @@
     "find": "        s.prestige = keep.prestige + 1;",
     "replace": "        s.prestige = keep.prestige + 1;\n        s.mxp = keep.mxp.clone();",
     "test": "every_prestige_needs_600_and_keeps_only_the_multiplier"
+  },
+  {
+    "name": "crops take their time to grow",
+    "file": "crates/core/src/game.rs",
+    "find": "Some((p.planted + crop.grow_ms).saturating_sub(self.sim_ms))",
+    "replace": "Some(0)",
+    "test": "a_crop_grows_while_something_else_runs_and_waits_to_be_harvested"
+  },
+  {
+    "name": "patches open with Farming level",
+    "file": "crates/core/src/game.rs",
+    "find": "c::PATCH_LEVELS.iter().filter(|&&need| l >= need).count()",
+    "replace": "c::PATCH_LEVELS.len()",
+    "test": "three_patches_open_at_first_and_more_at_farming_40_and_70"
+  },
+  {
+    "name": "armour takes damage off",
+    "file": "crates/core/src/game.rs",
+    "find": " * (100 - self.armour().1 * c::ARMOUR_PCT_PER_TIER) / 100",
+    "replace": "",
+    "test": "armour_means_less_food_eaten_in_the_same_fight"
+  },
+  {
+    "name": "a version-one save gains two skills",
+    "file": "crates/core/src/api.rs",
+    "find": "state.xp.resize(c::SKILLS.len(), 0);",
+    "replace": "",
+    "test": "a_version_one_save_gains_crafting_and_farming"
+  },
+  {
+    "name": "crops ripening while away open the return screen",
+    "file": "crates/core/src/api.rs",
+    "find": "|| r.stop.is_some() || !ripe.is_empty()",
+    "replace": "|| r.stop.is_some()",
+    "test": "crops_that_ripen_while_away_open_the_return_screen"
+  },
+  {
+    "name": "the page wakes for a ripening crop",
+    "file": "crates/core/src/api.rs",
+    "find": "let next_ms = action.into_iter().chain(crop).min().unwrap_or(0);",
+    "replace": "let next_ms = action.into_iter().min().unwrap_or(0 + crop.map(|_| 0).unwrap_or(0));",
+    "test": "with_nothing_running_the_page_still_wakes_for_a_ripening_crop"
   }
 ]

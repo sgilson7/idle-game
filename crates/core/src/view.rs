@@ -240,14 +240,16 @@ pub struct Device {
     pub h: u64,
 }
 
-pub const TABS: [&str; 14] = [
+pub const TABS: [&str; 16] = [
     "woodcutting",
     "mining",
     "fishing",
+    "farming",
     "firemaking",
     "fletching",
     "smithing",
     "cooking",
+    "crafting",
     "runecrafting",
     "combat",
     "bank",
@@ -256,6 +258,9 @@ pub const TABS: [&str; 14] = [
     "prestige",
     "settings",
 ];
+
+/// The tabs that are skills (the rest are screens).
+pub const SKILL_TABS: usize = 11;
 
 /// Everything the view needs to read.
 pub struct View<'a> {
@@ -395,6 +400,7 @@ impl View<'_> {
             "plan" => self.plan(),
             "prestige" => self.prestige(),
             "settings" => self.settings(),
+            "farming" => self.farming(),
             id => self.skill(c::skill_index(id).unwrap_or(0)),
         }
     }
@@ -405,7 +411,7 @@ impl View<'_> {
     fn links(&self, me: &str, ins: &[&str], outs: &[&str]) -> Block {
         let mut uses: Vec<&str> = Vec::new();
         let mut feeds: Vec<&str> = Vec::new();
-        for tab in TABS.iter().take(9) {
+        for tab in TABS.iter().take(SKILL_TABS) {
             if *tab == me {
                 continue;
             }
@@ -781,6 +787,19 @@ impl View<'_> {
             None => self.t.s("food_none"),
         };
         let mut chips = vec![chip("h", food)];
+        chips.push(match self.s.armour() {
+            ("", _) => chip("t", self.t.s("armour_none")),
+            (item, tier) => chip(
+                "t",
+                self.t.t(
+                    "armour_have",
+                    &[
+                        ("item", self.t.item(item)),
+                        ("pct", (tier * c::ARMOUR_PCT_PER_TIER).to_string()),
+                    ],
+                ),
+            ),
+        });
         for list in [st.held, st.spent] {
             if list.is_empty() {
                 continue;
@@ -1019,6 +1038,201 @@ impl View<'_> {
         out.push(Block {
             rows,
             ..block("rows")
+        });
+        out.push(Block {
+            title: self.t.s("seeds_title"),
+            rows: self.seed_rows(),
+            ..block("rows")
+        });
+        out
+    }
+
+    fn seed_rows(&self) -> Vec<Row> {
+        let l = self.s.level(c::FARMING);
+        c::CROPS
+            .iter()
+            .filter(|cr| cr.level <= l + 10)
+            .map(|cr| {
+                let cost = cr.seed_cost * c::SEED_PACK;
+                Row {
+                    icon: cr.seed.into(),
+                    title: self.t.item(cr.seed),
+                    sub: self.t.t("seeds_have", &[("n", num(self.s.have(cr.seed)))]),
+                    buttons: vec![button(
+                        self.t.t(
+                            "buy_seeds",
+                            &[("n", c::SEED_PACK.to_string()), ("cost", num(cost))],
+                        ),
+                        "buy.seed",
+                        cr.id,
+                    )
+                    .enabled(self.s.gold >= cost)],
+                    ..Row::default()
+                }
+            })
+            .collect()
+    }
+
+    // ---------- farming (T5) ----------
+
+    fn farming(&self) -> Vec<Block> {
+        let w = self.t.skill("farming");
+        let lvl = self.s.level(c::FARMING);
+        let mut out = vec![self.head(
+            "farming",
+            w.name.clone(),
+            self.t.t("lvl", &[("n", lvl.to_string())]),
+            "xp",
+        )];
+        out.push(Block {
+            bar: Some(self.xp_bar(c::FARMING)),
+            ..block("bar")
+        });
+        let (ins, outs) = io_of("farming");
+        out.push(self.links("farming", &ins, &outs));
+        let open = self.s.patches_open();
+        let mut rows: Vec<Row> = (0..open)
+            .map(|i| {
+                let p = self.s.patch(i);
+                match self.s.grow_left(i) {
+                    None => Row {
+                        icon: "patch".into(),
+                        title: self.t.s("patch_empty"),
+                        sub: self.t.s("patch_plant_hint"),
+                        ..Row::default()
+                    },
+                    Some(0) => Row {
+                        icon: p.crop.clone(),
+                        title: self.t.action(&p.crop),
+                        sub: self.t.s("patch_ready"),
+                        tone: "rare".into(),
+                        buttons: vec![
+                            button(self.t.s("harvest"), "farm.harvest", &i.to_string()).tone("good")
+                        ],
+                        ..Row::default()
+                    },
+                    Some(left) => Row {
+                        icon: p.crop.clone(),
+                        title: self.t.action(&p.crop),
+                        sub: self.t.t("patch_growing", &[("left", dur(left))]),
+                        ..Row::default()
+                    },
+                }
+            })
+            .collect();
+        if let Some(next) = c::PATCH_LEVELS.iter().find(|&&need| need > lvl) {
+            rows.push(Row {
+                icon: "patch".into(),
+                title: self.t.t("patch_locked", &[("n", next.to_string())]),
+                ..Row::default()
+            });
+        }
+        out.push(Block {
+            title: self.t.t(
+                "patches_title",
+                &[
+                    ("open", open.to_string()),
+                    ("max", c::PATCH_LEVELS.len().to_string()),
+                ],
+            ),
+            rows,
+            ..block("rows")
+        });
+        if (0..open).any(|i| self.s.ready(i)) {
+            out.push(Block {
+                buttons: vec![button(self.t.s("harvest_all"), "farm.harvest_all", "").tone("good")],
+                ..block("buttons")
+            });
+        }
+        let empty = (0..open).any(|i| self.s.patch(i).crop.is_empty());
+        let mut cards = Vec::new();
+        let mut locked = 0;
+        for cr in c::CROPS {
+            let unlocked = lvl >= cr.level;
+            if !unlocked {
+                locked += 1;
+                if locked > 2 {
+                    continue;
+                }
+            }
+            let seeds = self.s.have(cr.seed);
+            let plant = if !unlocked {
+                button(self.t.s("locked"), "farm.plant", cr.id).enabled(false)
+            } else if seeds == 0 {
+                button(
+                    self.t.t("need_item", &[("item", self.t.item(cr.seed))]),
+                    "farm.plant",
+                    cr.id,
+                )
+                .enabled(false)
+            } else if !empty {
+                button(self.t.s("patches_full"), "farm.plant", cr.id).enabled(false)
+            } else {
+                button(self.t.s("plant"), "farm.plant", cr.id).tone("primary")
+            };
+            let cost = cr.seed_cost * c::SEED_PACK;
+            cards.push(Card {
+                icon: cr.id.into(),
+                title: self.t.action(cr.id),
+                sub: self.t.t("seeds_have", &[("n", num(seeds))]),
+                tag: if unlocked {
+                    String::new()
+                } else {
+                    self.t.t("lock_tag", &[("n", cr.level.to_string())])
+                },
+                tone: "lock".into(),
+                locked: !unlocked,
+                dur: "0ms".into(),
+                chips: vec![
+                    chip("t", self.t.t("grows_in", &[("t", dur(cr.grow_ms))])),
+                    chip(
+                        "x",
+                        self.t.t(
+                            "plant_xp",
+                            &[("n", (cr.xp_plant * self.s.mult_bp() / 10_000).to_string())],
+                        ),
+                    ),
+                    chip(
+                        "x",
+                        self.t.t(
+                            "each_xp",
+                            &[("n", (cr.xp_each * self.s.mult_bp() / 10_000).to_string())],
+                        ),
+                    ),
+                    chip(
+                        "g",
+                        self.t.t(
+                            "yield",
+                            &[
+                                ("a", cr.yield_min.to_string()),
+                                ("b", cr.yield_max.to_string()),
+                                ("item", self.t.item(cr.produce)),
+                            ],
+                        ),
+                    ),
+                ],
+                buttons: vec![
+                    plant,
+                    button(
+                        self.t.t(
+                            "buy_seeds",
+                            &[("n", c::SEED_PACK.to_string()), ("cost", num(cost))],
+                        ),
+                        "buy.seed",
+                        cr.id,
+                    )
+                    .enabled(unlocked && self.s.gold >= cost),
+                ],
+                ..Card::default()
+            });
+        }
+        out.push(Block {
+            text: self.t.s("farming_intro"),
+            ..block("note")
+        });
+        out.push(Block {
+            cards,
+            ..block("cards")
         });
         out
     }
@@ -1429,6 +1643,17 @@ impl View<'_> {
                 ..Row::default()
             });
         }
+        let ripe: Vec<String> = (0..self.s.patches_open())
+            .filter(|&i| self.s.ready(i))
+            .map(|i| self.t.action(&self.s.patch(i).crop).to_lowercase())
+            .collect();
+        if !ripe.is_empty() {
+            ready.push(Row {
+                title: self.t.t("crops_ready", &[("list", ripe.join(", "))]),
+                buttons: vec![button(self.t.s("harvest_all"), "farm.harvest_all", "").tone("good")],
+                ..Row::default()
+            });
+        }
         if self.s.can_prestige() {
             ready.push(Row {
                 title: self
@@ -1492,7 +1717,7 @@ impl View<'_> {
             Stop::Missing(item) => {
                 let maker = TABS
                     .iter()
-                    .take(9)
+                    .take(SKILL_TABS)
                     .find(|t| io_of(t).1.contains(&item.as_str()))
                     .copied();
                 Row {
@@ -1526,12 +1751,19 @@ fn first_action(skill: usize) -> usize {
 
 /// What a tab's skill takes in and gives out, for the uses and feeds links.
 pub fn io_of(tab: &str) -> (Vec<&'static str>, Vec<&'static str>) {
+    if tab == "farming" {
+        return (
+            c::CROPS.iter().map(|cr| cr.seed).collect(),
+            c::CROPS.iter().map(|cr| cr.produce).collect(),
+        );
+    }
     if tab == "combat" {
         let mut ins: Vec<&str> = c::STYLES
             .iter()
             .flat_map(|s| s.held.iter().chain(s.spent.iter()).map(|(i, _)| *i))
             .collect();
         ins.extend(c::FOOD.iter().map(|(f, _)| *f));
+        ins.extend(c::ARMOUR.iter().map(|(a, _)| *a));
         let outs = c::ENEMIES
             .iter()
             .flat_map(|e| e.drops.iter().map(|d| d.0))
