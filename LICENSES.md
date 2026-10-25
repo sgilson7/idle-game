@@ -7,6 +7,8 @@ Every file in this repository that is not code written for it: its source, its a
 | Path | Source | Terms |
 | --- | --- | --- |
 | `web/art/` | drawn by `tools/art/art.py` from TikZ in this repository | this repository's licence |
+| `web/icons.svg` | flat shapes written by `tools/icons/icons.py` in this repository | this repository's licence (MIT) |
+| `data/icons/icon-180.png`, `data/icons/icon-512.png` | drawn with Pillow by the agent for the home-screen icon | this repository's licence (MIT) |
 
 ## Vendored code
 

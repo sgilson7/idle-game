@@ -31,7 +31,8 @@ One row per assumption, surprise or open item. **Kind** is *divergence* (what wa
 | R3.8 | worklist | | Every number in `crates/core/src/content.rs` (times, XP, levels, drops, prices, tool costs, prestige) is the agent's first guess. | The playtest file carries the tuning table and XP per hour per skill, so the person and co-designer can say which number to move. | | person |
 | R3.9 | worklist | | Every name in `data/strings.json` (skills, trees, items, enemies, tools) and every icon in `web/icons.svg` was written by the agent. | For the person to approve or replace (IG-11). | | person |
 | R3.10 | worklist | | Real-device checks the emulator cannot make: Add to Home Screen and the save it keeps, the share sheet sending the playtest file, iPad fullscreen, how it feels in the hand. | First playtest on the co-designer's phone. | | person |
-| R3.11 | worklist | | Nothing is published. The co-designer needs an address to play. | Asked of the person: a GitHub Pages repository and permission to publish (IG-Q7). | | person |
+| R3.11 | worklist | | Nothing is published. The co-designer needs an address to play. | Asked of the person: a GitHub Pages repository and permission to publish (IG-Q7). Granted: sgilson7/idle-game. | | person |
+| R3.12 | worklist | The README said MIT, as Builder is. | The template had no LICENSE file. | Added an MIT LICENSE ("the Idle Game contributors") before the repository went public; the licence is the person's to confirm or change. | | person |
 
 ## Strings written by the agent
 

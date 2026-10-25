@@ -37,7 +37,8 @@ Every `SECOND-ORDER.md` row with status *person*, by number, with what the perso
 - R3.8: tuning numbers, to judge from playtest files.
 - R3.9: approve the content names and icons.
 - R3.10: real-device checks on a phone.
-- R3.11: name a repository and grant publishing so the co-designer can play.
+- R3.11: granted 2026-10-25 (sgilson7/idle-game).
+- R3.12: confirm the MIT licence.
 
 ## Mistakes so far
 
