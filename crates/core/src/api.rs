@@ -69,6 +69,9 @@ pub struct Game {
     all: bool,
     /// The plan step whose sheet is open (T18); not saved.
     editing: Option<usize>,
+    /// The encyclopedia's search box and open group (T19); not saved.
+    book_search: String,
+    book_group: String,
 }
 
 /// A save as it is written to a file: a little about where it came from, then
@@ -151,6 +154,8 @@ impl Game {
             search: String::new(),
             all: false,
             editing: None,
+            book_search: String::new(),
+            book_group: String::new(),
         };
         g.seal();
         if saved.trim().is_empty() {
@@ -718,6 +723,14 @@ impl Game {
                     .t("toast_prestige", &[("n", self.s.prestige.to_string())])];
             }
             "bank.search" => self.search = value.chars().take(40).collect(),
+            "book.search" => self.book_search = value.chars().take(40).collect(),
+            "book.group" => {
+                self.book_group = if self.book_group == value {
+                    String::new()
+                } else {
+                    value.into()
+                };
+            }
             "list.all" => self.all = !self.all,
             "sheet.close" => {
                 self.sheet = None;
@@ -823,6 +836,8 @@ impl Game {
             device: &self.device,
             search: &self.search,
             all: self.all,
+            book_search: &self.book_search,
+            book_group: &self.book_group,
         }
     }
 
@@ -1119,7 +1134,7 @@ mod tests {
         let v = ui(&g.tick(1_000));
         assert_eq!(v["screen"], "woodcutting");
         assert_eq!(v["sheet"]["kind"], "notice");
-        assert_eq!(v["tabs"].as_array().unwrap().len(), 25);
+        assert_eq!(v["tabs"].as_array().unwrap().len(), 26);
         assert_eq!(v["groups"].as_array().unwrap().len(), 5);
         assert_eq!(v["next_ms"], 0);
     }
@@ -1797,5 +1812,38 @@ mod tests {
             t.iter().any(|x| x.starts_with("You hit the Chicken for ")),
             "{t:?}"
         );
+    }
+
+    #[test]
+    fn the_encyclopedia_says_what_makes_each_item_and_what_uses_it() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        g.act("tab", "book", 0);
+        let v = ui(&g.act("book.search", "flute", 0));
+        let rows = v["blocks"][2]["rows"].as_array().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["title"], "Wooden flute");
+        assert_eq!(rows[0]["icon"], "wooden_flute");
+        assert_eq!(
+            rows[0]["sub"],
+            "From Fletching 3 · used by Performance · sells for 30 gold"
+        );
+        // Feathers: dropped by chickens and goblins, sold on a shelf, used for arrows.
+        let v = ui(&g.act("book.search", "feathers", 0));
+        let sub = v["blocks"][2]["rows"][0]["sub"].as_str().unwrap().to_string();
+        assert!(sub.starts_with("From Chicken, Goblin"), "{sub}");
+        assert!(sub.contains("used by Fletching"), "{sub}");
+        // With no search, groups open one at a time.
+        g.act("book.search", "", 0);
+        let v = ui(&g.act("book.group", "woodcutting", 0));
+        let open = v["blocks"].as_array().unwrap().last().unwrap().clone();
+        assert_eq!(open["title"], "Woodcutting");
+        assert!(open["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["title"] == "Logs"));
+        let v = ui(&g.act("book.group", "woodcutting", 0));
+        assert!(v["blocks"].as_array().unwrap().last().unwrap()["title"] != "Woodcutting");
     }
 }

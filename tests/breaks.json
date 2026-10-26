@@ -803,5 +803,12 @@
     "find": "(\"hit\", num(c::MAX_HIT_BASE + next as u64 * c::MAX_HIT_PER_LEVEL)),",
     "replace": "(\"hit\", num(c::MAX_HIT_BASE + l as u64 * c::MAX_HIT_PER_LEVEL)),",
     "test": "combat_shows_what_each_level_does_and_keeps_a_log_of_the_newest_twelve_lines"
+  },
+  {
+    "name": "the encyclopedia lists what uses an item",
+    "file": "crates/core/src/view.rs",
+    "find": "        for a in c::ACTIONS.iter().filter(|a| a.needs.iter().any(|(i, _)| *i == item)) {\n            push(&mut uses, self.skill_name(a.skill));\n        }\n",
+    "replace": "",
+    "test": "the_encyclopedia_says_what_makes_each_item_and_what_uses_it"
   }
 ]

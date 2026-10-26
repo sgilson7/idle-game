@@ -266,16 +266,16 @@ pub const GROUPS: [(&str, &[&str]); 5] = [
     ("make", &["firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction"]),
     ("fight", &["combat", "recipes"]),
     ("engines", &["performance", "stage", "trader", "estate", "workshop", "observatory"]),
-    ("more", &["bank", "shop", "regions", "plan", "prestige", "settings"]),
+    ("more", &["bank", "shop", "book", "regions", "plan", "prestige", "settings"]),
 ];
 
 #[rustfmt::skip]
-pub const TABS: [&str; 25] = [
+pub const TABS: [&str; 26] = [
     "woodcutting", "mining", "fishing", "farming",
     "firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction",
     "combat", "recipes",
     "performance", "stage", "trader", "estate", "workshop", "observatory",
-    "bank", "shop", "regions", "plan", "prestige", "settings",
+    "bank", "shop", "book", "regions", "plan", "prestige", "settings",
 ];
 
 /// The tabs whose skills or engines take things in and give things out,
@@ -315,6 +315,9 @@ pub struct View<'a> {
     pub search: &'a str,
     /// Skill screens show every row.
     pub all: bool,
+    /// The encyclopedia's search box and open group (T19).
+    pub book_search: &'a str,
+    pub book_group: &'a str,
 }
 
 /// How many of a skill's newest rows show before "Show all" (T15).
@@ -521,6 +524,7 @@ impl View<'_> {
             "combat" => self.combat(),
             "bank" => self.bank(),
             "shop" => self.shop(),
+            "book" => self.book(),
             "plan" => self.plan(),
             "prestige" => self.prestige(),
             "settings" => self.settings(),
@@ -1431,6 +1435,223 @@ impl View<'_> {
             });
         }
         out
+    }
+
+    /// The encyclopedia (T19): every item, its picture, what makes it and
+    /// what uses it. A search, or one group at a time.
+    fn book(&self) -> Vec<Block> {
+        let mut all: Vec<&'static str> = c::VALUES.iter().map(|(i, _)| *i).collect();
+        all.sort_by_key(|i| self.t.item(i).to_lowercase());
+        let mut out = vec![self.head(
+            "book",
+            self.t.s("tab_book"),
+            self.t.t("kinds", &[("n", all.len().to_string())]),
+            "xp",
+        )];
+        out.push(Block {
+            title: self.t.s("book_search"),
+            act: "book.search".into(),
+            value: self.book_search.to_string(),
+            text: self.t.s("book_search_hint"),
+            ..block("search")
+        });
+        let q = self.book_search.trim().to_lowercase();
+        if !q.is_empty() {
+            let found: Vec<&str> = all
+                .iter()
+                .copied()
+                .filter(|i| self.t.item(i).to_lowercase().contains(&q))
+                .collect();
+            if found.is_empty() {
+                out.push(Block {
+                    text: self.t.s("bank_none_match"),
+                    ..block("note")
+                });
+            } else {
+                let more = found.len().saturating_sub(c::BOOK_ROWS);
+                out.push(Block {
+                    rows: found.iter().take(c::BOOK_ROWS).map(|i| self.entry(i)).collect(),
+                    ..block("rows")
+                });
+                if more > 0 {
+                    out.push(Block {
+                        text: self.t.t("book_more", &[("n", more.to_string())]),
+                        ..block("note")
+                    });
+                }
+            }
+            return out;
+        }
+        let mut groups: Vec<(&'static str, Vec<&'static str>)> = Vec::new();
+        for i in all {
+            let tab = maker_tab(i);
+            match groups.iter_mut().find(|(t, _)| *t == tab) {
+                Some((_, list)) => list.push(i),
+                None => groups.push((tab, vec![i])),
+            }
+        }
+        groups.sort_by_key(|(t, _)| TABS.iter().position(|x| x == t).unwrap_or(TABS.len()));
+        out.push(Block {
+            text: self.t.s("book_intro"),
+            buttons: groups
+                .iter()
+                .map(|(tab, list)| {
+                    let name = if *tab == "other" {
+                        self.t.s("bank_other")
+                    } else {
+                        self.tab_name(tab)
+                    };
+                    button(name, "book.group", tab)
+                        .icon(if *tab == "other" { "book" } else { tab })
+                        .below(list.len().to_string())
+                        .pressed(self.book_group == *tab)
+                })
+                .collect(),
+            ..block("buttons")
+        });
+        if let Some((tab, list)) = groups.iter().find(|(t, _)| *t == self.book_group) {
+            out.push(Block {
+                title: if *tab == "other" {
+                    self.t.s("bank_other")
+                } else {
+                    self.tab_name(tab)
+                },
+                rows: list.iter().map(|i| self.entry(i)).collect(),
+                ..block("rows")
+            });
+        }
+        out
+    }
+
+    /// One item's encyclopedia row: what makes it, what uses it, what it sells for.
+    fn entry(&self, item: &str) -> Row {
+        let mut from: Vec<String> = Vec::new();
+        let mut push = |list: &mut Vec<String>, s: String| {
+            if !list.contains(&s) {
+                list.push(s);
+            }
+        };
+        for a in c::ACTIONS.iter().filter(|a| a.makes.0 == item) {
+            push(
+                &mut from,
+                self.t.t(
+                    "lvl_of",
+                    &[("skill", self.skill_name(a.skill)), ("n", a.level.to_string())],
+                ),
+            );
+        }
+        for cr in c::CROPS.iter().filter(|cr| cr.produce == item) {
+            push(
+                &mut from,
+                self.t.t(
+                    "lvl_of",
+                    &[
+                        ("skill", self.skill_name(c::FARMING)),
+                        ("n", cr.level.to_string()),
+                    ],
+                ),
+            );
+        }
+        for e in c::ENEMIES.iter().filter(|e| e.drops.iter().any(|d| d.0 == item)) {
+            push(&mut from, self.t.enemy(e.id));
+        }
+        for t in c::TOWNS.iter().filter(|t| t.sells == item) {
+            push(&mut from, self.t.s(&format!("town_{}", t.id)));
+        }
+        for m in c::MACHINES.iter().filter(|m| m.makes.0 == item) {
+            push(&mut from, self.t.action(m.id));
+        }
+        if c::GEMS.iter().any(|g| g.0 == item) {
+            push(&mut from, self.skill_name(c::MINING));
+        }
+        if c::CROPS.iter().any(|cr| cr.seed == item) {
+            push(&mut from, self.t.s("tab_shop"));
+        }
+        if self
+            .s
+            .shelves()
+            .iter()
+            .any(|(_, _, items, _)| items.contains(&item))
+        {
+            push(&mut from, self.t.s("tab_shop"));
+        }
+        let mut uses: Vec<String> = Vec::new();
+        for a in c::ACTIONS
+            .iter()
+            .filter(|a| a.needs.iter().any(|(i, _)| *i == item))
+        {
+            push(&mut uses, self.skill_name(a.skill));
+        }
+        if c::SONG_INSTRUMENTS.iter().any(|(_, i)| *i == item) {
+            push(&mut uses, self.skill_name(c::PERFORMANCE));
+        }
+        if c::CROPS.iter().any(|cr| cr.seed == item) {
+            push(&mut uses, self.skill_name(c::FARMING));
+        }
+        for s in c::STYLES
+            .iter()
+            .filter(|s| s.held.iter().chain(s.spent.iter()).any(|(i, _)| *i == item))
+        {
+            push(&mut uses, self.skill_name(s.skill));
+        }
+        if c::FOOD.iter().any(|(f, _)| *f == item) {
+            push(&mut uses, self.t.s("book_use_food"));
+        }
+        if c::ARMOUR.iter().any(|(a, _, _)| *a == item) {
+            push(&mut uses, self.t.s("book_use_armour"));
+        }
+        if c::VENUES.iter().any(|v| v.needs.iter().any(|(i, _)| *i == item)) || item == "renown" {
+            push(&mut uses, self.t.s("tab_stage"));
+        }
+        if c::TOWNS.iter().any(|t| t.wants.contains(&item)) {
+            push(&mut uses, self.t.s("tab_trader"));
+        }
+        if c::MACHINES
+            .iter()
+            .any(|m| m.needs.iter().any(|(i, _)| *i == item))
+        {
+            push(&mut uses, self.t.s("tab_workshop"));
+        }
+        if c::TRIBUTES
+            .iter()
+            .flatten()
+            .any(|t| t.iter().any(|(i, _)| *i == item))
+            || c::ROOM_PLANKS.contains(&item)
+        {
+            push(&mut uses, self.t.s("tab_estate"));
+        }
+        let none = self.t.s("book_none");
+        let mut sub = vec![
+            self.t.t(
+                "book_from",
+                &[(
+                    "list",
+                    if from.is_empty() {
+                        none.clone()
+                    } else {
+                        from.join(", ")
+                    },
+                )],
+            ),
+            self.t.t(
+                "book_uses",
+                &[("list", if uses.is_empty() { none } else { uses.join(", ") })],
+            ),
+        ];
+        if c::value(item) > 0 {
+            sub.push(self.t.t("book_sells", &[("n", num(c::value(item)))]));
+        }
+        Row {
+            icon: item.into(),
+            title: self.t.item(item),
+            sub: sub.join(" · "),
+            chip: if self.s.have(item) > 0 {
+                num(self.s.have(item))
+            } else {
+                String::new()
+            },
+            ..Row::default()
+        }
     }
 
     fn shop(&self) -> Vec<Block> {

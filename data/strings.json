@@ -2162,6 +2162,18 @@
   "blow_hurt": "The {what} hit you for {n}",
   "blow_eat": "You ate {what}: +{n} health",
   "blow_kill": "{what} defeated: +{n} gold",
-  "blow_drop": "Found {n} {what}"
+  "blow_drop": "Found {n} {what}",
+  "tab_book": "Encyclopedia",
+  "tab_book_short": "Book",
+  "book_search": "Find an item",
+  "book_search_hint": "Type part of a name",
+  "book_intro": "Every item in the game, grouped by what makes it. Open a group, or search.",
+  "book_more": "{n} more: type more of the name.",
+  "book_from": "From {list}",
+  "book_uses": "used by {list}",
+  "book_sells": "sells for {n} gold",
+  "book_none": "nothing",
+  "book_use_food": "Combat (food)",
+  "book_use_armour": "Combat (armour)"
  }
 }

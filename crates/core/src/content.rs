@@ -1111,6 +1111,8 @@ pub const MAX_HIT_STRONG: u64 = 15;
 pub const ENEMY_HIT_PCT: u64 = 50;
 /// The combat log keeps this many newest lines (T19).
 pub const COMBAT_LOG: usize = 12;
+/// The encyclopedia shows this many search results at once (T19).
+pub const BOOK_ROWS: usize = 40;
 /// Experience per point of damage, in tenths (style) and thousandths (Hitpoints).
 pub const STYLE_XP_TENTHS: u64 = 4;
 pub const HP_XP_THOUSANDTHS: u64 = 133;
