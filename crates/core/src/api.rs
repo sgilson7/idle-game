@@ -2128,4 +2128,33 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn combat_says_a_held_weapon_does_not_stack_and_ammunition_is_spent() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        g.state_mut().bank.insert("bronze_sword".into(), 20);
+        let mut t = Vec::new();
+        all_text(&ui(&g.act("tab", "combat", 0))["blocks"], &mut t);
+        assert!(
+            t.iter().any(|s| s.starts_with("Bronze sword held: +")
+                && s.ends_with("Only your best weapon counts, and it is not used up; you have 20")),
+            "{t:?}"
+        );
+        // a sword's card in Smithing says so too; a bar's does not
+        let mut t = Vec::new();
+        all_text(&ui(&g.act("tab", "smithing", 0))["blocks"], &mut t);
+        assert_eq!(
+            t.iter()
+                .filter(|s| *s == "In combat only your best one counts, and it is not used up")
+                .count(),
+            t.iter().filter(|s| s.contains("sword")).count().min(1)
+        );
+        assert!(
+            crate::view::is_held("bronze_sword")
+                && crate::view::is_held("shortbow")
+                && !crate::view::is_held("bronze_bar")
+        );
+        assert!(!crate::view::is_held("bronze_arrows"), "arrows are spent");
+    }
 }

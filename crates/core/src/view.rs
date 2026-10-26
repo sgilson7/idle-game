@@ -858,6 +858,10 @@ impl View<'_> {
         if a.makes.1 > 1 {
             chips.push(chip("g", self.t.t("makes_n", &[("n", a.makes.1.to_string())])));
         }
+        // Weapons and armour are held, not spent: one is all a fight uses (T21).
+        if is_held(a.makes.0) {
+            chips.push(chip("t", self.t.s("held_note")));
+        }
         if a.region > 0 {
             chips.push(chip("p", self.t.s(&format!("region_{}", c::REGIONS[a.region].0))));
         }
@@ -1056,11 +1060,13 @@ impl View<'_> {
                 ),
             ),
         });
-        for list in [st.held, st.spent] {
+        // A held weapon is not used up and only the best counts; ammunition
+        // is spent one a swing (T21: say which, so stacking is clear).
+        for (list, key) in [(st.held, "supply_held"), (st.spent, "supply_spent")] {
             if list.is_empty() {
                 continue;
             }
-            let (best, _) = self.s.tier(list);
+            let (best, tier) = self.s.tier(list);
             chips.push(match best.as_str() {
                 "" => chip(
                     "bad",
@@ -1070,8 +1076,12 @@ impl View<'_> {
                 b => chip(
                     "t",
                     self.t.t(
-                        "supply_have",
-                        &[("item", self.t.item(b)), ("n", num(self.s.have(b)))],
+                        key,
+                        &[
+                            ("item", self.t.item(b)),
+                            ("n", num(self.s.have(b))),
+                            ("hit", num(tier * c::MAX_HIT_PER_TIER)),
+                        ],
                     ),
                 ),
             });
@@ -1642,6 +1652,9 @@ impl View<'_> {
         }
         if c::FOOD.iter().any(|(f, _)| *f == item) {
             push(&mut uses, self.t.s("book_use_food"));
+        }
+        if is_held(item) {
+            push(&mut uses, self.t.s("book_use_held"));
         }
         if c::ARMOUR.iter().any(|(a, _, _)| *a == item) {
             push(&mut uses, self.t.s("book_use_armour"));
@@ -3125,4 +3138,11 @@ mod tests {
         }
         assert!(outs.contains(&"feathers"));
     }
+}
+
+/// A weapon a style holds, or armour: combat uses the best one you have and
+/// never spends it, so a second one adds nothing in a fight (T21).
+pub fn is_held(item: &str) -> bool {
+    c::STYLES.iter().any(|s| s.held.iter().any(|(i, _)| *i == item))
+        || c::ARMOUR.iter().any(|(a, _, _)| *a == item)
 }

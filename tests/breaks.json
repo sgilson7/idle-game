@@ -852,5 +852,19 @@
     "find": "        out.push(if rows.is_empty() {\n            Block {\n                title,\n                text: self.t.s(\"followers_none\"),\n                ..block(\"card\")\n            }",
     "replace": "        out.push(if rows.len() > 99 {\n            Block {\n                title,\n                text: self.t.s(\"followers_none\"),\n                ..block(\"card\")\n            }",
     "test": "no_screen_sends_a_list_block_with_nothing_in_it"
+  },
+  {
+    "name": "combat says a held weapon does not stack",
+    "file": "crates/core/src/view.rs",
+    "find": "for (list, key) in [(st.held, \"supply_held\"), (st.spent, \"supply_spent\")] {",
+    "replace": "for (list, key) in [(st.held, \"supply_spent\"), (st.spent, \"supply_spent\")] {",
+    "test": "combat_says_a_held_weapon_does_not_stack_and_ammunition_is_spent"
+  },
+  {
+    "name": "arrows are not held",
+    "file": "crates/core/src/view.rs",
+    "find": "c::STYLES.iter().any(|s| s.held.iter().any(|(i, _)| *i == item))",
+    "replace": "c::STYLES.iter().any(|s| s.held.iter().chain(s.spent.iter()).any(|(i, _)| *i == item))",
+    "test": "combat_says_a_held_weapon_does_not_stack_and_ammunition_is_spent"
   }
 ]
