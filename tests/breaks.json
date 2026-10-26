@@ -133,11 +133,11 @@
     "test": "ashes_are_compost_and_a_composted_crop_grows_in_three_quarters_of_its_time"
   },
   {
-    "name": "a plan holds four steps",
+    "name": "a plan holds five steps, fifteen in advanced mode",
     "file": "crates/core/src/content.rs",
-    "find": "pub const PLAN_STEPS: usize = 4;",
-    "replace": "pub const PLAN_STEPS: usize = 3;",
-    "test": "a_plan_holds_four_steps"
+    "find": "pub const PLAN_STEPS: usize = 5;",
+    "replace": "pub const PLAN_STEPS: usize = 4;",
+    "test": "a_plan_holds_five_steps_and_fifteen_in_advanced_mode"
   },
   {
     "name": "a recipe is learned from its enemy",
@@ -922,5 +922,19 @@
     "find": "        s.weapon_xp = keep.weapon_xp;\n",
     "replace": "",
     "test": "you_choose_the_weapon_in_hand_and_its_level_adds_to_the_hit"
+  },
+  {
+    "name": "a moved step keeps its jumps",
+    "file": "crates/core/src/game.rs",
+    "find": "                s.to = place[s.to.min(len - 1)];",
+    "replace": "                s.to = s.to.min(len - 1);",
+    "test": "dragging_a_block_moves_it_and_jumps_follow_the_steps_they_name"
+  },
+  {
+    "name": "an inserted block moves later jumps down",
+    "file": "crates/core/src/game.rs",
+    "find": "            if !s.kind.is_empty() && s.to >= at {\n                s.to += 1;",
+    "replace": "            if !s.kind.is_empty() && s.to >= at + 99 {\n                s.to += 1;",
+    "test": "dragging_a_block_moves_it_and_jumps_follow_the_steps_they_name"
   }
 ]

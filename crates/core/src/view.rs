@@ -2478,6 +2478,7 @@ impl View<'_> {
     fn step_sub(&self, k: usize) -> String {
         let st = &self.s.plan[k];
         match st.kind.as_str() {
+            "repeat" if st.to >= k => self.t.s("plan_repeat_forward"),
             "repeat" => {
                 if st.times == 0 {
                     self.t.s("plan_forever")
@@ -2609,35 +2610,45 @@ impl View<'_> {
                     title: self.step_title(k),
                     sub: self.step_sub(k),
                     chip: if running { self.t.s("now") } else { String::new() },
+                    // The block's colour: a step, a repeat or an if (T24).
+                    tone: if st.kind.is_empty() {
+                        "do".into()
+                    } else {
+                        st.kind.clone()
+                    },
                     buttons,
-                    ..Row::default()
                 }
             })
             .collect();
-        if rows.is_empty() {
-            out.push(Block {
-                text: self.t.s("plan_empty"),
-                ..block("note")
-            });
+        // The plan as blocks to drag (T24): the stack, the end to drop on,
+        // and in Advanced a palette of new repeat and if blocks.
+        let palette = if adv && self.s.plan.len() < max {
+            vec![
+                button(self.t.s("plan_add_repeat"), "plan.insert", "repeat").tone("repeat"),
+                button(self.t.s("plan_add_if"), "plan.insert", "if").tone("if"),
+            ]
         } else {
-            out.push(Block {
-                rows,
-                ..block("rows")
-            });
+            Vec::new()
+        };
+        let empty = rows.is_empty();
+        out.push(Block {
+            title: if palette.is_empty() {
+                String::new()
+            } else {
+                self.t.s("plan_palette")
+            },
+            text: self.t.s(if empty { "plan_empty" } else { "plan_drop_end" }),
+            label2: self.t.s("plan_drag_hint"),
+            act: "plan.move".into(),
+            rows,
+            buttons: palette,
+            ..block("program")
+        });
+        if !empty {
             out.push(Block {
                 buttons: vec![
                     button(self.t.s("plan_start"), "plan.start", "").tone("primary"),
                     button(self.t.s("plan_clear"), "plan.clear", ""),
-                ],
-                ..block("buttons")
-            });
-        }
-        if adv && self.s.plan.len() < max {
-            out.push(Block {
-                text: self.t.s("plan_add_control"),
-                buttons: vec![
-                    button(self.t.s("plan_add_repeat"), "plan.control", "repeat"),
-                    button(self.t.s("plan_add_if"), "plan.control", "if"),
                 ],
                 ..block("buttons")
             });
@@ -2821,10 +2832,26 @@ impl View<'_> {
             title: self.step_title(k),
             lines: vec![self.step_sub(k)],
             blocks,
-            buttons: vec![
-                button(self.t.s("remove"), "plan.remove", &k.to_string()).tone("stop"),
-                button(self.t.s("ok"), "sheet.close", "").tone("primary"),
-            ],
+            buttons: {
+                let mut b = Vec::new();
+                if k > 0 {
+                    b.push(button(
+                        self.t.s("plan_up"),
+                        "plan.move",
+                        &format!("{k}:{}", k - 1),
+                    ));
+                }
+                if k + 1 < self.s.plan.len() {
+                    b.push(button(
+                        self.t.s("plan_down"),
+                        "plan.move",
+                        &format!("{k}:{}", k + 1),
+                    ));
+                }
+                b.push(button(self.t.s("remove"), "plan.remove", &k.to_string()).tone("stop"));
+                b.push(button(self.t.s("ok"), "sheet.close", "").tone("primary"));
+                b
+            },
             ..Sheet::default()
         }
     }

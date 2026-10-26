@@ -174,6 +174,48 @@ const blocks = {
     return box;
   },
   scene,
+  // The plan as blocks to drag, Scratch-style (T24). The core decides what
+  // a move means; the page only says which block went where.
+  program: (b) => {
+    const box = h("div", "program");
+    const palette = b.buttons || [];
+    const rows = b.rows || [];
+    if (palette.length) {
+      const pal = h("div", "palette");
+      if (b.title) pal.append(h("h3", "", b.title));
+      palette.forEach((x) => {
+        const blk = h("div", "blk new " + x.tone, x.label);
+        blk.append(h("span", "grip", "⠿"));
+        draggable(blk, blk, x.act, x.value);
+        pal.append(blk);
+      });
+      box.append(pal);
+    }
+    const stack = h("div", "stack");
+    rows.forEach((r, k) => {
+      const blk = h("div", "blk " + r.tone + (r.chip ? " now" : ""));
+      blk.dataset.k = k;
+      const grip = h("span", "grip", "⠿");
+      grip.title = b.label2;
+      const text = h("div", "grow");
+      text.append(h("b", "", r.title));
+      if (r.sub) text.append(h("small", "", r.sub));
+      blk.append(grip);
+      if (r.icon) blk.append(icon(r.icon, "ic row-ic"));
+      blk.append(text);
+      if (r.chip) blk.append(h("span", "chip", r.chip));
+      const bs = h("div", "row-buttons");
+      (r.buttons || []).forEach((x) => bs.append(btn(x, "small")));
+      blk.append(bs);
+      draggable(grip, blk, b.act, String(k));
+      stack.append(blk);
+    });
+    const end = h("div", "blk end", b.text);
+    end.dataset.k = rows.length;
+    stack.append(end);
+    box.append(stack);
+    return box;
+  },
   // A graph the core shapes (T23): its path, a marker and four labels.
   curve: (b) => {
     const box = h("div", "panel curve");
@@ -190,7 +232,7 @@ const blocks = {
     const mark = h("i", "mark");
     mark.style.setProperty("--x", b.curve.x);
     mark.style.setProperty("--y", b.curve.y);
-    plot.append(svg, mark, h("span", "top", b.curve.top), h("span", "low", b.curve.low));
+    plot.append(svg, mark, h("span", "y-top", b.curve.top), h("span", "y-low", b.curve.low));
     const axis = h("div", "axis");
     axis.append(h("span", "", b.curve.left), h("span", "", b.curve.right));
     box.append(plot, axis);
@@ -421,6 +463,70 @@ function hint(nodes, hints) {
       node.title = found.definition;
       node.dataset.term = found.term;
     }
+  });
+}
+
+// Dragging a plan block (T24): a ghost follows the pointer; dropping on a
+// block (or the end) sends the act with "value:place". A tap with no move
+// drops on the end, so the palette also works by tapping.
+function draggable(handle, blk, act, value) {
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("button")) return;
+    e.preventDefault();
+    const box = blk.getBoundingClientRect();
+    const ghost = blk.cloneNode(true);
+    ghost.classList.add("ghost");
+    ghost.style.left = box.left + "px";
+    ghost.style.top = box.top + "px";
+    ghost.style.width = box.width + "px";
+    document.body.append(ghost);
+    blk.classList.add("lifted");
+    const x0 = e.clientX;
+    const y0 = e.clientY;
+    let moved = false;
+    let over = null;
+    let x = x0;
+    let y = y0;
+    const main = el("main");
+    const aim = () => {
+      const hit = document.elementFromPoint(x, y);
+      const target = hit && hit.closest(".stack .blk[data-k]");
+      if (over && over !== target) over.classList.remove("over");
+      over = target;
+      if (over) over.classList.add("over");
+    };
+    // Near the top or bottom edge, a block's height from it, the screen
+    // scrolls, faster the closer the pointer is to the edge.
+    let frame = requestAnimationFrame(function edge() {
+      const view = main.getBoundingClientRect();
+      const low = y - (view.bottom - box.height);
+      const high = view.top + box.height - y;
+      if (low > 0) main.scrollTop += low;
+      if (high > 0) main.scrollTop -= high;
+      if (low > 0 || high > 0) aim();
+      frame = requestAnimationFrame(edge);
+    });
+    const move = (m) => {
+      moved = moved || m.clientX !== x0 || m.clientY !== y0;
+      x = m.clientX;
+      y = m.clientY;
+      ghost.style.transform = "translate(" + (x - x0) + "px, " + (y - y0) + "px)";
+      aim();
+    };
+    const up = () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      document.removeEventListener("pointercancel", up);
+      ghost.remove();
+      blk.classList.remove("lifted");
+      const end = document.querySelector(".stack .blk.end");
+      const place = moved ? over : blk.dataset.k === undefined ? end : null;
+      if (place) draw(game.act(act, value + ":" + place.dataset.k, now()));
+    };
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
+    document.addEventListener("pointercancel", up);
   });
 }
 

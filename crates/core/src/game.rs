@@ -1521,6 +1521,58 @@ impl State {
         self.plan_at = 0;
     }
 
+    /// Moves a step to another place in the plan, as a dragged block does
+    /// (T24). Jumps keep pointing at the steps they pointed at.
+    pub fn plan_move(&mut self, from: usize, to: usize) -> bool {
+        let len = self.plan.len();
+        if from >= len || to >= len || from == to {
+            return false;
+        }
+        let mut order: Vec<usize> = (0..len).collect();
+        let moved = order.remove(from);
+        order.insert(to, moved);
+        let mut place = vec![0; len];
+        for (new, &old) in order.iter().enumerate() {
+            place[old] = new;
+        }
+        let mut steps: Vec<Step> = order.iter().map(|&old| self.plan[old].clone()).collect();
+        for s in &mut steps {
+            if !s.kind.is_empty() {
+                s.to = place[s.to.min(len - 1)];
+            }
+        }
+        self.plan = steps;
+        self.plan_halt();
+        true
+    }
+
+    /// Puts a new "repeat" or "if" at a place in the plan, as a block
+    /// dragged from the palette (T24); jumps past it move down one.
+    pub fn plan_insert(&mut self, kind: &str, at: usize) -> bool {
+        let at = at.min(self.plan.len());
+        if !self.plan_add_control(kind) {
+            return false;
+        }
+        let new = self.plan.pop().unwrap_or_default();
+        for s in &mut self.plan {
+            if !s.kind.is_empty() && s.to >= at {
+                s.to += 1;
+            }
+        }
+        self.plan.insert(at, new);
+        self.plan_halt();
+        true
+    }
+
+    /// A changed plan starts again from its first step when next started.
+    fn plan_halt(&mut self) {
+        if self.plan_on {
+            self.plan_on = false;
+            self.stop();
+        }
+        self.plan_at = 0;
+    }
+
     pub fn plan_clear(&mut self) {
         self.plan.clear();
         self.plan_at = 0;
@@ -1984,6 +2036,24 @@ mod tests {
         let r = run(&mut s, 60_000);
         assert!(r.plan_stuck.is_some());
         assert!(!s.plan_on);
+    }
+
+    #[test]
+    fn dragging_a_block_moves_it_and_jumps_follow_the_steps_they_name() {
+        // 0 tree, 1 burn, 2 repeat back to 0 (tree).
+        let mut s = advanced();
+        s.plan_add("tree");
+        s.plan_add("burn_logs");
+        s.plan_add_control("repeat");
+        // Drag burn to the top: burn, tree, repeat; the repeat still names tree, now 1.
+        assert!(s.plan_move(1, 0));
+        assert_eq!(s.plan[0].id, "burn_logs");
+        assert_eq!(s.plan[2].to, 1);
+        // Drop a new if at the top: if, burn, tree, repeat; the repeat moves to 2.
+        assert!(s.plan_insert("if", 0));
+        assert_eq!(s.plan[0].kind, "if");
+        assert_eq!(s.plan[3].to, 2);
+        assert!(!s.plan_move(0, 9), "past the end");
     }
 
     #[test]

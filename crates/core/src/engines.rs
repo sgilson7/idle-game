@@ -1209,13 +1209,20 @@ mod tests {
     }
 
     #[test]
-    fn a_plan_holds_four_steps() {
+    fn a_plan_holds_five_steps_and_fifteen_in_advanced_mode() {
         let mut s = State::new(1);
-        for _ in 0..4 {
+        for _ in 0..5 {
             assert!(s.plan_add("tree"));
         }
         assert!(!s.plan_add("tree"));
-        assert_eq!(s.plan.len(), 4);
+        assert_eq!(s.plan.len(), 5);
+        s.plan_advanced = true;
+        for _ in 5..15 {
+            assert!(s.plan_add("tree"));
+        }
+        assert!(!s.plan_add("tree"));
+        assert!(!s.plan_insert("repeat", 0));
+        assert_eq!(s.plan.len(), 15);
     }
 
     #[test]

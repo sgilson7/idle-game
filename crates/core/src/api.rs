@@ -686,6 +686,27 @@ impl Game {
                     }
                 }
             }
+            // A dragged block (T24): "from:to" moves a step; "kind:at" puts a
+            // new repeat or if at a place.
+            "plan.move" => {
+                if let Some((a, b)) = value.split_once(':') {
+                    if let (Ok(a), Ok(b)) = (a.parse::<usize>(), b.parse::<usize>()) {
+                        let b = b.min(self.s.plan.len().saturating_sub(1));
+                        if self.s.plan_move(a, b) {
+                            self.editing = self.editing.map(|_| b);
+                        }
+                    }
+                }
+            }
+            "plan.insert" => {
+                if let Some((kind, at)) = value.split_once(':') {
+                    if let Ok(at) = at.parse::<usize>() {
+                        if self.s.plan_insert(kind, at) {
+                            self.editing = Some(at.min(self.s.plan.len() - 1));
+                        }
+                    }
+                }
+            }
             "plan.control" => {
                 if self.s.plan_add_control(value) {
                     self.editing = Some(self.s.plan.len() - 1);

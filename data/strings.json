@@ -1444,7 +1444,7 @@
   "plan_add": "+ Plan",
   "plan_clear": "Clear",
   "plan_empty": "No plan yet. Tap + Plan on any card to add a step.",
-  "plan_intro": "Up to {n} steps, run in order while you watch or while you are away. Each step can use what the one before made. Picking an action by hand stops the plan and keeps its steps.",
+  "plan_intro": "Up to {n} steps, run in order while you watch or while you are away. Drag a block by its grip to move it. Picking an action by hand stops the plan and keeps its steps.",
   "plan_start": "Start plan",
   "plan_step": "{k}. {verb} {what}",
   "plant": "Plant",
@@ -2066,7 +2066,7 @@
   "now_step": "Step {k} of {n}: {sub}. Then: {then}",
   "plan_then_end": "the plan ends",
   "now_by_hand": "Picked by hand; the plan is not running.",
-  "plan_intro_advanced": "Up to {n} steps. A step can stop at an amount, a level or an amount of gold; a repeat goes back to an earlier step; an if jumps to a step. A plan that goes round without doing anything stops.",
+  "plan_intro_advanced": "Up to {n} blocks. Drag a block by its grip to move it, or drag a repeat or an if from the palette into the plan. Tap Edit to set a block. A plan that goes round without doing anything stops.",
   "plan_edit": "Edit",
   "plan_add_control": "Add a step that goes back or jumps:",
   "plan_add_repeat": "+ Repeat",
@@ -2231,6 +2231,12 @@
   "gate_top": "100%",
   "gate_low": "{n}%",
   "gate_right": "{n} levels",
-  "toast_wield": "Fighting with {item}"
+  "toast_wield": "Fighting with {item}",
+  "plan_palette": "Blocks",
+  "plan_drop_end": "Drop here to put it last",
+  "plan_drag_hint": "Drag by the grip",
+  "plan_up": "Move up",
+  "plan_down": "Move down",
+  "plan_repeat_forward": "its step is below it, so it does nothing: move it below the steps to repeat"
  }
 }

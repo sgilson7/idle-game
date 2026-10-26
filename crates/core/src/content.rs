@@ -1326,10 +1326,10 @@ pub const AUTOSAVE_MS: u64 = 10_000;
 pub const PRESTIGE_BASE: u32 = 900;
 pub const PRESTIGE_STEP_BP: u64 = 2_500;
 
-/// A plan holds this many steps (P3, four since T9).
-pub const PLAN_STEPS: usize = 4;
-/// In advanced mode (T18, IG-Q53 A).
-pub const PLAN_STEPS_ADVANCED: usize = 12;
+/// A plan holds this many steps (P3; four since T9, five since T24).
+pub const PLAN_STEPS: usize = 5;
+/// In advanced mode (T18, IG-Q53 A; fifteen since T24).
+pub const PLAN_STEPS_ADVANCED: usize = 15;
 /// The amounts an "until" or an "if" can test, for items and gold.
 pub const PLAN_AMOUNTS: [u64; 7] = [10, 50, 100, 500, 1_000, 5_000, 10_000];
 /// How many times a "repeat" can go back; 0 is forever.

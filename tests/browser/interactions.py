@@ -91,6 +91,25 @@ def run(page, check, engine):
     check(UI["opens_at"].replace("{n}", "150") in page.inner_text("#main"), "the Trader tab says it opens at total level 150")
     check(page.locator('#tabs .tab[data-tab="trader"].locked').count() == 1, "a tab not open yet is drawn dimmed")
 
+    # The plan's blocks drag (T24): two steps, the first made 100 long, then
+    # the second dragged by its grip onto the first swaps them.
+    open_tab(page, "woodcutting")
+    for _ in range(2):
+        page.locator('button[data-act="plan.add"][data-value="tree"]').first.click()
+    open_tab(page, "plan")
+    page.locator('.stack .blk[data-k="0"] button[data-act="plan.count"][data-value="0:100"]').click()
+    first = lambda: page.inner_text('.stack .blk[data-k="0"] small')
+    before = first()
+    grip = page.locator('.stack .blk[data-k="1"] .grip').bounding_box()
+    top = page.locator('.stack .blk[data-k="0"]').bounding_box()
+    page.mouse.move(grip["x"] + grip["width"] / 2, grip["y"] + grip["height"] / 2)
+    page.mouse.down()
+    page.mouse.move(top["x"] + top["width"] / 2, top["y"] + top["height"] / 2, steps=8)
+    page.mouse.up()
+    page.wait_for_timeout(300)
+    check(first() != before and page.inner_text('.stack .blk[data-k="1"] small') == before, "dragging a plan block by its grip moves it")
+    page.locator('button[data-act="plan.clear"]').click()
+
     # The bank's search box keeps the keyboard up while it filters.
     open_tab(page, "bank")
     field = page.locator('input[data-act="bank.search"]')
