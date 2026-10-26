@@ -371,6 +371,30 @@ const blocks = {
   },
 };
 
+// The screen redraws only the blocks that changed (R22.2): a long screen
+// (the encyclopedia shows every item) is not rebuilt each time an action
+// finishes, only the block whose words or numbers moved.
+let shown = [];
+function drawScreen(main, list, same) {
+  const next = list.map((b) => {
+    const key = JSON.stringify(b);
+    const old = same && shown.find((x) => x.key === key && !x.used);
+    if (old) {
+      old.used = true;
+      return old;
+    }
+    const make = blocks[b.kind];
+    return { key, node: make ? make(b) : null, used: true };
+  });
+  next.forEach((x) => {
+    x.used = false;
+  });
+  const nodes = next.filter((x) => x.node).map((x) => x.node);
+  const now = [...main.children];
+  if (nodes.length !== now.length || nodes.some((n, k) => n !== now[k])) main.replaceChildren(...nodes);
+  shown = next;
+}
+
 function drawBlocks(list, parent) {
   list.forEach((b) => {
     const make = blocks[b.kind];
@@ -569,9 +593,7 @@ function draw(json) {
   // A redraw from the action timer must not take the keyboard away from a
   // search box being typed in (R19.1): note it, and give focus back.
   const typing = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.act : "";
-  const frag = document.createDocumentFragment();
-  drawBlocks(ui.blocks, frag);
-  main.replaceChildren(frag);
+  drawScreen(main, ui.blocks, lastScreen === ui.screen);
   main.scrollTop = keep;
   const again = typing && main.querySelector('input[data-act="' + typing + '"]');
   if (again) {

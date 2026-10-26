@@ -150,9 +150,20 @@ def main():
         host, port = server.server_address[:2]
         origin = f"http://{host}:{port}"
     interactions = load_interactions()
-    with sync_playwright() as p:
+    if len(ENGINES) > 1:
+        # Each engine runs in a process of its own, as each player's browser
+        # does: one Playwright session driving several WebKit browsers in
+        # turn hung the second on a long page (R22.2).
+        import subprocess
         for engine in ENGINES:
-            run_engine(p, engine, origin, interactions)
+            env = dict(os.environ, BUILDER_ENGINES=engine, BUILDER_ORIGIN=origin)
+            done = subprocess.run([sys.executable, __file__], env=env)
+            if done.returncode != 0:
+                failures.append(f"{engine}: see its output above")
+    else:
+        with sync_playwright() as p:
+            for engine in ENGINES:
+                run_engine(p, engine, origin, interactions)
     if server:
         server.shutdown()
     if failures:
