@@ -957,5 +957,19 @@
     "find": "        if self.unfolded.iter().any(|k| k == \"levels\") {\n            out.push(self.combat_levels());\n        }",
     "replace": "        out.push(self.combat_levels());",
     "test": "the_combat_levels_and_log_start_folded_and_open_with_a_tap"
+  },
+  {
+    "name": "the + plan button follows the mode",
+    "file": "crates/core/src/view.rs",
+    "find": "if open && self.s.plan.len() < self.s.plan_max() {",
+    "replace": "if open && self.s.plan.len() < c::PLAN_STEPS {",
+    "test": "the_plus_plan_button_follows_the_modes_limit"
+  },
+  {
+    "name": "the enemy's + plan button follows the mode",
+    "file": "crates/core/src/view.rs",
+    "find": "        if self.s.plan.len() < self.s.plan_max() {",
+    "replace": "        if self.s.plan.len() < c::PLAN_STEPS {",
+    "test": "the_plus_plan_button_follows_the_modes_limit"
   }
 ]

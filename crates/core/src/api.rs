@@ -2411,4 +2411,37 @@ mod tests {
         let v = ui(&g.act("fold", "levels", 0));
         assert!(!has(&v, "What your combat levels do"));
     }
+
+    #[test]
+    fn the_plus_plan_button_follows_the_modes_limit() {
+        // Basic holds 5 steps and Advanced 15: the + Plan button on cards
+        // must follow the mode, not stop at 5 (T26).
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        g.state_mut().bank.insert("bronze_sword".into(), 1);
+        fn find(v: &serde_json::Value, id: &str) -> bool {
+            match v {
+                serde_json::Value::Object(o) => {
+                    (o.get("act").is_some_and(|a| a == "plan.add") && o.get("value").is_some_and(|x| x == id))
+                        || o.values().any(|x| find(x, id))
+                }
+                serde_json::Value::Array(a) => a.iter().any(|x| find(x, id)),
+                _ => false,
+            }
+        }
+        let has_add = |g: &mut Game, tab: &str, id: &str| find(&ui(&g.act("tab", tab, 0))["blocks"], id);
+        for _ in 0..5 {
+            g.act("plan.add", "tree", 0);
+        }
+        assert!(!has_add(&mut g, "woodcutting", "tree"), "basic: full at 5");
+        assert!(!has_add(&mut g, "combat", "chicken"));
+        g.act("plan.advanced", "1", 0);
+        assert!(has_add(&mut g, "woodcutting", "tree"), "advanced: room for 15");
+        assert!(has_add(&mut g, "combat", "chicken"));
+        for _ in 5..15 {
+            g.act("plan.add", "tree", 0);
+        }
+        assert_eq!(g.state().plan.len(), 15);
+        assert!(!has_add(&mut g, "woodcutting", "tree"), "advanced: full at 15");
+    }
 }

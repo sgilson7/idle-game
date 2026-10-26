@@ -1061,7 +1061,7 @@ impl View<'_> {
             .tone("primary")
         };
         let mut buttons = vec![main];
-        if open && self.s.plan.len() < c::PLAN_STEPS {
+        if open && self.s.plan.len() < self.s.plan_max() {
             buttons.push(button(self.t.s("plan_add"), "plan.add", a.id));
         }
         Card {
@@ -1731,7 +1731,7 @@ impl View<'_> {
             .tone("primary")
         };
         let mut buttons = vec![main];
-        if self.s.plan.len() < c::PLAN_STEPS {
+        if self.s.plan.len() < self.s.plan_max() {
             buttons.push(button(self.t.s("plan_add"), "plan.add", e.id));
         }
         Card {
