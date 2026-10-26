@@ -552,10 +552,18 @@ function draw(json) {
   drawTabs(ui.tabs, ui.groups);
   const main = el("main");
   const keep = lastScreen === ui.screen ? main.scrollTop : 0;
+  // A redraw from the action timer must not take the keyboard away from a
+  // search box being typed in (R19.1): note it, and give focus back.
+  const typing = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.act : "";
   const frag = document.createDocumentFragment();
   drawBlocks(ui.blocks, frag);
   main.replaceChildren(frag);
   main.scrollTop = keep;
+  const again = typing && main.querySelector('input[data-act="' + typing + '"]');
+  if (again) {
+    again.focus();
+    again.setSelectionRange(again.value.length, again.value.length);
+  }
   lastScreen = ui.screen;
   document.body.dataset.screen = ui.screen;
   drawSheet(ui.sheet);
