@@ -100,8 +100,8 @@
   {
     "name": "armour takes damage off",
     "file": "crates/core/src/game.rs",
-    "find": " * (100 - self.armour().1 * c::ARMOUR_PCT_PER_TIER) / 100",
-    "replace": "",
+    "find": "let hit = self.rng.below(enemy.hit + 1) * (100 - guard) / 100;",
+    "replace": "let hit = self.rng.below(enemy.hit + 1) * (100 - guard * 0) / 100;",
     "test": "armour_means_less_food_eaten_in_the_same_fight"
   },
   {
