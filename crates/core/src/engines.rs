@@ -5,7 +5,8 @@
 //! region and a timer that `advance` runs alongside your one action.
 
 use crate::content::{self as c, Engine, RoomEffect};
-use crate::game::{Caravan, Report, Research, Servant, State};
+use crate::game::{Caravan, Follower, Report, Research, Servant, Show, State};
+use crate::xp;
 
 /// What is open at one moment, for the time loop's many checks.
 pub(crate) struct Open {
@@ -19,6 +20,7 @@ pub(crate) struct Open {
 pub(crate) struct Timers {
     pub servants: Vec<Option<u64>>,
     pub machines: Vec<Option<u64>>,
+    pub followers: Vec<Option<u64>>,
 }
 
 /// An order a town has posted: what it wants, how many, and what it pays.
@@ -139,6 +141,9 @@ impl State {
     /// Whether a skill can be trained: the old skills always, the engine
     /// skills once their engine is open.
     pub fn skill_open(&self, skill: usize) -> bool {
+        if skill == c::PERFORMANCE {
+            return self.fame_open();
+        }
         match c::engine_of_skill(skill) {
             Some(e) => self.engine_open(e),
             None => true,
@@ -468,6 +473,22 @@ impl State {
                 }
             }
         }
+        for i in 0..self.followers.len() {
+            if let Some(need) = self.follower_need_in(i, &open) {
+                if self.followers[i].progress >= need {
+                    self.followers[i].progress = 0;
+                    if let Some(ai) = c::action_index(&self.followers[i].job) {
+                        self.produce(ai, false, r);
+                        self.followers[i].xp += c::ACTIONS[ai].xp;
+                    }
+                }
+            }
+        }
+        if self.show.as_ref().is_some_and(|sh| sh.back <= self.sim_ms) {
+            if let Some(sh) = self.show.take() {
+                self.show_ends(&sh, r);
+            }
+        }
         let now = self.sim_ms;
         let (home, away): (Vec<Caravan>, Vec<Caravan>) =
             self.caravans.drain(..).partition(|cv| cv.back <= now);
@@ -490,7 +511,7 @@ impl State {
             .filter(|&r| self.region_open(r))
             .map(|r| c::NOBLE_RANKS[r][self.rank_in(Engine::Nobility, r)].income)
             .sum();
-        base * (100 + c::INCOME_PCT * self.rooms_of(RoomEffect::Income)) / 100
+        base * (100 + c::INCOME_PCT * self.rooms_of(RoomEffect::Income)) / 100 * (100 + self.fame_pct()) / 100
     }
 
     /// The estate's hour: its income, then each servant's wage and food.
@@ -685,7 +706,7 @@ impl State {
         let h = mix(w * 1_000 + t as u64 * 10 + slot);
         let item = town.wants[(h % town.wants.len() as u64) as usize];
         let n = 10 * (1 + (h >> 16) % 5);
-        let gold = c::value(item) * n * c::ORDER_PAY_PCT / 100;
+        let gold = c::value(item) * n * c::ORDER_PAY_PCT / 100 * (100 + self.fame_pct()) / 100;
         Order {
             town: t,
             slot,
@@ -969,6 +990,162 @@ impl State {
     }
 }
 
+// ---------- the bard: Fame, shows and followers (T18, IG-Q54 A, IG-Q56 A) ----------
+
+impl State {
+    /// Fame opens at a total level, with the Performance skill.
+    pub fn fame_open(&self) -> bool {
+        self.total_level() >= c::FAME_AT
+    }
+
+    /// The next rank on a region's Fame ladder, if the region is open.
+    pub fn fame_next_in(&self, reg: usize) -> Option<&'static c::FameRank> {
+        if !self.fame_open() || !self.region_open(reg) {
+            return None;
+        }
+        c::FAME_RANKS.get(reg)?.get(self.fame[reg] + 1)
+    }
+
+    /// Whether the next rank can be paid for now.
+    pub fn fame_ready_in(&self, reg: usize) -> bool {
+        self.fame_next_in(reg).is_some_and(|rk| {
+            self.level(c::PERFORMANCE) >= rk.level && self.have("renown") >= rk.renown && self.gold >= rk.gold
+        })
+    }
+
+    /// Rises a rank: spends the renown and gold. In the Vale, ranks 1 to 3
+    /// each bring a follower, three at most ever.
+    pub fn rise_fame_in(&mut self, reg: usize) -> bool {
+        if !self.fame_ready_in(reg) {
+            return false;
+        }
+        let Some(rk) = self.fame_next_in(reg) else {
+            return false;
+        };
+        let mut r = Report::default();
+        self.take("renown", rk.renown, &mut r);
+        self.gold -= rk.gold;
+        self.fame[reg] += 1;
+        if reg == 0
+            && c::FOLLOWER_RANKS.contains(&self.fame[0])
+            && self.followers.len() < c::FOLLOWER_RANKS.len()
+        {
+            self.followers.push(Follower::default());
+        }
+        true
+    }
+
+    /// Fame ranks above the first, in every open region.
+    pub fn fame_sum(&self) -> u64 {
+        (0..c::REGIONS.len())
+            .filter(|&r| self.region_open(r))
+            .map(|r| self.fame[r] as u64)
+            .sum()
+    }
+
+    /// What fame adds to orders and the estate's income, in percent.
+    pub fn fame_pct(&self) -> u64 {
+        if self.fame_open() {
+            c::FAME_PCT * self.fame_sum()
+        } else {
+            0
+        }
+    }
+
+    /// Whether a venue can be booked now, and if not, what is in the way:
+    /// `Err(None)` for a rank, a show already running or a shut region;
+    /// `Err(Some(item))` for food the crowd needs.
+    pub fn venue_ready(&self, v: &c::Venue) -> Result<(), Option<&'static str>> {
+        if !self.fame_open()
+            || self.show.is_some()
+            || !self.region_open(v.region)
+            || self.fame[v.region] < v.rank
+        {
+            return Err(None);
+        }
+        match v.needs.iter().find(|(i, n)| self.have(i) < *n) {
+            Some((i, _)) => Err(Some(i)),
+            None => Ok(()),
+        }
+    }
+
+    /// Books a show: the crowd's food is spent now; gold and renown come
+    /// when it ends.
+    pub fn book(&mut self, venue: &str) -> bool {
+        let Some(v) = c::venue_index(venue).map(|i| &c::VENUES[i]) else {
+            return false;
+        };
+        if self.venue_ready(v).is_err() {
+            return false;
+        }
+        let mut r = Report::default();
+        for (i, n) in v.needs {
+            self.take(i, *n, &mut r);
+        }
+        self.show = Some(Show {
+            venue: v.id.to_string(),
+            back: self.sim_ms + v.ms,
+        });
+        true
+    }
+
+    pub(crate) fn show_ends(&mut self, sh: &Show, r: &mut Report) {
+        let Some(v) = c::venue_index(&sh.venue).map(|i| &c::VENUES[i]) else {
+            return;
+        };
+        self.gold += v.gold;
+        r.gold += v.gold;
+        self.put("renown", v.renown, r, false);
+        let xp = v.renown * c::SHOW_XP_PER_RENOWN * self.mult_bp() / 10_000;
+        self.gain(c::PERFORMANCE, xp, r);
+        r.shows.push((v.id.to_string(), v.gold, v.renown));
+        self.count("shows", 1);
+    }
+
+    /// A follower's level, from its own experience.
+    pub fn follower_level(&self, i: usize) -> u32 {
+        self.followers.get(i).map_or(1, |f| xp::level(f.xp))
+    }
+
+    /// A follower's speed against yours, in percent: a quarter at level 1,
+    /// all of it at `FOLLOWER_FULL`.
+    pub fn follower_pct(&self, i: usize) -> u64 {
+        let l = self.follower_level(i).min(c::FOLLOWER_FULL) as u64;
+        c::FOLLOWER_START_PCT + (100 - c::FOLLOWER_START_PCT) * (l - 1) / (c::FOLLOWER_FULL as u64 - 1)
+    }
+
+    /// Whether an action is one a follower can do: gathering you can do.
+    pub fn follower_can(&self, id: &str) -> bool {
+        c::action_index(id).is_some_and(|ai| {
+            let a = &c::ACTIONS[ai];
+            matches!(a.skill, c::WOODCUTTING | c::MINING | c::FISHING) && self.unlocked(id)
+        })
+    }
+
+    pub(crate) fn follower_need_in(&self, i: usize, open: &Open) -> Option<u64> {
+        let f = self.followers.get(i)?;
+        let ai = c::action_index(&f.job)?;
+        let a = &c::ACTIONS[ai];
+        if !matches!(a.skill, c::WOODCUTTING | c::MINING | c::FISHING)
+            || a.region >= open.regions
+            || self.level(a.skill) < a.level
+        {
+            return None;
+        }
+        Some(self.duration(a.id) * 100 / self.follower_pct(i))
+    }
+
+    /// Sets a follower to gather; an empty job rests it.
+    pub fn set_follower(&mut self, i: usize, job: &str) -> bool {
+        if i >= self.followers.len() || !(job.is_empty() || self.follower_can(job)) {
+            return false;
+        }
+        self.followers[i].job = job.to_string();
+        self.followers[i].progress = 0;
+        true
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -998,11 +1175,12 @@ mod tests {
         let mut s = State::new(1);
         assert!(!s.engine_open(Engine::Trader));
         assert!(!s.unlocked("plank"));
-        // 18 skills: 17 at level 8 (136) and Hitpoints at 14 make 150.
+        // 19 skills: 17 at level 8 (136), Hitpoints at 13 and Performance at 1 make 150.
         for i in 0..c::SKILLS.len() {
             s.xp[i] = xp::at(8);
         }
-        s.xp[c::HITPOINTS] = xp::at(14);
+        s.xp[c::HITPOINTS] = xp::at(13);
+        s.xp[c::PERFORMANCE] = 0;
         assert_eq!(s.total_level(), 150);
         assert!(s.engine_open(Engine::Trader));
         assert!(s.unlocked("plank"));
@@ -1475,15 +1653,17 @@ mod region_tests {
 
     #[test]
     fn regions_open_at_300_500_and_700_and_close_at_prestige() {
-        // 18 skills: level 16 is 288, 17 is 306; 27 is 486, 28 is 504; 38 is 684, 39 is 702.
-        assert_eq!(at(16).regions_open(), 1);
-        assert_eq!(at(17).regions_open(), 2);
-        assert_eq!(at(27).regions_open(), 2);
-        assert_eq!(at(28).regions_open(), 3);
-        assert_eq!(at(38).regions_open(), 3);
-        assert_eq!(at(39).regions_open(), 4);
-        let mut s = at(50);
-        assert_eq!(s.total_level(), 900);
+        // 19 skills (T18): level 15 is 285, 16 is 304; 26 is 494, 27 is 513; 36 is 684, 37 is 703.
+        assert_eq!(at(15).regions_open(), 1);
+        assert_eq!(at(16).regions_open(), 2);
+        assert_eq!(at(26).regions_open(), 2);
+        assert_eq!(at(27).regions_open(), 3);
+        assert_eq!(at(36).regions_open(), 3);
+        assert_eq!(at(37).regions_open(), 4);
+        // 47 is 893, 48 is 912.
+        assert!(!at(47).can_prestige());
+        let mut s = at(48);
+        assert_eq!(s.total_level(), 912);
         assert!(s.can_prestige());
         s.do_prestige(1);
         assert_eq!(s.regions_open(), 1);
@@ -1492,12 +1672,12 @@ mod region_tests {
     #[test]
     fn a_region_row_waits_for_its_region() {
         // Driftwood is a Coast tree at Woodcutting 3.
-        let s = at(16);
+        let s = at(15);
         assert!(!s.unlocked("driftwood_tree"));
-        assert!(at(17).unlocked("driftwood_tree"));
+        assert!(at(16).unlocked("driftwood_tree"));
         assert!(!s.unlocked("shore_crab"));
         assert!(!s.unlocked("sunken_ship"));
-        assert!(at(17).unlocked("sunken_ship"));
+        assert!(at(16).unlocked("sunken_ship"));
     }
 
     #[test]
@@ -1511,7 +1691,7 @@ mod region_tests {
         // one chop at mastery 1: no double from mastery, so the 2 is the rare tree
         assert_eq!(s.have(logs), 2);
         // without the Coast there is no rare tree
-        assert_eq!(at(16).rare_tree(), None);
+        assert_eq!(at(15).rare_tree(), None);
     }
 
     #[test]
@@ -1621,12 +1801,12 @@ mod region_tests {
     #[test]
     fn each_later_region_raises_every_rooms_top_level() {
         // The Kitchen: 5 in the Vale, then 7, 9, 10 (two a region, at most 10).
-        assert_eq!(at(16).room_max(c::KITCHEN), 5);
-        assert_eq!(at(17).room_max(c::KITCHEN), 7);
-        assert_eq!(at(28).room_max(c::KITCHEN), 9);
-        assert_eq!(at(39).room_max(c::KITCHEN), 10);
+        assert_eq!(at(15).room_max(c::KITCHEN), 5);
+        assert_eq!(at(16).room_max(c::KITCHEN), 7);
+        assert_eq!(at(27).room_max(c::KITCHEN), 9);
+        assert_eq!(at(37).room_max(c::KITCHEN), 10);
         // the Garden stops at 4
-        assert_eq!(at(39).room_max(c::GARDEN), 4);
+        assert_eq!(at(37).room_max(c::GARDEN), 4);
     }
 
     #[test]
@@ -1754,7 +1934,7 @@ mod region_tests {
         let mut s = at(30);
         assert_eq!(s.patches_open(), 3 + 2);
         s.xp[c::FARMING] = xp::at(30);
-        assert_eq!(at(16).patches_open(), 3);
+        assert_eq!(at(15).patches_open(), 3);
     }
 }
 
@@ -1825,5 +2005,143 @@ mod shop_tests {
                 assert!(c::value(i) < c::shop_price(i), "{i} sells for what it costs");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod bard_tests {
+    use crate::content::{self as c};
+    use crate::game::{Report, State};
+    use crate::xp;
+
+    fn at(level: u32) -> State {
+        let mut s = State::new(3);
+        for i in 0..c::SKILLS.len() {
+            s.xp[i] = xp::at(level);
+        }
+        s
+    }
+
+    fn run(s: &mut State, ms: u64) -> Report {
+        let mut r = Report::begin(s, ms, 0);
+        s.advance(ms, &mut r);
+        r
+    }
+
+    #[test]
+    fn performance_opens_at_total_level_50() {
+        // 19 skills: level 2 is 38, level 3 is 57.
+        let mut s = at(2);
+        s.bank.insert("wooden_flute".into(), 1);
+        assert!(!s.fame_open());
+        assert!(!s.unlocked("jig"));
+        let s = at(3);
+        assert!(s.fame_open());
+        assert!(s.unlocked("jig"));
+    }
+
+    #[test]
+    fn a_song_needs_its_instrument_held_and_makes_renown() {
+        let mut s = at(3);
+        assert_eq!(s.missing("jig").as_deref(), Some("wooden_flute"));
+        s.bank.insert("wooden_flute".into(), 1);
+        assert_eq!(s.missing("jig"), None);
+        let xp0 = s.xp[c::PERFORMANCE];
+        s.start("jig", 0);
+        run(&mut s, 3_000);
+        assert_eq!(s.have("renown"), 1);
+        assert_eq!(s.have("wooden_flute"), 1, "held, not spent");
+        assert_eq!(s.xp[c::PERFORMANCE] - xp0, 10);
+    }
+
+    #[test]
+    fn three_songs_make_other_work_faster_for_an_hour() {
+        let mut s = at(60);
+        s.bank.insert("iron_horn".into(), 1);
+        s.bank.insert("lute".into(), 1);
+        s.bank.insert("golden_harp".into(), 1);
+        let swing = s.duration("chicken");
+        let chop = s.duration("tree");
+        let crop = s.grow_ms(&c::CROPS[0]);
+        for song in ["war_march", "harvest_hymn", "song_of_the_hunt"] {
+            s.start(song, 0);
+            let ms = s.duration(song);
+            run(&mut s, ms);
+        }
+        assert_eq!(s.duration("chicken"), swing * 90 / 100);
+        assert_eq!(s.duration("tree"), chop * 90 / 100);
+        assert_eq!(s.grow_ms(&c::CROPS[0]), crop * 90 / 100);
+        s.stop();
+        run(&mut s, c::BUFF_MS);
+        assert_eq!(s.duration("chicken"), swing);
+        assert_eq!(s.duration("tree"), chop);
+    }
+
+    #[test]
+    fn fame_ranks_spend_renown_and_gold_and_bring_three_followers_at_most() {
+        let mut s = at(99);
+        s.bank.insert("renown".into(), 100_000);
+        s.gold = 10_000_000;
+        assert_eq!(s.fame_pct(), 0);
+        for k in 1..=4 {
+            assert!(s.rise_fame_in(0), "rank {k}");
+        }
+        // 50 + 300 + 1,500 + 6,000 renown; 5,000 + 50,000 + 500,000 gold.
+        assert_eq!(s.have("renown"), 100_000 - 7_850);
+        assert_eq!(s.gold, 10_000_000 - 555_000);
+        assert_eq!(s.followers.len(), 3);
+        assert!(!s.rise_fame_in(0), "the top of the ladder");
+        // four ranks at 5% each
+        assert_eq!(s.fame_pct(), 20);
+        s.do_prestige(1);
+        assert_eq!(s.followers.len(), 3, "followers stay");
+        assert_eq!(s.fame, [0; 4]);
+        // rising again after prestige brings no fourth
+        for i in 0..c::SKILLS.len() {
+            s.xp[i] = xp::at(99);
+        }
+        s.bank.insert("renown".into(), 100_000);
+        s.gold = 10_000_000;
+        assert!(s.rise_fame_in(0));
+        assert_eq!(s.followers.len(), 3);
+    }
+
+    #[test]
+    fn a_booked_show_feeds_its_crowd_now_and_pays_at_the_end() {
+        let mut s = at(3);
+        assert!(!s.book("tavern"), "no shrimp for the crowd");
+        s.bank.insert("shrimp".into(), 20);
+        assert!(!s.book("market_square"), "a higher rank");
+        assert!(s.book("tavern"));
+        assert_eq!(s.have("shrimp"), 10);
+        assert!(!s.book("tavern"), "one show at a time");
+        let gold = s.gold;
+        run(&mut s, 1_800_000 - 1);
+        assert_eq!(s.gold, gold);
+        let r = run(&mut s, 1);
+        assert_eq!(s.gold, gold + 300);
+        assert_eq!(s.have("renown"), 20);
+        assert_eq!(r.shows.len(), 1);
+        assert!(s.show.is_none());
+    }
+
+    #[test]
+    fn a_follower_gathers_at_a_quarter_of_your_speed_and_grows() {
+        let mut s = at(3);
+        s.followers.push(Default::default());
+        assert!(!s.set_follower(0, "jig"), "gathering only");
+        assert!(s.set_follower(0, "tree"));
+        assert_eq!(s.follower_pct(0), 25);
+        // A tree is 3 s for you, 12 s for a new follower.
+        run(&mut s, 11_999);
+        assert_eq!(s.have("logs"), 0);
+        run(&mut s, 1);
+        assert_eq!(s.have("logs"), 1);
+        assert_eq!(s.followers[0].xp, 10);
+        // level 2 is 25 + 75 × 1 / 49 = 26%; level 50 is all of your speed
+        s.followers[0].xp = xp::at(2);
+        assert_eq!(s.follower_pct(0), 26);
+        s.followers[0].xp = xp::at(60);
+        assert_eq!(s.follower_pct(0), 100);
     }
 }

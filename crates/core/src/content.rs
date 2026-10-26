@@ -29,7 +29,7 @@ pub struct Skill {
 /// The skills, in the order the save stores their experience (P1).
 /// Crafting and Farming came later (T5), and the four engine skills later
 /// still (T11 to T14); each goes at the end, so older saves still line up.
-pub const SKILLS: [Skill; 18] = [
+pub const SKILLS: [Skill; 19] = [
     Skill {
         id: "woodcutting",
         kind: Kind::Gather,
@@ -102,6 +102,12 @@ pub const SKILLS: [Skill; 18] = [
         id: "attunement",
         kind: Kind::Make,
     },
+    // The bard (T18, IG-Q56 A): songs are actions that need an instrument
+    // held, not spent, and make renown for the Fame engine.
+    Skill {
+        id: "performance",
+        kind: Kind::Gather,
+    },
 ];
 pub const WOODCUTTING: usize = 0;
 pub const MINING: usize = 1;
@@ -120,6 +126,7 @@ pub const CONSTRUCTION: usize = 14;
 pub const TRADING: usize = 15;
 pub const INVENTION: usize = 16;
 pub const ATTUNEMENT: usize = 17;
+pub const PERFORMANCE: usize = 18;
 /// Hitpoints starts here, as in RuneScape.
 pub const HITPOINTS_START_LEVEL: u32 = 10;
 
@@ -727,6 +734,50 @@ pub const ACTIONS: &[Action] = &[
     region(3, make("voidsteel_plate", 5, 89, 6_670, 489, &[("voidsteel_bar", 4), ("sunstone", 2), ("salamander_leather", 2)], ("voidsteel_plate", 1))),
     region(3, make("ember_silk_robe", 12, 94, 6_820, 544, &[("ember_cloth", 4), ("fire_opal", 2), ("sun_rune", 30)], ("ember_silk_robe", 1))),
     // </gen:actions>
+    // Performance (T18, IG-Q56 A): each song needs its instrument held (`SONG_INSTRUMENTS`).
+    make("wooden_flute", 4, 3, 2_500, 12, &[("logs", 4)], ("wooden_flute", 1)),
+    make("lute", 12, 18, 3_500, 45, &[("oak_plank", 2), ("flax", 4)], ("lute", 1)),
+    make("iron_horn", 5, 28, 4_000, 70, &[("iron_bar", 3)], ("iron_horn", 1)),
+    make("golden_harp", 12, 45, 5_000, 150, &[("maple_logs", 3), ("flax", 10), ("gold_bar", 1)], ("golden_harp", 1)),
+    region(1, make("conch_horn", 12, 30, 4_400, 90, &[("coral", 2), ("brass_bar", 2)], ("conch_horn", 1))),
+    region(2, make("alpine_horn", 4, 40, 4_600, 120, &[("alpine_ash_logs", 6), ("nickel_steel_bar", 1)], ("alpine_horn", 1))),
+    region(3, make("war_drum", 12, 50, 5_200, 170, &[("salamander_leather", 3), ("ashbark_logs", 4)], ("war_drum", 1))),
+    make("jig", PERFORMANCE, 1, 3_000, 10, &[], ("renown", 1)),
+    make("ballad", PERFORMANCE, 10, 4_000, 15, &[], ("renown", 1)),
+    make("lay_of_the_vale", PERFORMANCE, 20, 5_000, 22, &[], ("renown", 2)),
+    make("drinking_song", PERFORMANCE, 30, 5_500, 30, &[], ("renown", 2)),
+    make("war_march", PERFORMANCE, 40, 6_500, 42, &[], ("renown", 3)),
+    make("harvest_hymn", PERFORMANCE, 50, 7_000, 52, &[], ("renown", 3)),
+    make("court_air", PERFORMANCE, 60, 8_000, 75, &[], ("renown", 4)),
+    make("song_of_the_hunt", PERFORMANCE, 75, 10_000, 125, &[], ("renown", 5)),
+    make("legend_of_the_vale", PERFORMANCE, 90, 12_000, 190, &[], ("renown", 6)),
+    region(1, make("sea_shanty", PERFORMANCE, 3, 3_090, 11, &[], ("renown", 2))),
+    region(1, make("tide_song", PERFORMANCE, 12, 4_120, 16, &[], ("renown", 2))),
+    region(1, make("gull_reel", PERFORMANCE, 22, 5_150, 24, &[], ("renown", 4))),
+    region(1, make("shanty_of_the_deep", PERFORMANCE, 32, 5_660, 32, &[], ("renown", 4))),
+    region(1, make("mermaids_air", PERFORMANCE, 42, 6_700, 45, &[], ("renown", 6))),
+    region(1, make("storm_chorus", PERFORMANCE, 52, 7_210, 56, &[], ("renown", 6))),
+    region(1, make("harbour_hymn", PERFORMANCE, 64, 8_240, 81, &[], ("renown", 8))),
+    region(1, make("kraken_saga", PERFORMANCE, 78, 10_300, 135, &[], ("renown", 10))),
+    region(1, make("song_of_the_coast", PERFORMANCE, 92, 12_360, 205, &[], ("renown", 12))),
+    region(2, make("yodel", PERFORMANCE, 5, 3_180, 12, &[], ("renown", 3))),
+    region(2, make("shepherds_pipe", PERFORMANCE, 14, 4_240, 17, &[], ("renown", 3))),
+    region(2, make("snowfall_ballad", PERFORMANCE, 24, 5_300, 26, &[], ("renown", 6))),
+    region(2, make("echo_song", PERFORMANCE, 34, 5_830, 35, &[], ("renown", 6))),
+    region(2, make("alpine_call", PERFORMANCE, 44, 6_890, 49, &[], ("renown", 9))),
+    region(2, make("avalanche_march", PERFORMANCE, 54, 7_420, 60, &[], ("renown", 9))),
+    region(2, make("frost_hymn", PERFORMANCE, 66, 8_480, 87, &[], ("renown", 12))),
+    region(2, make("griffin_saga", PERFORMANCE, 80, 10_600, 145, &[], ("renown", 15))),
+    region(2, make("song_of_the_peaks", PERFORMANCE, 94, 12_720, 220, &[], ("renown", 18))),
+    region(3, make("sand_chant", PERFORMANCE, 7, 3_270, 12, &[], ("renown", 4))),
+    region(3, make("caravan_song", PERFORMANCE, 16, 4_360, 19, &[], ("renown", 4))),
+    region(3, make("dune_ballad", PERFORMANCE, 26, 5_450, 27, &[], ("renown", 8))),
+    region(3, make("fire_dance", PERFORMANCE, 36, 6_000, 37, &[], ("renown", 8))),
+    region(3, make("mirage_air", PERFORMANCE, 46, 7_090, 52, &[], ("renown", 12))),
+    region(3, make("drum_of_embers", PERFORMANCE, 56, 7_630, 64, &[], ("renown", 12))),
+    region(3, make("sun_hymn", PERFORMANCE, 68, 8_720, 93, &[], ("renown", 16))),
+    region(3, make("wyrm_saga", PERFORMANCE, 82, 10_900, 155, &[], ("renown", 20))),
+    region(3, make("song_of_the_wastes", PERFORMANCE, 96, 13_080, 236, &[], ("renown", 24))),
 ];
 
 /// Ids to table positions, built once: the full game has about 500 actions
@@ -760,7 +811,7 @@ pub struct Enemy {
 pub const ENEMIES: &[Enemy] = &[
     Enemy { id: "chicken", level: 1, hp: 30, hit: 10, weak: MELEE, drops: &[("feathers", 5, 1), ("bones", 1, 1), ("potato_seed", 2, 3)], gold: 0, region: 0 },
     Enemy { id: "cow", level: 1, hp: 80, hit: 10, weak: RANGED, drops: &[("cowhide", 1, 1), ("bones", 1, 1), ("sweetcorn_seed", 1, 6)], gold: 0, region: 0 },
-    Enemy { id: "goblin", level: 5, hp: 50, hit: 20, weak: MAGIC, drops: &[("bones", 1, 1), ("feathers", 10, 4), ("onion_seed", 2, 3), ("cabbage_seed", 1, 4)], gold: 12, region: 0 },
+    Enemy { id: "goblin", level: 5, hp: 50, hit: 20, weak: MAGIC, drops: &[("bones", 1, 1), ("feathers", 10, 4), ("onion_seed", 2, 3), ("cabbage_seed", 1, 4), ("flax_seed", 2, 4)], gold: 12, region: 0 },
     Enemy { id: "spider", level: 20, hp: 220, hit: 40, weak: MELEE, drops: &[("spider_silk", 1, 4)], gold: 30, region: 0 },
     Enemy { id: "hill_giant", level: 30, hp: 350, hit: 60, weak: MAGIC, drops: &[("big_bones", 1, 1), ("iron_ore", 3, 3), ("coal", 2, 4), ("tomato_seed", 2, 4)], gold: 60, region: 0 },
     Enemy { id: "black_knight", level: 45, hp: 420, hit: 80, weak: RANGED, drops: &[("steel_bar", 1, 3)], gold: 120, region: 0 },
@@ -1004,6 +1055,8 @@ pub const CROPS: &[Crop] = &[
     crop("sweetcorn", 28, 45, "sweetcorn_seed", 20, 24, 20),
     crop("strawberry", 40, 60, "strawberry_seed", 26, 31, 40),
     crop("watermelon", 55, 90, "watermelon_seed", 48, 55, 90),
+    // Strings for the bard's lute and harp (T18).
+    crop("flax", 3, 15, "flax_seed", 9, 10, 3),
     // <gen:crops>
     region_crop(1, crop("kelp", 5, 20, "kelp_seed", 10, 12, 2)),
     region_crop(1, crop("sea_beet", 15, 30, "sea_beet_seed", 15, 19, 7)),
@@ -1117,6 +1170,9 @@ pub fn region_goods(r: usize) -> Vec<&'static str> {
 /// What the shop pays for one of each item.
 #[rustfmt::skip]
 pub const VALUES: &[(&str, u64)] = &[
+    // The bard (T18): instruments, flax; renown is the Fame engine's and does not sell.
+    ("wooden_flute", 30), ("lute", 120), ("iron_horn", 90), ("golden_harp", 600), ("conch_horn", 300),
+    ("alpine_horn", 500), ("war_drum", 900), ("flax", 3), ("flax_seed", 2), ("renown", 0),
     ("logs", 1), ("oak_logs", 3), ("willow_logs", 6), ("teak_logs", 10), ("maple_logs", 15), ("mahogany_logs", 22),
     ("yew_logs", 40), ("magic_logs", 90), ("redwood_logs", 160),
     ("rune_essence", 1), ("copper_ore", 2), ("tin_ore", 2), ("iron_ore", 6), ("coal", 9), ("gold_ore", 28),
@@ -1359,6 +1415,128 @@ pub fn engine_of_skill(skill: usize) -> Option<Engine> {
         _ => None,
     }
 }
+
+// ---------- the bard: Performance and Fame (T18, IG-Q56 A, IG-Q57 A) ----------
+
+/// Fame opens at this total level, before the Trader.
+pub const FAME_AT: u32 = 50;
+
+/// The instrument each song needs held; it is not spent.
+#[rustfmt::skip]
+pub const SONG_INSTRUMENTS: &[(&str, &str)] = &[
+    ("jig", "wooden_flute"),
+    ("ballad", "wooden_flute"),
+    ("lay_of_the_vale", "lute"),
+    ("drinking_song", "iron_horn"),
+    ("war_march", "iron_horn"),
+    ("harvest_hymn", "lute"),
+    ("court_air", "golden_harp"),
+    ("song_of_the_hunt", "golden_harp"),
+    ("legend_of_the_vale", "golden_harp"),
+    ("sea_shanty", "wooden_flute"),
+    ("tide_song", "wooden_flute"),
+    ("gull_reel", "lute"),
+    ("shanty_of_the_deep", "conch_horn"),
+    ("mermaids_air", "lute"),
+    ("storm_chorus", "conch_horn"),
+    ("harbour_hymn", "golden_harp"),
+    ("kraken_saga", "conch_horn"),
+    ("song_of_the_coast", "golden_harp"),
+    ("yodel", "wooden_flute"),
+    ("shepherds_pipe", "wooden_flute"),
+    ("snowfall_ballad", "lute"),
+    ("echo_song", "iron_horn"),
+    ("alpine_call", "alpine_horn"),
+    ("avalanche_march", "alpine_horn"),
+    ("frost_hymn", "golden_harp"),
+    ("griffin_saga", "alpine_horn"),
+    ("song_of_the_peaks", "golden_harp"),
+    ("sand_chant", "wooden_flute"),
+    ("caravan_song", "lute"),
+    ("dune_ballad", "lute"),
+    ("fire_dance", "iron_horn"),
+    ("mirage_air", "golden_harp"),
+    ("drum_of_embers", "war_drum"),
+    ("sun_hymn", "golden_harp"),
+    ("wyrm_saga", "war_drum"),
+    ("song_of_the_wastes", "golden_harp"),
+];
+
+/// Songs that strengthen other work for an hour of game time after each
+/// is played (IG-Q57 A): fights, crops planted and gathering go 10% faster.
+pub const SONG_BUFFS: &[(&str, &str)] = &[
+    ("war_march", "fight"),
+    ("harvest_hymn", "farm"),
+    ("song_of_the_hunt", "gather"),
+];
+pub const BUFF_MS: u64 = 3_600_000;
+pub const BUFF_PCT: u64 = 10;
+
+/// A rank on a Fame ladder: the Performance level, the renown spent and the gold.
+pub struct FameRank {
+    pub id: &'static str,
+    pub level: u32,
+    pub renown: u64,
+    pub gold: u64,
+}
+
+const fn fame(id: &'static str, level: u32, renown: u64, gold: u64) -> FameRank {
+    FameRank {
+        id,
+        level,
+        renown,
+        gold,
+    }
+}
+
+/// One ladder for each region; the first rank of each is where you start.
+#[rustfmt::skip]
+pub const FAME_RANKS: [[FameRank; 5]; 4] = [
+    [fame("busker", 1, 0, 0), fame("tavern_player", 10, 50, 0), fame("town_favourite", 25, 300, 5_000), fame("court_bard", 45, 1_500, 50_000), fame("legend_of_the_vale", 70, 6_000, 500_000)],
+    [fame("dockside_singer", 3, 0, 0), fame("shanty_master", 15, 200, 10_000), fame("harbour_favourite", 35, 1_000, 100_000), fame("admirals_bard", 55, 4_000, 1_000_000), fame("legend_of_the_coast", 80, 15_000, 5_000_000)],
+    [fame("hill_piper", 5, 0, 0), fame("lodge_singer", 18, 400, 25_000), fame("valley_favourite", 38, 2_000, 250_000), fame("mountain_kings_bard", 58, 8_000, 2_500_000), fame("legend_of_the_peaks", 85, 30_000, 12_000_000)],
+    [fame("camp_drummer", 7, 0, 0), fame("caravan_singer", 20, 800, 60_000), fame("oasis_favourite", 40, 4_000, 600_000), fame("sultans_bard", 60, 16_000, 6_000_000), fame("legend_of_the_wastes", 90, 60_000, 25_000_000)],
+];
+
+/// Towns pay this many percent more for orders, and the estate this many
+/// percent more income, for each Fame rank above the first in every open region.
+pub const FAME_PCT: u64 = 5;
+
+/// A venue for a booked show: the Fame rank it needs in its region, how
+/// long the show runs, what the crowd eats, and what it pays at the end.
+pub struct Venue {
+    pub id: &'static str,
+    pub region: usize,
+    pub rank: usize,
+    pub ms: u64,
+    pub needs: &'static [(&'static str, u64)],
+    pub gold: u64,
+    pub renown: u64,
+}
+
+#[rustfmt::skip]
+pub const VENUES: &[Venue] = &[
+    Venue { id: "tavern", region: 0, rank: 0, ms: 1_800_000, needs: &[("shrimp", 10)], gold: 300, renown: 20 },
+    Venue { id: "market_square", region: 0, rank: 1, ms: 3_600_000, needs: &[("trout", 20)], gold: 1_500, renown: 60 },
+    Venue { id: "great_hall", region: 0, rank: 2, ms: 7_200_000, needs: &[("salmon", 20)], gold: 8_000, renown: 200 },
+    Venue { id: "royal_court", region: 0, rank: 3, ms: 14_400_000, needs: &[("shark", 10)], gold: 40_000, renown: 600 },
+    Venue { id: "harbour_inn", region: 1, rank: 1, ms: 7_200_000, needs: &[("rice", 20)], gold: 20_000, renown: 300 },
+    Venue { id: "mountain_lodge", region: 2, rank: 1, ms: 10_800_000, needs: &[("hops", 20)], gold: 60_000, renown: 700 },
+    Venue { id: "oasis_court", region: 3, rank: 1, ms: 14_400_000, needs: &[("dates", 20)], gold: 150_000, renown: 1_500 },
+];
+
+pub fn venue_index(id: &str) -> Option<usize> {
+    VENUES.iter().position(|v| v.id == id)
+}
+
+/// Followers (IG-Q54 A): a fan joins at each of these Vale Fame ranks, three
+/// at most ever, kept through prestige. Each gathers at a quarter of your
+/// speed at its level 1, rising to your full speed at `FOLLOWER_FULL`.
+pub const FOLLOWER_RANKS: [usize; 3] = [1, 2, 3];
+pub const FOLLOWER_START_PCT: u64 = 25;
+pub const FOLLOWER_FULL: u32 = 50;
+/// Performance XP a show gives at its end, for each renown it pays.
+pub const SHOW_XP_PER_RENOWN: u64 = 2;
 
 // ---------- recipes (T10) ----------
 

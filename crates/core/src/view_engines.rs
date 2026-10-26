@@ -30,7 +30,11 @@ impl View<'_> {
     /// A tab whose engine has not opened: what opens it, and how far you are.
     pub(crate) fn locked(&self, id: &str) -> Vec<Block> {
         let e = Self::engine_of_tab(id);
-        let at = self.s.engine_at(e);
+        let at = if matches!(id, "performance" | "stage") {
+            c::FAME_AT
+        } else {
+            self.s.engine_at(e)
+        };
         let tl = self.s.total_level();
         vec![
             self.head(id, self.tab_name(id), self.t.s("rank_tag"), ""),
@@ -248,6 +252,174 @@ impl View<'_> {
             ],
             ..block("buttons")
         }]
+    }
+
+    // ---------- the stage: Fame, shows and followers (T18) ----------
+
+    pub(crate) fn stage(&self) -> Vec<Block> {
+        let mut out = vec![self.head(
+            "stage",
+            self.t.s("tab_stage"),
+            self.t.t("fame_tag", &[("pct", self.s.fame_pct().to_string())]),
+            "pres",
+        )];
+        out.push(Block {
+            text: self.t.t(
+                "stage_intro",
+                &[
+                    ("pct", c::FAME_PCT.to_string()),
+                    ("n", c::FOLLOWER_RANKS.len().to_string()),
+                ],
+            ),
+            ..block("note")
+        });
+        // The show running, or the venues to book.
+        if let Some(sh) = &self.s.show {
+            let v = c::venue_index(&sh.venue).map(|i| &c::VENUES[i]);
+            let total = v.map_or(1, |v| v.ms);
+            let left = sh.back.saturating_sub(self.s.sim_ms);
+            out.push(Block {
+                title: self
+                    .t
+                    .t("show_on", &[("venue", self.t.s(&format!("venue_{}", sh.venue)))]),
+                bar: Some(Bar {
+                    tone: "pres".into(),
+                    width: width((total - left.min(total)) * 10_000 / total.max(1)),
+                    left: self.t.t("left_time", &[("t", dur(left))]),
+                    right: v.map_or(String::new(), |v| {
+                        self.t
+                            .t("show_pays", &[("n", num(v.gold)), ("renown", num(v.renown))])
+                    }),
+                }),
+                ..block("bar")
+            });
+        }
+        let rows = c::VENUES
+            .iter()
+            .filter(|v| self.s.region_open(v.region))
+            .map(|v| {
+                let ready = self.s.venue_ready(v);
+                let rank_ok = self.s.fame[v.region] >= v.rank;
+                Row {
+                    icon: "stage".into(),
+                    title: self.t.s(&format!("venue_{}", v.id)),
+                    sub: if rank_ok {
+                        self.t.t(
+                            "venue_sub",
+                            &[
+                                ("t", dur(v.ms)),
+                                ("needs", self.list(v.needs)),
+                                ("n", num(v.gold)),
+                                ("renown", num(v.renown)),
+                            ],
+                        )
+                    } else {
+                        self.t.t(
+                            "venue_needs_rank",
+                            &[(
+                                "rank",
+                                self.t.s(&format!("fame_{}", c::FAME_RANKS[v.region][v.rank].id)),
+                            )],
+                        )
+                    },
+                    tone: if rank_ok { String::new() } else { "used".into() },
+                    buttons: if rank_ok {
+                        vec![button(self.t.s("book"), "book", v.id)
+                            .tone("primary")
+                            .enabled(ready.is_ok())]
+                    } else {
+                        Vec::new()
+                    },
+                    ..Row::default()
+                }
+            })
+            .collect();
+        out.push(Block {
+            title: self.t.s("venues_title"),
+            rows,
+            ..block("rows")
+        });
+        // Followers.
+        let mut rows: Vec<Row> = Vec::new();
+        for i in 0..self.s.followers.len() {
+            let f = &self.s.followers[i];
+            let job = if f.job.is_empty() {
+                self.t.s("follower_rests")
+            } else {
+                self.t.t("follower_job", &[("what", self.t.action(&f.job))])
+            };
+            let mut buttons: Vec<Button> = [c::WOODCUTTING, c::MINING, c::FISHING]
+                .iter()
+                .filter_map(|&sk| {
+                    let best = c::ACTIONS
+                        .iter()
+                        .filter(|a| a.skill == sk && self.s.follower_can(a.id))
+                        .max_by_key(|a| (a.level, a.region))?;
+                    Some(
+                        button(self.skill_name(sk), "follower.set", &format!("{i}:{}", best.id))
+                            .icon(c::SKILLS[sk].id)
+                            .pressed(f.job == best.id),
+                    )
+                })
+                .collect();
+            buttons.push(button(self.t.s("follower_rest"), "follower.set", &format!("{i}:")).tone("plain"));
+            rows.push(Row {
+                icon: "follower".into(),
+                title: self.t.t(
+                    "follower_title",
+                    &[
+                        ("k", (i + 1).to_string()),
+                        ("lvl", self.s.follower_level(i).to_string()),
+                    ],
+                ),
+                sub: self.t.t(
+                    "follower_sub",
+                    &[("job", job), ("pct", self.s.follower_pct(i).to_string())],
+                ),
+                buttons,
+                ..Row::default()
+            });
+        }
+        out.push(Block {
+            title: self.t.t(
+                "followers_title",
+                &[
+                    ("n", self.s.followers.len().to_string()),
+                    ("max", c::FOLLOWER_RANKS.len().to_string()),
+                ],
+            ),
+            text: if rows.is_empty() {
+                self.t.s("followers_none")
+            } else {
+                String::new()
+            },
+            rows,
+            ..block("rows")
+        });
+        // The ladders.
+        for r in self.open_regions() {
+            let ranks = c::FAME_RANKS[r]
+                .iter()
+                .map(|rk| {
+                    (
+                        self.t.s(&format!("fame_{}", rk.id)),
+                        self.t.t(
+                            "fame_needs",
+                            &[
+                                ("lvl", rk.level.to_string()),
+                                ("renown", num(rk.renown)),
+                                ("gold", num(rk.gold)),
+                            ],
+                        ),
+                    )
+                })
+                .collect();
+            let rise = vec![button(self.t.s("rise"), "rise.fame", &r.to_string())
+                .tone("pres")
+                .enabled(self.s.fame_ready_in(r))];
+            out.push(self.ladder(self.ladder_title(r), ranks, self.s.fame[r], rise));
+        }
+        out
     }
 
     // ---------- the recipe book (T10) ----------

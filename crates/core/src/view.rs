@@ -265,26 +265,26 @@ pub const GROUPS: [(&str, &[&str]); 5] = [
     ("gather", &["woodcutting", "mining", "fishing", "farming"]),
     ("make", &["firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction"]),
     ("fight", &["combat", "recipes"]),
-    ("engines", &["trader", "estate", "workshop", "observatory"]),
+    ("engines", &["performance", "stage", "trader", "estate", "workshop", "observatory"]),
     ("more", &["bank", "shop", "regions", "plan", "prestige", "settings"]),
 ];
 
 #[rustfmt::skip]
-pub const TABS: [&str; 23] = [
+pub const TABS: [&str; 25] = [
     "woodcutting", "mining", "fishing", "farming",
     "firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction",
     "combat", "recipes",
-    "trader", "estate", "workshop", "observatory",
+    "performance", "stage", "trader", "estate", "workshop", "observatory",
     "bank", "shop", "regions", "plan", "prestige", "settings",
 ];
 
 /// The tabs whose skills or engines take things in and give things out,
 /// for the uses and feeds links.
 #[rustfmt::skip]
-pub const LINK_TABS: [&str; 16] = [
+pub const LINK_TABS: [&str; 18] = [
     "woodcutting", "mining", "fishing", "farming",
     "firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction",
-    "combat", "trader", "estate", "workshop", "observatory",
+    "combat", "performance", "stage", "trader", "estate", "workshop", "observatory",
 ];
 
 /// The tab where a skill's actions are: its own, or its engine's.
@@ -447,6 +447,7 @@ impl View<'_> {
             "estate" => !self.s.engine_reached(c::Engine::Nobility),
             "workshop" => !self.s.engine_reached(c::Engine::Inventor),
             "observatory" => !self.s.engine_reached(c::Engine::Cosmic),
+            "performance" | "stage" => !self.s.fame_open(),
             _ => false,
         }
     }
@@ -516,6 +517,7 @@ impl View<'_> {
             "estate" => self.estate(),
             "workshop" => self.workshop(),
             "observatory" => self.observatory(),
+            "stage" => self.stage(),
             "combat" => self.combat(),
             "bank" => self.bank(),
             "shop" => self.shop(),
@@ -2376,6 +2378,19 @@ impl View<'_> {
                 ..Row::default()
             });
         }
+        for (v, gold, renown) in &r.shows {
+            gains.push(Row {
+                icon: "stage".into(),
+                title: self
+                    .t
+                    .t("show_ended", &[("venue", self.t.s(&format!("venue_{v}")))]),
+                sub: self
+                    .t
+                    .t("n_item", &[("n", num(*renown)), ("item", self.t.item("renown"))]),
+                chip: self.t.t("plus_n", &[("n", num(*gold))]),
+                ..Row::default()
+            });
+        }
         for (t, gold, bandits) in &r.caravans {
             gains.push(Row {
                 icon: "cart".into(),
@@ -2627,6 +2642,18 @@ pub fn io_of(tab: &str) -> (Vec<&'static str>, Vec<&'static str>) {
             .flat_map(|e| e.drops.iter().map(|d| d.0))
             .collect();
         return (ins, outs);
+    }
+    if tab == "performance" {
+        let ins = c::SONG_INSTRUMENTS.iter().map(|(_, i)| *i).collect();
+        return (ins, vec!["renown"]);
+    }
+    if tab == "stage" {
+        let mut ins: Vec<&str> = c::VENUES
+            .iter()
+            .flat_map(|v| v.needs.iter().map(|(i, _)| *i))
+            .collect();
+        ins.push("renown");
+        return (ins, Vec::new());
     }
     if tab == "trader" {
         let ins = c::TOWNS.iter().flat_map(|t| t.wants.iter().copied()).collect();

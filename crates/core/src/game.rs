@@ -14,8 +14,9 @@ use crate::xp;
 /// The save format's version (IG-5). A save from a newer version is not read.
 /// 2 added Crafting, Farming and patches (T5); 3 added the four engines and
 /// their skills (T10 to T14); 4 the regions, their engine tiers, twelve
-/// rooms and dungeons (T15). An older save is brought up to it.
-pub const SAVE_VERSION: u32 = 4;
+/// rooms and dungeons (T15); 5 Performance, Fame, followers and advanced
+/// plans (T18). An older save is brought up to it.
+pub const SAVE_VERSION: u32 = 5;
 
 /// One step of a plan. A plain step runs an action or an enemy id; in
 /// advanced mode (T18, IG-Q53 A) a step can also stop on a condition
@@ -77,6 +78,21 @@ pub struct Servant {
     pub progress: u64,
     /// No wage or no food at the last hour: the servant waits for the next.
     pub unpaid: bool,
+}
+
+/// A show booked at a venue (T18): it pays when the game clock reaches `back`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Show {
+    pub venue: String,
+    pub back: u64,
+}
+
+/// A follower (T18, IG-Q54 A): gathers alongside you and grows with work.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Follower {
+    pub job: String,
+    pub xp: u64,
+    pub progress: u64,
 }
 
 /// A caravan on the road (T12).
@@ -212,6 +228,18 @@ pub struct State {
     /// (IG-Q46 B). The api sets it from the device on every load; not saved.
     #[serde(skip)]
     pub sealed: bool,
+    // ---- the bard (T18) ----
+    /// Rank on each region's Fame ladder.
+    #[serde(default)]
+    pub fame: [usize; 4],
+    #[serde(default)]
+    pub show: Option<Show>,
+    /// Kept through prestige; three at most.
+    #[serde(default)]
+    pub followers: Vec<Follower>,
+    /// Game time each song's strength lasts until: "fight", "farm", "gather".
+    #[serde(default)]
+    pub buffs: BTreeMap<String, u64>,
 }
 
 /// Why an action could not go on.
@@ -258,6 +286,8 @@ pub struct Report {
     pub chests: Vec<String>,
     /// Masterworks, sold as they were made, and the gold they brought.
     pub masterworks: u64,
+    /// Shows that ended: (venue, gold, renown).
+    pub shows: Vec<(String, u64, u64)>,
     /// The plan stopped at this step: it went round doing nothing.
     pub plan_stuck: Option<usize>,
 }
@@ -314,6 +344,10 @@ impl State {
             machines_off: Vec::new(),
             upkeep_hour: 0,
             sealed: false,
+            fame: [0; 4],
+            show: None,
+            followers: Vec::new(),
+            buffs: BTreeMap::new(),
         };
         s.hp = s.max_hp();
         s.note(now, "new", "", 0);
@@ -367,7 +401,7 @@ impl State {
     /// How long one action takes now, after mastery and tools.
     pub fn duration(&self, id: &str) -> u64 {
         if c::enemy_index(id).is_some() || c::dungeon_index(id).is_some() {
-            return c::STYLES[self.style].ms;
+            return self.buffed("fight", c::STYLES[self.style].ms);
         }
         let Some(i) = c::action_index(id) else {
             return 1_000;
@@ -390,7 +424,23 @@ impl State {
         if room > 0 {
             ms = ms * (100 - room) / 100;
         }
+        if matches!(a.skill, c::WOODCUTTING | c::MINING | c::FISHING) {
+            ms = self.buffed("gather", ms);
+        }
         ms
+    }
+
+    /// A song's strength (IG-Q57 A): 10% off while it lasts.
+    pub fn buffed(&self, kind: &str, ms: u64) -> u64 {
+        if self.buff_on(kind) {
+            ms * (100 - c::BUFF_PCT) / 100
+        } else {
+            ms
+        }
+    }
+
+    pub fn buff_on(&self, kind: &str) -> bool {
+        self.buffs.get(kind).is_some_and(|&until| until > self.sim_ms)
     }
 
     /// Chance of a double for a gathering action, in percent (P6).
@@ -441,6 +491,11 @@ impl State {
             return None;
         }
         let a = &c::ACTIONS[c::action_index(id)?];
+        if let Some(&(_, inst)) = c::SONG_INSTRUMENTS.iter().find(|(s, _)| *s == a.id) {
+            if self.have(inst) == 0 {
+                return Some(inst.to_string());
+            }
+        }
         a.needs
             .iter()
             .find(|(i, n)| self.have(i) < *n)
@@ -571,7 +626,7 @@ impl State {
         for _ in 0..self.signs_for(c::FARMING) {
             ms = ms * c::HARVEST_MOON_PCT / 100;
         }
-        ms
+        self.buffed("farm", ms)
     }
 
     /// The compost planting would use: fine ashes first (T15), then ashes.
@@ -811,6 +866,9 @@ impl State {
                 .iter()
                 .map(|m| self.machine_need_in(m, &open))
                 .collect(),
+            followers: (0..self.followers.len())
+                .map(|i| self.follower_need_in(i, &open))
+                .collect(),
         }
     }
 
@@ -840,6 +898,19 @@ impl State {
         for cv in &self.caravans {
             next = next.min(cv.back.saturating_sub(self.sim_ms));
         }
+        for (i, need) in t.followers.iter().enumerate() {
+            if let Some(need) = need {
+                next = next.min(need.saturating_sub(self.followers[i].progress));
+            }
+        }
+        if let Some(sh) = &self.show {
+            next = next.min(sh.back.saturating_sub(self.sim_ms));
+        }
+        for &until in self.buffs.values() {
+            if until > self.sim_ms {
+                next = next.min(until - self.sim_ms);
+            }
+        }
         if self.engine_open(c::Engine::Nobility) {
             next = next
                 .min((self.upkeep_hour + 1) * c::HOUR - self.sim_ms.min((self.upkeep_hour + 1) * c::HOUR));
@@ -861,6 +932,11 @@ impl State {
         for (m, need) in c::MACHINES.iter().zip(&t.machines) {
             if need.is_some() {
                 *self.machine_ms.entry(m.id.to_string()).or_insert(0) += dt;
+            }
+        }
+        for (i, need) in t.followers.iter().enumerate() {
+            if need.is_some() {
+                self.followers[i].progress += dt;
             }
         }
         if self.research_need().is_some() {
@@ -1029,6 +1105,11 @@ impl State {
         }
         let gained = self.xp_for(a);
         self.gain(a.skill, gained, r);
+        if yours {
+            if let Some(&(_, kind)) = c::SONG_BUFFS.iter().find(|(s, _)| *s == a.id) {
+                self.buffs.insert(kind.to_string(), self.sim_ms + c::BUFF_MS);
+            }
+        }
         let before = self.mastery(a.id);
         if yours {
             add(&mut self.mxp, a.id, a.xp);
@@ -1505,6 +1586,9 @@ impl State {
         s.sim_ms = keep.sim_ms;
         s.rng = keep.rng;
         s.recipes = keep.recipes;
+        s.followers = keep.followers;
+        s.plan = keep.plan;
+        s.plan_advanced = keep.plan_advanced;
         s.rooms = vec![0; c::ROOMS.len()];
         s.upkeep_hour = keep.sim_ms / c::HOUR;
         s.screen = "woodcutting".into();
@@ -1541,8 +1625,8 @@ mod tests {
         let s = State::new(5);
         assert_eq!(s.level(c::HITPOINTS), 10);
         assert_eq!(s.hp, 100);
-        // seventeen skills at 1, Hitpoints at 10
-        assert_eq!(s.total_level(), 27);
+        // eighteen skills at 1, Hitpoints at 10
+        assert_eq!(s.total_level(), 28);
     }
 
     #[test]

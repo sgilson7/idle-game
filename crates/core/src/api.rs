@@ -101,6 +101,11 @@ fn read_save(text: &str) -> Result<State, String> {
     // Version 3 had six rooms and one tier of each engine; the regions add
     // six rooms and a tier each (T15). Ranks, rooms and goods carry over.
     if state.v == 3 {
+        state.v = 4;
+    }
+    // Version 4 had eighteen skills; Performance follows (T18).
+    if state.v == 4 {
+        state.xp.resize(c::SKILLS.len(), 0);
         state.v = SAVE_VERSION;
     }
     state.rooms.resize(c::ROOMS.len(), 0);
@@ -326,6 +331,7 @@ impl Game {
                 || r.gold > 0
                 || !r.research.is_empty()
                 || !r.chests.is_empty()
+                || !r.shows.is_empty()
             {
                 let sheet = self.view().return_sheet(&r);
                 self.sheet = Some(sheet);
@@ -380,6 +386,9 @@ impl Game {
                 self.s.toggle_machine(value);
                 true
             }
+            "rise.fame" => self.s.rise_fame_in(reg),
+            "book" => self.s.book(value),
+            "follower.set" => num_k.is_some_and(|i| self.s.set_follower(i, rest)),
             _ => false,
         };
         if done {
@@ -463,6 +472,9 @@ impl Game {
         for id in &r.chests {
             self.s.note(now, "chest", id, 0);
         }
+        for (v, gold, _) in &r.shows {
+            self.s.note(now, "show", v, *gold);
+        }
         if r.masterworks > 0 {
             self.s.note(now, "masterwork", "", r.masterworks);
         }
@@ -512,6 +524,16 @@ impl Game {
         }
         for id in &r.recipes {
             out.push(t.t("toast_recipe", &[("what", t.action(id))]));
+        }
+        for (v, gold, renown) in &r.shows {
+            out.push(t.t(
+                "toast_show",
+                &[
+                    ("venue", t.s(&format!("venue_{v}"))),
+                    ("n", num(*gold)),
+                    ("renown", num(*renown)),
+                ],
+            ));
         }
         for (town, gold, _) in &r.caravans {
             out.push(t.t(
@@ -655,7 +677,7 @@ impl Game {
             }
             "room.build" | "rise.noble" | "rise.trader" | "rise.inventor" | "rise.cosmic" | "servant.set"
             | "servant.dismiss" | "order.fill" | "caravan.send" | "caravan.guarded" | "research"
-            | "machine.toggle" => self.engine(now, name, value),
+            | "machine.toggle" | "rise.fame" | "book" | "follower.set" => self.engine(now, name, value),
             "farm.plant" => self.farm(now, "plant", value),
             "farm.harvest" => self.farm(now, "harvest", value),
             "farm.harvest_all" => self.farm(now, "all", value),
@@ -1097,7 +1119,7 @@ mod tests {
         let v = ui(&g.tick(1_000));
         assert_eq!(v["screen"], "woodcutting");
         assert_eq!(v["sheet"]["kind"], "notice");
-        assert_eq!(v["tabs"].as_array().unwrap().len(), 23);
+        assert_eq!(v["tabs"].as_array().unwrap().len(), 25);
         assert_eq!(v["groups"].as_array().unwrap().len(), 5);
         assert_eq!(v["next_ms"], 0);
     }
@@ -1226,7 +1248,7 @@ mod tests {
         let v = ui(&g3.tick(0));
         assert_eq!(v["stash"], true);
         assert_eq!(g3.state().xp[0], 0);
-        let newer = saved.replace("\"v\":4", "\"v\":99");
+        let newer = saved.replace("\"v\":5", "\"v\":99");
         let mut g4 = Game::new(STRINGS, GLOSSARY, &newer, "{}", 0).unwrap();
         assert_eq!(ui(&g4.tick(0))["stash"], true);
     }
@@ -1290,7 +1312,7 @@ mod tests {
         old["state"]["xp"].as_array_mut().unwrap().truncate(12);
         old["state"].as_object_mut().unwrap().remove("patches");
         let loaded = Game::new(STRINGS, GLOSSARY, &old.to_string(), "{}", 40_000).unwrap();
-        assert_eq!(loaded.state().xp.len(), 18);
+        assert_eq!(loaded.state().xp.len(), 19);
         assert_eq!(loaded.state().xp[0], 100);
         assert_eq!(loaded.state().xp[c::FARMING], 0);
     }
@@ -1309,7 +1331,7 @@ mod tests {
             old["state"].as_object_mut().unwrap().remove(k);
         }
         let loaded = Game::new(STRINGS, GLOSSARY, &old.to_string(), "{}", 40_000).unwrap();
-        assert_eq!(loaded.state().xp.len(), 18);
+        assert_eq!(loaded.state().xp.len(), 19);
         assert_eq!(loaded.state().xp[0], 100);
         assert_eq!(loaded.state().upkeep_hour, 50);
         assert_eq!(loaded.state().rooms, vec![0; c::ROOMS.len()]);
@@ -1706,5 +1728,21 @@ mod tests {
         let mut t = Vec::new();
         all_text(&v["blocks"], &mut t);
         assert!(t.iter().any(|s| s == "Logs · 1,240"), "{t:?}");
+    }
+
+    #[test]
+    fn a_version_four_save_gains_performance() {
+        let mut g = game(0);
+        g.state_mut().xp[0] = 500;
+        let saved = g.save();
+        let mut v: serde_json::Value = serde_json::from_str(&saved).unwrap();
+        v["v"] = 4.into();
+        v["state"]["v"] = 4.into();
+        v["state"]["xp"].as_array_mut().unwrap().pop();
+        let loaded = Game::new(STRINGS, GLOSSARY, &v.to_string(), "{}", 0).unwrap();
+        assert_eq!(loaded.state().xp.len(), 19);
+        assert_eq!(loaded.state().xp[0], 500);
+        assert_eq!(loaded.state().xp[c::PERFORMANCE], 0);
+        assert_eq!(loaded.state().v, 5);
     }
 }

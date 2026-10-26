@@ -712,5 +712,82 @@
     "find": "&& dropped(i) && !out.contains(&i)",
     "replace": "&& !out.contains(&i)",
     "test": "everything_on_a_shelf_is_also_made_in_the_game_and_sells_for_less_than_it_costs"
+  },
+  {
+    "name": "performance waits for fame",
+    "file": "crates/core/src/engines.rs",
+    "find": "        if skill == c::PERFORMANCE {\n            return self.fame_open();\n        }\n",
+    "replace": "",
+    "test": "performance_opens_at_total_level_50"
+  },
+  {
+    "name": "a song needs its instrument",
+    "file": "crates/core/src/game.rs",
+    "find": "            if self.have(inst) == 0 {",
+    "replace": "            if self.have(inst) == 999 {",
+    "test": "a_song_needs_its_instrument_held_and_makes_renown"
+  },
+  {
+    "name": "songs make other work faster",
+    "file": "crates/core/src/game.rs",
+    "find": "            ms * (100 - c::BUFF_PCT) / 100\n",
+    "replace": "            ms\n",
+    "test": "three_songs_make_other_work_faster_for_an_hour"
+  },
+  {
+    "name": "a song's strength ends after an hour",
+    "file": "crates/core/src/game.rs",
+    "find": "self.buffs.get(kind).is_some_and(|&until| until > self.sim_ms)",
+    "replace": "self.buffs.contains_key(kind)",
+    "test": "three_songs_make_other_work_faster_for_an_hour"
+  },
+  {
+    "name": "three followers at most",
+    "file": "crates/core/src/engines.rs",
+    "find": "&& self.followers.len() < c::FOLLOWER_RANKS.len()",
+    "replace": "",
+    "test": "fame_ranks_spend_renown_and_gold_and_bring_three_followers_at_most"
+  },
+  {
+    "name": "followers stay through prestige",
+    "file": "crates/core/src/game.rs",
+    "find": "        s.followers = keep.followers;\n",
+    "replace": "",
+    "test": "fame_ranks_spend_renown_and_gold_and_bring_three_followers_at_most"
+  },
+  {
+    "name": "a show pays at its end",
+    "file": "crates/core/src/engines.rs",
+    "find": "if self.show.as_ref().is_some_and(|sh| sh.back <= self.sim_ms) {",
+    "replace": "if self.show.as_ref().is_some_and(|sh| sh.back <= self.sim_ms + 1) {",
+    "test": "a_booked_show_feeds_its_crowd_now_and_pays_at_the_end"
+  },
+  {
+    "name": "one show at a time",
+    "file": "crates/core/src/engines.rs",
+    "find": "if !self.fame_open() || self.show.is_some() || ",
+    "replace": "if !self.fame_open() || ",
+    "test": "a_booked_show_feeds_its_crowd_now_and_pays_at_the_end"
+  },
+  {
+    "name": "a follower starts at a quarter of your speed",
+    "file": "crates/core/src/engines.rs",
+    "find": "Some(self.duration(a.id) * 100 / self.follower_pct(i))",
+    "replace": "Some(self.duration(a.id))",
+    "test": "a_follower_gathers_at_a_quarter_of_your_speed_and_grows"
+  },
+  {
+    "name": "followers only gather",
+    "file": "crates/core/src/engines.rs",
+    "find": "matches!(a.skill, c::WOODCUTTING | c::MINING | c::FISHING) && self.unlocked(id)",
+    "replace": "self.unlocked(id)",
+    "test": "a_follower_gathers_at_a_quarter_of_your_speed_and_grows"
+  },
+  {
+    "name": "a version four save gains performance",
+    "file": "crates/core/src/api.rs",
+    "find": "    if state.v == 4 {\n        state.xp.resize(c::SKILLS.len(), 0);",
+    "replace": "    if state.v == 4 {",
+    "test": "a_version_four_save_gains_performance"
   }
 ]
