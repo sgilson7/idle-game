@@ -93,6 +93,9 @@ pub struct Game {
     sounds: Vec<String>,
     /// A newer save found in iCloud, waiting for the player's choice (T17).
     cloud: Option<String>,
+    /// Sections the player has opened (T25): the combat levels and log
+    /// start folded; not saved.
+    unfolded: Vec<String>,
     /// When this device's save was last played, before this session: what
     /// an iCloud save is compared with. 0 for a new game.
     played: u64,
@@ -183,6 +186,7 @@ impl Game {
             sounds: Vec::new(),
             cloud: None,
             played: 0,
+            unfolded: Vec::new(),
         };
         g.seal();
         if saved.trim().is_empty() {
@@ -825,6 +829,23 @@ impl Game {
             }
             "list.all" => self.all = !self.all,
             "sound.toggle" => self.s.sound = !self.s.sound,
+            "view.region" => {
+                if let Ok(r) = value.parse::<usize>() {
+                    if r <= c::REGIONS.len() {
+                        self.s.view_region = r;
+                        self.all = false;
+                    }
+                }
+            }
+            "fold" if matches!(value, "levels" | "log") => {
+                match self.unfolded.iter().position(|k| k == value) {
+                    Some(i) => {
+                        self.unfolded.remove(i);
+                    }
+                    None => self.unfolded.push(value.into()),
+                }
+            }
+            "view.sort" if matches!(value, "" | "high" | "name") => self.s.view_sort = value.into(),
             "wield" => {
                 if self.s.wield_weapon(value) {
                     self.toasts = vec![self.text.t("toast_wield", &[("item", self.text.item(value))])];
@@ -953,6 +974,7 @@ impl Game {
             device: &self.device,
             search: &self.search,
             all: self.all,
+            unfolded: &self.unfolded,
             book_search: &self.book_search,
             book_group: &self.book_group,
         }
@@ -1991,7 +2013,10 @@ mod tests {
         s.xp[c::HITPOINTS] = crate::xp::at(40);
         s.bank.insert("bronze_sword".into(), 1);
         s.bank.insert("shrimp".into(), 100);
-        let v = ui(&g.act("tab", "combat", 0));
+        g.act("tab", "combat", 0);
+        // both sections start folded (T25); open them
+        g.act("fold", "log", 0);
+        let v = ui(&g.act("fold", "levels", 0));
         let levels = v["blocks"]
             .as_array()
             .unwrap()
@@ -2039,7 +2064,7 @@ mod tests {
         g.act("sheet.close", "", 0);
         g.act("tab", "book", 0);
         let v = ui(&g.act("book.search", "flute", 0));
-        let rows = v["blocks"][2]["rows"].as_array().unwrap();
+        let rows = v["blocks"][3]["rows"].as_array().unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0]["title"], "Wooden flute");
         assert_eq!(rows[0]["icon"], "wooden_flute");
@@ -2050,7 +2075,7 @@ mod tests {
         );
         // Feathers: dropped by chickens and goblins, sold on a shelf, used for arrows.
         let v = ui(&g.act("book.search", "feathers", 0));
-        let sub = v["blocks"][2]["rows"][0]["sub"].as_str().unwrap().to_string();
+        let sub = v["blocks"][3]["rows"][0]["sub"].as_str().unwrap().to_string();
         assert!(sub.starts_with("From Chicken, Goblin"), "{sub}");
         assert!(sub.contains("used by Fletching"), "{sub}");
         // With no search, groups open one at a time.
@@ -2249,7 +2274,7 @@ mod tests {
         // the row whose name is the search, so "shrimp" is Shrimp, not Raw shrimp
         let sub = |g: &mut Game, q: &str| {
             let v = ui(&g.act("book.search", q, 0));
-            v["blocks"][2]["rows"]
+            v["blocks"][3]["rows"]
                 .as_array()
                 .unwrap()
                 .iter()
@@ -2302,5 +2327,88 @@ mod tests {
             .clone();
         assert_eq!(rows[0]["title"], "Bronze sword · level 1");
         assert_eq!(rows[0]["chip"], "in hand");
+    }
+
+    // ---------- the region filter and order (T25) ----------
+
+    #[test]
+    fn lists_filter_by_region_and_sort_by_level_or_name() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        // 19 skills at 20 is total level 380: the Vale and the Coast are open.
+        all_at(&mut g, 20);
+        let titles = |v: &serde_json::Value| -> Vec<String> {
+            v["blocks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|b| b["kind"] == "cards")
+                .flat_map(|b| b["cards"].as_array().unwrap().clone())
+                .map(|c| c["title"].as_str().unwrap().to_string())
+                .collect()
+        };
+        let v = ui(&g.act("tab", "combat", 0));
+        let bar = v["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["kind"] == "filters")
+            .unwrap()
+            .clone();
+        let regions: Vec<&str> = bar["buttons"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|b| b["label"].as_str().unwrap())
+            .collect();
+        assert_eq!(regions, ["All", "The Vale", "The Coast"]);
+        let all = titles(&v);
+        assert!(all.contains(&"Shore crab".to_string()) && all.contains(&"Chicken".to_string()));
+        // The Coast only
+        let v = ui(&g.act("view.region", "2", 0));
+        let coast = titles(&v);
+        assert!(coast.contains(&"Shore crab".to_string()) && !coast.contains(&"Chicken".to_string()));
+        // A to Z, within the Coast: the enemies (the dungeon is a block of its own)
+        let v = ui(&g.act("view.sort", "name", 0));
+        let enemies = v["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .rev()
+            .find(|b| b["kind"] == "cards")
+            .unwrap()
+            .clone();
+        let mut sorted: Vec<String> = enemies["cards"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["title"].as_str().unwrap().to_string())
+            .collect();
+        let shown = sorted.clone();
+        sorted.sort_by_key(|t| t.to_lowercase());
+        assert_eq!(shown, sorted);
+        // a region that closes (prestige) shows everything again
+        g.state_mut().view_region = 4;
+        let v = ui(&g.act("tab", "combat", 0));
+        assert!(titles(&v).contains(&"Chicken".to_string()));
+    }
+
+    #[test]
+    fn the_combat_levels_and_log_start_folded_and_open_with_a_tap() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        let has = |v: &serde_json::Value, title: &str| {
+            v["blocks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|b| b["title"] == title)
+        };
+        let v = ui(&g.act("tab", "combat", 0));
+        assert!(!has(&v, "What your combat levels do"));
+        let v = ui(&g.act("fold", "levels", 0));
+        assert!(has(&v, "What your combat levels do"));
+        let v = ui(&g.act("fold", "levels", 0));
+        assert!(!has(&v, "What your combat levels do"));
     }
 }

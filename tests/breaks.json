@@ -936,5 +936,26 @@
     "find": "            if !s.kind.is_empty() && s.to >= at {\n                s.to += 1;",
     "replace": "            if !s.kind.is_empty() && s.to >= at + 99 {\n                s.to += 1;",
     "test": "dragging_a_block_moves_it_and_jumps_follow_the_steps_they_name"
+  },
+  {
+    "name": "the region filter hides other regions",
+    "file": "crates/core/src/view.rs",
+    "find": "self.region_filter().is_none_or(|f| f == r)",
+    "replace": "self.region_filter().is_none_or(|_| true)",
+    "test": "lists_filter_by_region_and_sort_by_level_or_name"
+  },
+  {
+    "name": "a to z sorts by name",
+    "file": "crates/core/src/view.rs",
+    "find": "\"name\" => list.sort_by_key(|x| name(x).to_lowercase()),",
+    "replace": "\"name\" => {}",
+    "test": "lists_filter_by_region_and_sort_by_level_or_name"
+  },
+  {
+    "name": "combat sections start folded",
+    "file": "crates/core/src/view.rs",
+    "find": "        if self.unfolded.iter().any(|k| k == \"levels\") {\n            out.push(self.combat_levels());\n        }",
+    "replace": "        out.push(self.combat_levels());",
+    "test": "the_combat_levels_and_log_start_folded_and_open_with_a_tap"
   }
 ]

@@ -338,6 +338,8 @@ pub struct View<'a> {
     pub search: &'a str,
     /// Skill screens show every row.
     pub all: bool,
+    /// Sections opened by the player (T25).
+    pub unfolded: &'a [String],
     /// The encyclopedia's search box and open group (T19).
     pub book_search: &'a str,
     pub book_group: &'a str,
@@ -536,6 +538,130 @@ impl View<'_> {
         if self.tab_locked(&self.s.screen) {
             return self.locked(&self.s.screen);
         }
+        let mut blocks = self.screen_blocks();
+        if let Some(bar) = self.filter_bar() {
+            let at = 1.min(blocks.len());
+            blocks.insert(at, bar);
+        }
+        blocks
+    }
+
+    // ---------- filtering by region and sorting (T25) ----------
+
+    /// Screens whose lists sort; the region filter shows wherever regions do.
+    fn sorts(&self) -> bool {
+        let s = self.s.screen.as_str();
+        c::skill_index(s).is_some() || matches!(s, "combat" | "bank" | "book" | "weapons")
+    }
+
+    fn filters_regions(&self) -> bool {
+        let s = self.s.screen.as_str();
+        self.sorts() && s != "weapons"
+            || matches!(
+                s,
+                "recipes" | "trader" | "estate" | "observatory" | "stage" | "shop"
+            )
+    }
+
+    /// The region the lists show, or `None` for every open region. A
+    /// filter on a region that has closed (after prestige) shows them all.
+    pub(crate) fn region_filter(&self) -> Option<usize> {
+        let v = self.s.view_region;
+        (v > 0 && self.s.region_open(v - 1)).then(|| v - 1)
+    }
+
+    pub(crate) fn region_shown(&self, r: usize) -> bool {
+        self.region_filter().is_none_or(|f| f == r)
+    }
+
+    /// The bar above a list: a chip for each open region, and the orders.
+    fn filter_bar(&self) -> Option<Block> {
+        let regions = self.filters_regions() && self.s.regions_open() > 1;
+        let sorts = self.sorts();
+        if !regions && !sorts {
+            return None;
+        }
+        let here = self.region_filter().map_or(0, |r| r + 1);
+        let buttons = if regions {
+            std::iter::once(button(self.t.s("view_all"), "view.region", "0").pressed(here == 0))
+                .chain((0..c::REGIONS.len()).filter(|&r| self.s.region_open(r)).map(|r| {
+                    button(self.region_title(r), "view.region", &(r + 1).to_string()).pressed(here == r + 1)
+                }))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let buttons2 = if sorts {
+            [("", "sort_level"), ("high", "sort_high"), ("name", "sort_name")]
+                .iter()
+                .map(|&(v, k)| button(self.t.s(k), "view.sort", v).pressed(self.s.view_sort == v))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        Some(Block {
+            title: self.t.s("view_show"),
+            label2: self.t.s("view_order"),
+            buttons,
+            buttons2,
+            ..block("filters")
+        })
+    }
+
+    fn region_title(&self, r: usize) -> String {
+        self.t.s(&format!("region_{}", c::REGIONS[r].0))
+    }
+
+    /// Orders things by level (lowest first), highest first, or name.
+    pub(crate) fn order<T>(
+        &self,
+        list: &mut [T],
+        level: impl Fn(&T) -> (u32, usize),
+        name: impl Fn(&T) -> String,
+    ) {
+        match self.s.view_sort.as_str() {
+            "name" => list.sort_by_key(|x| name(x).to_lowercase()),
+            "high" => list.sort_by_key(|x| std::cmp::Reverse(level(x))),
+            _ => list.sort_by_key(|x| level(x)),
+        }
+    }
+
+    /// Where an item comes from: the region of what makes it, grows it,
+    /// drops it or sells it, the Vale for anything else.
+    pub(crate) fn item_region(&self, item: &str) -> usize {
+        c::ACTIONS
+            .iter()
+            .filter(|a| a.makes.0 == item)
+            .map(|a| a.region)
+            .chain(
+                c::CROPS
+                    .iter()
+                    .filter(|cr| cr.produce == item || cr.seed == item)
+                    .map(|cr| cr.region),
+            )
+            .chain(
+                c::ENEMIES
+                    .iter()
+                    .filter(|e| e.drops.iter().any(|d| d.0 == item))
+                    .map(|e| e.region),
+            )
+            .chain(c::TOWNS.iter().filter(|t| t.sells == item).map(|t| t.region))
+            .min()
+            .unwrap_or(0)
+    }
+
+    /// The level that first makes an item, for ordering lists of items.
+    pub(crate) fn item_level(&self, item: &str) -> u32 {
+        c::ACTIONS
+            .iter()
+            .filter(|a| a.makes.0 == item)
+            .map(|a| a.level)
+            .chain(c::CROPS.iter().filter(|cr| cr.produce == item).map(|cr| cr.level))
+            .min()
+            .unwrap_or(0)
+    }
+
+    fn screen_blocks(&self) -> Vec<Block> {
         match self.s.screen.as_str() {
             "recipes" => self.recipes(),
             "regions" => self.regions(),
@@ -708,7 +834,12 @@ impl View<'_> {
     pub(crate) fn action_cards(&self, i: usize, active: Option<usize>) -> Vec<Block> {
         let mut rows: Vec<&c::Action> = c::ACTIONS
             .iter()
-            .filter(|a| a.skill == i && self.shown(a.id) && self.s.region_open(a.region))
+            .filter(|a| {
+                a.skill == i
+                    && self.shown(a.id)
+                    && self.s.region_open(a.region)
+                    && self.region_shown(a.region)
+            })
             .collect();
         rows.sort_by_key(|a| (a.level, a.region));
         let closed = c::ACTIONS
@@ -719,13 +850,17 @@ impl View<'_> {
         let open: Vec<&c::Action> = rows.iter().copied().filter(|a| a.level <= lvl).collect();
         let locked: Vec<&c::Action> = rows.iter().copied().filter(|a| a.level > lvl).collect();
         let older = open.len().saturating_sub(NEWEST);
-        let mut cards = Vec::new();
-        for (k, a) in open.iter().enumerate() {
-            let on = active == c::action_index(a.id);
-            if self.all || k >= older || on {
-                cards.push(self.action_card(a, on));
-            }
-        }
+        let mut shown: Vec<&c::Action> = open
+            .iter()
+            .enumerate()
+            .filter(|(k, a)| self.all || *k >= older || active == c::action_index(a.id))
+            .map(|(_, a)| *a)
+            .collect();
+        self.order(&mut shown, |a| (a.level, a.region), |a| self.t.action(a.id));
+        let mut cards: Vec<Card> = shown
+            .into_iter()
+            .map(|a| self.action_card(a, active == c::action_index(a.id)))
+            .collect();
         // LR-2: the next two locked ones show; the rest wait out of sight.
         for a in locked.iter().take(2) {
             cards.push(self.action_card(a, false));
@@ -1009,7 +1144,10 @@ impl View<'_> {
             bar: Some(self.xp_bar(st.skill)),
             ..block("bar")
         });
-        out.push(self.combat_levels());
+        out.push(self.fold("levels", "fold_levels"));
+        if self.unfolded.iter().any(|k| k == "levels") {
+            out.push(self.combat_levels());
+        }
         let (ins, outs) = io_of("combat");
         out.push(self.links("combat", &ins, &outs));
         out.push(self.scene(
@@ -1155,12 +1293,15 @@ impl View<'_> {
             });
         }
         if !self.s.blows.is_empty() {
-            out.push(self.combat_log());
+            out.push(self.fold("log", "fold_log"));
+            if self.unfolded.iter().any(|k| k == "log") {
+                out.push(self.combat_log());
+            }
         }
         let mut dungeons: Vec<Card> = c::DUNGEONS
             .iter()
             .enumerate()
-            .filter(|(_, d)| self.s.unlocked(d.id))
+            .filter(|(_, d)| self.s.unlocked(d.id) && self.region_shown(d.region))
             .map(|(k, d)| self.dungeon_card(d, in_dungeon == Some(k)))
             .collect();
         if !dungeons.is_empty() {
@@ -1172,8 +1313,14 @@ impl View<'_> {
             });
         }
         // the newest region's enemies first
-        let mut list: Vec<&c::Enemy> = c::ENEMIES.iter().filter(|en| self.s.unlocked(en.id)).collect();
+        let mut list: Vec<&c::Enemy> = c::ENEMIES
+            .iter()
+            .filter(|en| self.s.unlocked(en.id) && self.region_shown(en.region))
+            .collect();
         list.sort_by_key(|en| (std::cmp::Reverse(en.region), en.level));
+        if !self.s.view_sort.is_empty() {
+            self.order(&mut list, |en| (en.level, en.region), |en| self.t.enemy(en.id));
+        }
         let cards = list
             .into_iter()
             .map(|en| self.enemy_card(en, in_dungeon.is_none() && fighting == c::enemy_index(en.id)))
@@ -1183,6 +1330,23 @@ impl View<'_> {
             ..block("cards")
         });
         out
+    }
+
+    /// A button that opens or folds a section (T25).
+    fn fold(&self, key: &str, label: &str) -> Block {
+        let open = self.unfolded.iter().any(|k| k == key);
+        Block {
+            buttons: vec![button(
+                self.t.t(
+                    if open { "fold_hide" } else { "fold_show" },
+                    &[("what", self.t.s(label))],
+                ),
+                "fold",
+                key,
+            )
+            .pressed(open)],
+            ..block("buttons")
+        }
     }
 
     /// What each combat level does (T19): the max hit a style's level gives
@@ -1627,8 +1791,17 @@ impl View<'_> {
     /// The encyclopedia (T19): every item, its picture, what makes it and
     /// what uses it. A search, or one group at a time.
     fn book(&self) -> Vec<Block> {
-        let mut all: Vec<&'static str> = c::VALUES.iter().map(|(i, _)| *i).collect();
+        let mut all: Vec<&'static str> = c::VALUES
+            .iter()
+            .map(|(i, _)| *i)
+            .filter(|i| self.region_shown(self.item_region(i)))
+            .collect();
         all.sort_by_key(|i| self.t.item(i).to_lowercase());
+        self.order(
+            &mut all,
+            |i| (self.item_level(i), self.item_region(i)),
+            |i| self.t.item(i),
+        );
         let mut out = vec![self.head(
             "book",
             self.t.s("tab_book"),
@@ -1962,7 +2135,18 @@ impl View<'_> {
         });
         let q = self.search.trim().to_lowercase();
         let mut groups: Vec<(&'static str, Vec<Button>)> = Vec::new();
-        for (k, n) in items {
+        // the region filter and the order (T25)
+        let mut items: Vec<(&String, &u64)> = items
+            .iter()
+            .copied()
+            .filter(|(k, _)| self.region_shown(self.item_region(k)))
+            .collect();
+        self.order(
+            &mut items,
+            |(k, _)| (self.item_level(k), self.item_region(k)),
+            |(k, _)| self.t.item(k),
+        );
+        for (k, n) in &items {
             let name = self.t.item(k);
             if !q.is_empty() && !name.to_lowercase().contains(&q) {
                 continue;
@@ -2194,7 +2378,7 @@ impl View<'_> {
         let l = self.s.level(c::FARMING);
         c::CROPS
             .iter()
-            .filter(|cr| cr.level <= l + 10 && self.s.region_open(cr.region))
+            .filter(|cr| cr.level <= l + 10 && self.s.region_open(cr.region) && self.region_shown(cr.region))
             .map(|cr| {
                 let cost = cr.seed_cost * c::SEED_PACK;
                 Row {

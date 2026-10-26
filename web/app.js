@@ -216,6 +216,18 @@ const blocks = {
     box.append(stack);
     return box;
   },
+  // The lists' region filter and order (T25): two rows of small toggles.
+  filters: (b) => {
+    const box = h("div", "filters");
+    [[b.title, b.buttons || []], [b.label2, b.buttons2 || []]].forEach(([label, list]) => {
+      if (!list.length) return;
+      const row = h("div", "filter-row");
+      row.append(h("span", "filter-label", label));
+      list.forEach((x) => row.append(btn(x, "chipbtn")));
+      box.append(row);
+    });
+    return box;
+  },
   // A graph the core shapes (T23): its path, a marker and four labels.
   curve: (b) => {
     const box = h("div", "panel curve");

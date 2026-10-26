@@ -268,6 +268,12 @@ pub struct State {
     /// The weapon chosen for each style, by the style's skill id.
     #[serde(default)]
     pub wield: BTreeMap<String, String>,
+    /// The lists' filter and order (T25): 0 shows every region, r + 1 only
+    /// region r; the order is "" (level, lowest first), "high" or "name".
+    #[serde(default)]
+    pub view_region: usize,
+    #[serde(default)]
+    pub view_sort: String,
 }
 
 fn on() -> bool {
@@ -386,6 +392,8 @@ impl State {
             asked: Vec::new(),
             weapon_xp: BTreeMap::new(),
             wield: BTreeMap::new(),
+            view_region: 0,
+            view_sort: String::new(),
         };
         s.hp = s.max_hp();
         s.note(now, "new", "", 0);
@@ -1810,6 +1818,7 @@ impl State {
         s.followers = keep.followers;
         s.offered = keep.offered;
         s.weapon_xp = keep.weapon_xp;
+        s.view_sort = keep.view_sort;
         s.wield = keep.wield;
         s.asked = keep.asked;
         s.sound = keep.sound;

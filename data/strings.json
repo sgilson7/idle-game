@@ -2237,6 +2237,16 @@
   "plan_drag_hint": "Drag by the grip",
   "plan_up": "Move up",
   "plan_down": "Move down",
-  "plan_repeat_forward": "its step is below it, so it does nothing: move it below the steps to repeat"
+  "plan_repeat_forward": "its step is below it, so it does nothing: move it below the steps to repeat",
+  "view_show": "Show",
+  "view_order": "Order",
+  "view_all": "All",
+  "sort_level": "Level",
+  "sort_high": "Highest first",
+  "sort_name": "A to Z",
+  "fold_show": "Show {what}",
+  "fold_hide": "Hide {what}",
+  "fold_levels": "what your combat levels do",
+  "fold_log": "the combat log"
  }
 }

@@ -280,3 +280,9 @@ textarea { -webkit-user-select: text; user-select: text; }
 .blk.over { box-shadow: 0 -4px 0 var(--gold); }
 .blk.lifted { opacity: .35; }
 .blk.ghost { position: fixed; z-index: 50; pointer-events: none; opacity: .9; box-shadow: 0 8px 24px #0008; margin: 0; }
+/* the lists' region filter and order (T25) */
+.filters { display: grid; gap: 6px; }
+.filter-row { display: flex; gap: 6px; align-items: center; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.filter-row::-webkit-scrollbar { display: none; }
+.filter-label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); min-width: 48px; }
+.btn.chipbtn { padding: 6px 12px; min-height: 0; font-size: 13px; border-radius: 999px; white-space: nowrap; flex: none; }

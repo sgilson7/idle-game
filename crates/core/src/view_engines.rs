@@ -22,9 +22,11 @@ impl View<'_> {
         self.t.s(&format!("region_{}", c::REGIONS[r].0))
     }
 
-    /// The open regions, the Vale first.
+    /// The open regions, the Vale first, or only the one the filter shows (T25).
     fn open_regions(&self) -> Vec<usize> {
-        (0..c::REGIONS.len()).filter(|&r| self.s.region_open(r)).collect()
+        (0..c::REGIONS.len())
+            .filter(|&r| self.s.region_open(r) && self.region_shown(r))
+            .collect()
     }
 
     /// A tab whose engine has not opened: what opens it, and how far you are.
