@@ -2019,7 +2019,8 @@ mod tests {
         assert_eq!(rows[0]["icon"], "wooden_flute");
         assert_eq!(
             rows[0]["sub"],
-            "From Fletching 3 · used by Performance · sells for 30 gold"
+            "Held to play: Jig, Ballad, Sea shanty, Tide song, Yodel, Shepherd's pipe, Sand chant \
+             · From Fletching 3 · used by Performance · sells for 30 gold"
         );
         // Feathers: dropped by chickens and goblins, sold on a shelf, used for arrows.
         let v = ui(&g.act("book.search", "feathers", 0));
