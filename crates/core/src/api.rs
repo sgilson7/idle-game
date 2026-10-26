@@ -728,13 +728,27 @@ impl Game {
                 self.s.plan_clear();
                 self.editing = None;
             }
+            // Tapping a stack asks how many (T22); "item:n" sells n, and
+            // "item:all" or "item:keep1" sells all or all but one.
+            "sell.ask" if self.s.have(value) > 0 => {
+                self.sheet = Some(self.view().sell_sheet(value));
+            }
             "sell" => {
-                let got = self.s.sell(value);
+                let (item, how) = value.split_once(':').unwrap_or((value, "all"));
+                let have = self.s.have(item);
+                let n = match how {
+                    "all" => have,
+                    "keep1" => have.saturating_sub(1),
+                    k => k.parse::<u64>().unwrap_or(0),
+                };
+                let got = self.s.sell_n(item, n);
+                self.sheet = None;
                 if got > 0 {
-                    self.s.note(now, "sell", value, got);
+                    self.s.note(now, "sell", item, got);
                     self.toasts = vec![self
                         .text
-                        .t("toast_sold", &[("item", self.text.item(value)), ("n", num(got))])];
+                        .t("toast_sold", &[("item", self.text.item(item)), ("n", num(got))])];
+                    self.sounds.push("coin".into());
                 }
             }
             "room.build" | "rise.noble" | "rise.trader" | "rise.inventor" | "rise.cosmic" | "servant.set"
@@ -2156,5 +2170,79 @@ mod tests {
                 && !crate::view::is_held("bronze_bar")
         );
         assert!(!crate::view::is_held("bronze_arrows"), "arrows are spent");
+    }
+
+    // ---------- selling amounts and exact effects (T22) ----------
+
+    #[test]
+    fn a_stack_sells_a_chosen_number_from_the_bank_or_the_shop() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        g.state_mut().bank.insert("iron_ore".into(), 250);
+        // Iron ore is worth 6: the sheet offers 1, 10 and 100 (not 1,000), all but one, all.
+        let v = ui(&g.act("sell.ask", "iron_ore", 0));
+        let labels: Vec<String> = v["sheet"]["buttons"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|b| b["label"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                "Sell 1 for 6",
+                "Sell 10 for 60",
+                "Sell 100 for 600",
+                "All but one for 1,494",
+                "All 250 for 1,500",
+                "Cancel"
+            ]
+        );
+        g.act("sell", "iron_ore:10", 0);
+        assert_eq!(g.state().have("iron_ore"), 240);
+        assert_eq!(g.state().gold, 60);
+        g.act("sell", "iron_ore:keep1", 0);
+        assert_eq!(g.state().have("iron_ore"), 1);
+        g.act("sell", "iron_ore:500", 0);
+        assert_eq!(g.state().have("iron_ore"), 0);
+        assert_eq!(g.state().gold, 6 * 250);
+        // the shop shows the same stacks
+        g.state_mut().bank.insert("logs".into(), 5);
+        let mut t = Vec::new();
+        all_text(&ui(&g.act("tab", "shop", 0))["blocks"], &mut t);
+        assert!(t.iter().any(|x| x == "Sell"));
+        assert!(t.iter().any(|x| x == "Logs"));
+    }
+
+    #[test]
+    fn the_encyclopedia_gives_each_items_exact_effect() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        g.act("tab", "book", 0);
+        // the row whose name is the search, so "shrimp" is Shrimp, not Raw shrimp
+        let sub = |g: &mut Game, q: &str| {
+            let v = ui(&g.act("book.search", q, 0));
+            v["blocks"][2]["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|r| r["title"].as_str().unwrap().to_lowercase() == q)
+                .unwrap()["sub"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        assert!(sub(&mut g, "ashes").starts_with(
+            "Compost: a crop planted while you have it grows in 75% of its time, and one is used"
+        ));
+        // Shrimp heal 30; food is eaten below 45% health.
+        let s = sub(&mut g, "shrimp");
+        assert!(
+            s.contains("In a fight: eaten when your health falls below 45%, and heals 30"),
+            "{s}"
+        );
+        // A bronze sword is tier 1: 10 max hit.
+        assert!(sub(&mut g, "bronze sword")
+            .starts_with("Melee: held, +10 max hit; only your best weapon counts, and it is not used up"));
     }
 }

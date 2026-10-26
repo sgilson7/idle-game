@@ -866,5 +866,19 @@
     "find": "c::STYLES.iter().any(|s| s.held.iter().any(|(i, _)| *i == item))",
     "replace": "c::STYLES.iter().any(|s| s.held.iter().chain(s.spent.iter()).any(|(i, _)| *i == item))",
     "test": "combat_says_a_held_weapon_does_not_stack_and_ammunition_is_spent"
+  },
+  {
+    "name": "a chosen number is sold",
+    "file": "crates/core/src/game.rs",
+    "find": "        let n = n.min(self.have(item));\n",
+    "replace": "        let n = self.have(item);\n",
+    "test": "a_stack_sells_a_chosen_number_from_the_bank_or_the_shop"
+  },
+  {
+    "name": "the encyclopedia says what food does",
+    "file": "crates/core/src/view.rs",
+    "find": "(\"below\", c::EAT_BELOW_PCT.to_string())",
+    "replace": "(\"below\", c::HIT_PCT.to_string())",
+    "test": "the_encyclopedia_gives_each_items_exact_effect"
   }
 ]

@@ -1447,49 +1447,7 @@ impl View<'_> {
                 ..block("note")
             });
         }
-        // A search box, and the items grouped by the tab that makes them (IG-Q41 A).
-        out.push(Block {
-            title: self.t.s("bank_search"),
-            act: "bank.search".into(),
-            value: self.search.to_string(),
-            text: self.t.s("bank_search_hint"),
-            ..block("search")
-        });
-        let q = self.search.trim().to_lowercase();
-        let mut groups: Vec<(&'static str, Vec<Button>)> = Vec::new();
-        for (k, n) in &items {
-            let name = self.t.item(k);
-            if !q.is_empty() && !name.to_lowercase().contains(&q) {
-                continue;
-            }
-            let tab = maker_tab(k);
-            let b = button(name, "sell", k)
-                .icon(k)
-                .below(num(**n))
-                .tone(if c::value(k) > 0 { "" } else { "keep" });
-            match groups.iter_mut().find(|(t, _)| *t == tab) {
-                Some((_, list)) => list.push(b),
-                None => groups.push((tab, vec![b])),
-            }
-        }
-        groups.sort_by_key(|(t, _)| TABS.iter().position(|x| x == t).unwrap_or(TABS.len()));
-        if groups.is_empty() && !items.is_empty() {
-            out.push(Block {
-                text: self.t.s("bank_none_match"),
-                ..block("note")
-            });
-        }
-        for (tab, buttons) in groups {
-            out.push(Block {
-                title: if tab == "other" {
-                    self.t.s("bank_other")
-                } else {
-                    self.tab_name(tab)
-                },
-                buttons,
-                ..block("bank")
-            });
-        }
+        out.extend(self.stacks(&items));
         out
     }
 
@@ -1575,6 +1533,109 @@ impl View<'_> {
                 rows: list.iter().map(|i| self.entry(i)).collect(),
                 ..block("rows")
             });
+        }
+        out
+    }
+
+    /// What an item does, exactly, with the core's own numbers (T22): food
+    /// in a fight, compost on a crop, a weapon's or armour's strength, a
+    /// trinket, a gadget, a seed, an instrument, furniture, fuel.
+    fn effects(&self, item: &str) -> Vec<String> {
+        let t = &self.t;
+        let mut out = Vec::new();
+        if let Some(&(_, heal)) = c::FOOD.iter().find(|(f, _)| *f == item) {
+            out.push(t.t(
+                "fx_food",
+                &[
+                    ("heal", heal.to_string()),
+                    ("below", c::EAT_BELOW_PCT.to_string()),
+                ],
+            ));
+        }
+        match item {
+            "ashes" => out.push(t.t("fx_compost", &[("pct", c::COMPOST_GROW_PCT.to_string())])),
+            "fine_ashes" => out.push(t.t("fx_compost", &[("pct", c::FINE_COMPOST_GROW_PCT.to_string())])),
+            "spices" => out.push(t.t("fx_spices", &[("pct", c::SPICE_HEAL_PCT.to_string())])),
+            "goblin_hot_pot" => out.push(t.t(
+                "fx_hot_pot",
+                &[
+                    ("pct", c::HOT_POT_GOLD_PCT.to_string()),
+                    ("t", dur(c::HOT_POT_MS)),
+                ],
+            )),
+            _ => {}
+        }
+        for s in c::STYLES.iter() {
+            if let Some(&(_, tier)) = s.held.iter().find(|(i, _)| *i == item) {
+                out.push(t.t(
+                    "fx_held",
+                    &[
+                        ("hit", (tier * c::MAX_HIT_PER_TIER).to_string()),
+                        ("style", self.skill_name(s.skill)),
+                    ],
+                ));
+            }
+            if let Some(&(_, tier)) = s.spent.iter().find(|(i, _)| *i == item) {
+                out.push(t.t(
+                    "fx_spent",
+                    &[
+                        ("hit", (tier * c::MAX_HIT_PER_TIER).to_string()),
+                        ("style", self.skill_name(s.skill)),
+                    ],
+                ));
+            }
+        }
+        if let Some(&(_, tier, hp)) = c::ARMOUR.iter().find(|(a, _, _)| *a == item) {
+            out.push(t.t(
+                "fx_armour",
+                &[
+                    ("pct", (tier * c::ARMOUR_PCT_PER_TIER).to_string()),
+                    ("hp", hp.to_string()),
+                ],
+            ));
+        }
+        if let Some(&(_, kind, n)) = c::TRINKETS.iter().find(|(i, _, _)| *i == item) {
+            let key = match kind {
+                c::Trinket::Power => "fx_power",
+                c::Trinket::Vigour => "fx_vigour",
+                c::Trinket::Wealth => "fx_wealth",
+                c::Trinket::Warding => "fx_warding",
+            };
+            out.push(t.t(key, &[("n", n.to_string())]));
+        }
+        if let Some(&(_, skill)) = c::GADGETS.iter().find(|(g, _)| *g == item) {
+            out.push(t.t(
+                "fx_gadget",
+                &[
+                    ("skill", self.skill_name(skill)),
+                    ("pct", c::GADGET_PCT.to_string()),
+                ],
+            ));
+        }
+        if let Some(cr) = c::CROPS.iter().find(|cr| cr.seed == item) {
+            out.push(t.t(
+                "fx_seed",
+                &[
+                    ("t", dur(cr.grow_ms)),
+                    ("min", cr.yield_min.to_string()),
+                    ("max", cr.yield_max.to_string()),
+                    ("crop", t.item(cr.produce)),
+                ],
+            ));
+        }
+        let songs: Vec<String> = c::SONG_INSTRUMENTS
+            .iter()
+            .filter(|(_, i)| *i == item)
+            .map(|(s, _)| t.action(s))
+            .collect();
+        if !songs.is_empty() {
+            out.push(t.t("fx_instrument", &[("list", songs.join(", "))]));
+        }
+        if let Some(&(_, room)) = c::FURNITURE.iter().find(|(f, _)| *f == item) {
+            out.push(t.t("fx_furniture", &[("room", t.s(&format!("room_{room}")))]));
+        }
+        if c::FUEL.contains(&item) {
+            out.push(t.s("fx_fuel"));
         }
         out
     }
@@ -1680,7 +1741,8 @@ impl View<'_> {
             push(&mut uses, self.t.s("tab_estate"));
         }
         let none = self.t.s("book_none");
-        let mut sub = vec![
+        let mut sub = self.effects(item);
+        sub.extend([
             self.t.t(
                 "book_from",
                 &[(
@@ -1696,7 +1758,7 @@ impl View<'_> {
                 "book_uses",
                 &[("list", if uses.is_empty() { none } else { uses.join(", ") })],
             ),
-        ];
+        ]);
         if c::value(item) > 0 {
             sub.push(self.t.t("book_sells", &[("n", num(c::value(item)))]));
         }
@@ -1710,6 +1772,105 @@ impl View<'_> {
                 String::new()
             },
             ..Row::default()
+        }
+    }
+
+    /// The bank's search box and its stacks grouped by the tab that makes
+    /// them (IG-Q41 A); tapping one asks how many to sell. The bank and the
+    /// shop both show it (T22).
+    fn stacks(&self, items: &[(&String, &u64)]) -> Vec<Block> {
+        let mut out = Vec::new();
+        out.push(Block {
+            title: self.t.s("bank_search"),
+            act: "bank.search".into(),
+            value: self.search.to_string(),
+            text: self.t.s("bank_search_hint"),
+            ..block("search")
+        });
+        let q = self.search.trim().to_lowercase();
+        let mut groups: Vec<(&'static str, Vec<Button>)> = Vec::new();
+        for (k, n) in items {
+            let name = self.t.item(k);
+            if !q.is_empty() && !name.to_lowercase().contains(&q) {
+                continue;
+            }
+            let tab = maker_tab(k);
+            let b = button(name, "sell.ask", k)
+                .icon(k)
+                .below(num(**n))
+                .tone(if c::value(k) > 0 { "" } else { "keep" });
+            match groups.iter_mut().find(|(t, _)| *t == tab) {
+                Some((_, list)) => list.push(b),
+                None => groups.push((tab, vec![b])),
+            }
+        }
+        groups.sort_by_key(|(t, _)| TABS.iter().position(|x| x == t).unwrap_or(TABS.len()));
+        if groups.is_empty() && !items.is_empty() {
+            out.push(Block {
+                text: self.t.s("bank_none_match"),
+                ..block("note")
+            });
+        }
+        for (tab, buttons) in groups {
+            out.push(Block {
+                title: if tab == "other" {
+                    self.t.s("bank_other")
+                } else {
+                    self.tab_name(tab)
+                },
+                buttons,
+                ..block("bank")
+            });
+        }
+        out
+    }
+
+    /// How many to sell (T22): set amounts, all but one, or all.
+    pub(crate) fn sell_sheet(&self, item: &str) -> Sheet {
+        let have = self.s.have(item);
+        let each = c::value(item);
+        let mut buttons: Vec<Button> = c::SELL_AMOUNTS
+            .iter()
+            .filter(|&&n| n < have)
+            .map(|&n| {
+                button(
+                    self.t.t("sell_n", &[("n", num(n)), ("gold", num(n * each))]),
+                    "sell",
+                    &format!("{item}:{n}"),
+                )
+            })
+            .collect();
+        if have > 1 {
+            buttons.push(button(
+                self.t.t("sell_keep1", &[("gold", num((have - 1) * each))]),
+                "sell",
+                &format!("{item}:keep1"),
+            ));
+        }
+        buttons.push(
+            button(
+                self.t
+                    .t("sell_all", &[("n", num(have)), ("gold", num(have * each))]),
+                "sell",
+                &format!("{item}:all"),
+            )
+            .tone("primary"),
+        );
+        buttons.push(button(self.t.s("cancel"), "sheet.close", ""));
+        Sheet {
+            kind: "notice".into(),
+            title: self.t.t("sell_title", &[("item", self.t.item(item))]),
+            lines: vec![if each > 0 {
+                self.t.t("sell_have", &[("n", num(have)), ("each", num(each))])
+            } else {
+                self.t.t("sell_keep", &[("n", num(have))])
+            }],
+            buttons: if each > 0 {
+                buttons
+            } else {
+                vec![button(self.t.s("ok"), "sheet.close", "")]
+            },
+            ..Sheet::default()
         }
     }
 
@@ -1782,6 +1943,15 @@ impl View<'_> {
             ..block("rows")
         });
         out.extend(self.shelf_blocks());
+        let items: Vec<(&String, &u64)> = self.s.bank.iter().filter(|(_, n)| **n > 0).collect();
+        if !items.is_empty() {
+            out.push(Block {
+                text: self.t.s("tap_to_sell"),
+                title: self.t.s("shop_sell_title"),
+                ..block("card")
+            });
+            out.extend(self.stacks(&items));
+        }
         out
     }
 

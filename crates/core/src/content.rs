@@ -1098,6 +1098,8 @@ pub const COMPOST_GROW_PCT: u64 = 75;
 pub const PATCH_LEVELS: [u32; 5] = [1, 1, 1, 40, 70];
 /// The shop sells seeds in packs of this many.
 pub const SEED_PACK: u64 = 10;
+/// How many the sell sheet offers to sell at a time (T22).
+pub const SELL_AMOUNTS: [u64; 4] = [1, 10, 100, 1_000];
 
 /// Combat tuning (P8).
 pub const HP_PER_LEVEL: u64 = 10;

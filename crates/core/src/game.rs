@@ -1552,9 +1552,15 @@ impl State {
     // ---------- gold (P10) ----------
 
     pub fn sell(&mut self, item: &str) -> u64 {
-        let got = c::value(item) * self.have(item);
+        self.sell_n(item, self.have(item))
+    }
+
+    /// Sells `n` of an item, or all you have if you have fewer (T22).
+    pub fn sell_n(&mut self, item: &str, n: u64) -> u64 {
+        let n = n.min(self.have(item));
+        let got = c::value(item) * n;
         if got > 0 {
-            self.bank.insert(item.to_string(), 0);
+            self.bank.insert(item.to_string(), self.have(item) - n);
             self.gold += got;
         }
         got
