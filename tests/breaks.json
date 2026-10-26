@@ -858,14 +858,14 @@
     "file": "crates/core/src/view.rs",
     "find": "for (list, key) in [(st.held, \"supply_held\"), (st.spent, \"supply_spent\")] {",
     "replace": "for (list, key) in [(st.held, \"supply_spent\"), (st.spent, \"supply_spent\")] {",
-    "test": "combat_says_a_held_weapon_does_not_stack_and_ammunition_is_spent"
+    "test": "combat_names_the_weapon_in_hand_and_what_it_adds"
   },
   {
     "name": "arrows are not held",
     "file": "crates/core/src/view.rs",
     "find": "c::STYLES.iter().any(|s| s.held.iter().any(|(i, _)| *i == item))",
     "replace": "c::STYLES.iter().any(|s| s.held.iter().chain(s.spent.iter()).any(|(i, _)| *i == item))",
-    "test": "combat_says_a_held_weapon_does_not_stack_and_ammunition_is_spent"
+    "test": "combat_names_the_weapon_in_hand_and_what_it_adds"
   },
   {
     "name": "a chosen number is sold",

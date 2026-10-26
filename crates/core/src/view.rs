@@ -1014,10 +1014,6 @@ impl View<'_> {
         if a.makes.1 > 1 {
             chips.push(chip("g", self.t.t("makes_n", &[("n", a.makes.1.to_string())])));
         }
-        // Weapons and armour are held, not spent: one is all a fight uses (T21).
-        if is_held(a.makes.0) {
-            chips.push(chip("t", self.t.s("held_note")));
-        }
         if a.region > 0 {
             chips.push(chip("p", self.t.s(&format!("region_{}", c::REGIONS[a.region].0))));
         }

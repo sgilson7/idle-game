@@ -2196,25 +2196,16 @@ mod tests {
     }
 
     #[test]
-    fn combat_says_a_held_weapon_does_not_stack_and_ammunition_is_spent() {
+    fn combat_names_the_weapon_in_hand_and_what_it_adds() {
+        // Short on the chip (T29); the encyclopedia says it is not used up.
         let mut g = game(0);
         g.act("sheet.close", "", 0);
         g.state_mut().bank.insert("bronze_sword".into(), 20);
         let mut t = Vec::new();
         all_text(&ui(&g.act("tab", "combat", 0))["blocks"], &mut t);
         assert!(
-            t.iter().any(|s| s.starts_with("Bronze sword in hand: +")
-                && s.ends_with("Only the weapon in hand counts, and it is not used up; you have 20")),
+            t.iter().any(|s| s == "Bronze sword in hand: +10 max hit"),
             "{t:?}"
-        );
-        // a sword's card in Smithing says so too; a bar's does not
-        let mut t = Vec::new();
-        all_text(&ui(&g.act("tab", "smithing", 0))["blocks"], &mut t);
-        assert_eq!(
-            t.iter()
-                .filter(|s| *s == "In a fight only the weapon in hand counts, and it is not used up")
-                .count(),
-            t.iter().filter(|s| s.contains("sword")).count().min(1)
         );
         assert!(
             crate::view::is_held("bronze_sword")
