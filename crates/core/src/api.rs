@@ -37,6 +37,9 @@ pub struct Ui {
     /// The saved text could not be read: the page keeps a copy of it.
     pub stash: bool,
     pub hints: Vec<Hint>,
+    /// What the app reports to Game Center (T17); none on the web.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub game_center: Option<GameCenter>,
     /// A good moment to ask for a rating (T18): the app asks the store,
     /// which decides whether to show its prompt. Never on the web.
     pub review: bool,
@@ -47,6 +50,14 @@ pub struct Ui {
     /// schedules these when the page hides and drops them when it shows.
     /// Empty on the web.
     pub alerts: Vec<Alert>,
+}
+
+/// The leaderboard score and the achievements reached, for Game Center.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GameCenter {
+    pub board: String,
+    pub score: u64,
+    pub achieved: Vec<String>,
 }
 
 /// One notification for the device to schedule.
@@ -80,6 +91,11 @@ pub struct Game {
     book_group: String,
     /// Sounds waiting for the next screen (T18).
     sounds: Vec<String>,
+    /// A newer save found in iCloud, waiting for the player's choice (T17).
+    cloud: Option<String>,
+    /// When this device's save was last played, before this session: what
+    /// an iCloud save is compared with. 0 for a new game.
+    played: u64,
 }
 
 /// A save as it is written to a file: a little about where it came from, then
@@ -165,6 +181,8 @@ impl Game {
             book_search: String::new(),
             book_group: String::new(),
             sounds: Vec::new(),
+            cloud: None,
+            played: 0,
         };
         g.seal();
         if saved.trim().is_empty() {
@@ -174,6 +192,7 @@ impl Game {
         match read_save(saved) {
             Ok(s) => {
                 g.s = s;
+                g.played = g.s.last_wall;
                 g.seal();
                 g.s.note(now, "load", "", 0);
             }
@@ -860,6 +879,24 @@ impl Game {
             "store.none" => {
                 self.toasts = vec![self.text.s("toast_store_none")];
             }
+            // iCloud (T17): the app reads the save kept there at start. A save
+            // played later than this one is offered; the player chooses.
+            "cloud.found" => {
+                if let Ok(other) = read_save(value) {
+                    if other.last_wall > self.played + c::CLOUD_NEWER_MS {
+                        self.cloud = Some(value.to_string());
+                        self.sheet = Some(self.cloud_sheet(&other));
+                    }
+                }
+            }
+            "cloud.use" => {
+                if let Some(text) = self.cloud.take() {
+                    self.played = read_save(&text).map(|s| s.last_wall).unwrap_or(now);
+                    self.import(&text, now);
+                    self.sheet = None;
+                    self.toasts = vec![self.text.s("toast_cloud_used")];
+                }
+            }
             "playtest.sent" => {
                 self.toasts = vec![self.text.s("toast_playtest")];
             }
@@ -878,6 +915,32 @@ impl Game {
             all: self.all,
             book_search: &self.book_search,
             book_group: &self.book_group,
+        }
+    }
+
+    fn cloud_sheet(&self, other: &State) -> Sheet {
+        let t = &self.text;
+        Sheet {
+            kind: "notice".into(),
+            title: t.s("cloud_title"),
+            lines: vec![
+                t.t(
+                    "cloud_theirs",
+                    &[
+                        ("n", other.total_level().to_string()),
+                        (
+                            "ago",
+                            crate::text::dur(other.last_wall.saturating_sub(self.played)),
+                        ),
+                    ],
+                ),
+                t.t("cloud_mine", &[("n", self.s.total_level().to_string())]),
+            ],
+            buttons: vec![
+                button(t.s("cloud_keep"), "sheet.close", ""),
+                button(t.s("cloud_use"), "cloud.use", "").tone("primary"),
+            ],
+            ..Sheet::default()
         }
     }
 
@@ -1016,6 +1079,7 @@ impl Game {
             hints: self.hints.clone(),
             alerts: self.alerts(),
             review: self.review_moment(),
+            game_center: self.game_center(),
             sounds: if self.s.sound {
                 std::mem::take(&mut self.sounds)
             } else {
@@ -1025,6 +1089,33 @@ impl Game {
         self.sounds.clear();
         self.stash = false;
         ui
+    }
+
+    /// The total level for the leaderboard, and each achievement reached:
+    /// a region reached, the first prestige, a Legend's Fame rank, three
+    /// followers. Game Center ignores what it has already been told.
+    fn game_center(&self) -> Option<GameCenter> {
+        if !self.device.app {
+            return None;
+        }
+        let s = &self.s;
+        let achieved = [
+            ("coast", s.region_reached(1)),
+            ("peaks", s.region_reached(2)),
+            ("wastes", s.region_reached(3)),
+            ("first_prestige", s.prestige > 0),
+            ("legend", s.fame.iter().any(|&k| k + 1 >= c::FAME_RANKS[0].len())),
+            ("three_followers", s.followers.len() >= c::FOLLOWER_RANKS.len()),
+        ]
+        .into_iter()
+        .filter(|(_, done)| *done)
+        .map(|(k, _)| k.to_string())
+        .collect();
+        Some(GameCenter {
+            board: "total_level".into(),
+            score: s.total_level() as u64,
+            achieved,
+        })
     }
 
     /// In the app, the first good moments ask for a rating, once each: a
@@ -1990,5 +2081,31 @@ mod tests {
         assert_eq!(ui(&g.tick(6))["review"], false);
         web.state_mut().xp[0] = crate::xp::at(25);
         assert_eq!(ui(&web.tick(5))["review"], false);
+    }
+
+    #[test]
+    fn the_app_offers_a_newer_icloud_save_and_reports_to_game_center() {
+        // An older game here; iCloud holds one played two minutes later.
+        let mut there = game(1);
+        all_at(&mut there, 20);
+        there.tick(200_000);
+        let cloud = there.save();
+        let mut g = app(true, 1);
+        g.act("sheet.close", "", 1);
+        // this device's game is new; iCloud's was played at wall time 200,000
+        let v = ui(&g.act("cloud.found", &cloud, 250_000));
+        assert_eq!(v["sheet"]["title"], "A newer save in iCloud");
+        let v = ui(&g.act("cloud.use", "", 250_001));
+        assert_eq!(v["toasts"][0], "Playing the save from iCloud");
+        assert_eq!(g.state().total_level(), 19 * 20);
+        // The same save again is not newer: no sheet.
+        let v = ui(&g.act("cloud.found", &cloud, 250_002));
+        assert!(v.get("sheet").is_none());
+        // Game Center: the total level, and the Coast reached (304 ≥ 300).
+        let gc = &ui(&g.tick(250_003))["game_center"];
+        assert_eq!(gc["board"], "total_level");
+        assert_eq!(gc["score"], 380);
+        assert_eq!(gc["achieved"], serde_json::json!(["coast"]));
+        assert!(ui(&game(1).tick(1)).get("game_center").is_none());
     }
 }

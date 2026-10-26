@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <!-- Reference default, plus manifest-src 'self' for the mobile kit (D4).
-       connect-src 'self' keeps fetches on this origin; 'wasm-unsafe-eval' lets
+       connect-src 'self' keeps fetches on this origin (ipc: is the app's bridge
+       to the phone, T17, and reaches nothing on the web); 'wasm-unsafe-eval' lets
        the page compile its own WebAssembly module; form-action 'none' blocks
        form posts. A meta policy cannot stop navigation, so the browser check
        still watches requests. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; style-src 'self'; img-src 'self' data: blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ipc:; style-src 'self'; img-src 'self' data: blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="theme-color" content="#10141c">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">

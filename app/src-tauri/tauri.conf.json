@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Idlewright",
+  "version": "1.0.0",
+  "identifier": "io.github.sgilson7.idlewright",
+  "build": {
+    "frontendDist": "../../dist",
+    "beforeBuildCommand": "../scripts/build.sh",
+    "beforeDevCommand": "../scripts/build.sh"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Idlewright",
+        "width": 430,
+        "height": 900,
+        "backgroundColor": "#10141c"
+      }
+    ],
+    "security": {
+      "csp": null,
+      "dangerousDisableAssetCspModification": true,
+      "freezePrototype": false
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "RolePlayingGame",
+    "shortDescription": "Idle skilling RPG",
+    "copyright": "",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "iOS": {
+      "minimumSystemVersion": "16.0"
+    },
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    }
+  }
+}

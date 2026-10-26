@@ -2180,6 +2180,12 @@
   "sound_on": "On",
   "sound_off": "Off",
   "offer_title": "You have reached the Coast",
-  "offer_text": "Your total level is high enough for the Coast. It and the two regions past it open with the purchase; the Vale stays free to play in full."
+  "offer_text": "Your total level is high enough for the Coast. It and the two regions past it open with the purchase; the Vale stays free to play in full.",
+  "cloud_title": "A newer save in iCloud",
+  "cloud_theirs": "iCloud has a game at total level {n}, played {ago} after this one, on another device.",
+  "cloud_mine": "This device's game is at total level {n}.",
+  "cloud_keep": "Keep this one",
+  "cloud_use": "Use iCloud's",
+  "toast_cloud_used": "Playing the save from iCloud"
  }
 }

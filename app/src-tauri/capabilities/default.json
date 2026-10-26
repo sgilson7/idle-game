@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the game's page may ask of the phone: notifications and the Apple services.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "notification:default",
+    "apple:allow-call"
+  ]
+}

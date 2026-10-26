@@ -3,3 +3,7 @@
 /.venv/
 __pycache__/
 /mutants.out*/
+
+# The app (T17): build output and the Xcode project Tauri generates.
+app/src-tauri/target/
+app/src-tauri/gen/schemas/

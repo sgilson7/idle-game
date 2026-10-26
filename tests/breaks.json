@@ -107,8 +107,8 @@
   {
     "name": "a version-one save gains two skills",
     "file": "crates/core/src/api.rs",
-    "find": "state.xp.resize(c::SKILLS.len(), 0);",
-    "replace": "",
+    "find": "if (state.v == 1 && state.xp.len() == 12) ||",
+    "replace": "if (false && state.xp.len() == 12) ||",
     "test": "a_version_one_save_gains_crafting_and_farming"
   },
   {
@@ -674,8 +674,8 @@
   {
     "name": "plan edits outside the choices are refused",
     "file": "crates/core/src/game.rs",
-    "find": "(\"times\", \"repeat\") => number.filter(|n| c::PLAN_TIMES.contains(n))",
-    "replace": "(\"times\", \"repeat\") => number.filter(|_| true)",
+    "find": ".filter(|n| c::PLAN_TIMES.contains(n))",
+    "replace": ".filter(|_| true)",
     "test": "plan_edits_outside_the_offered_choices_are_refused"
   },
   {
@@ -688,15 +688,15 @@
   {
     "name": "a card shows how many of what it makes you have",
     "file": "crates/core/src/view.rs",
-    "find": "&[(\"item\", self.t.item(a.makes.0)), (\"n\", num(self.s.have(a.makes.0)))],",
-    "replace": "&[(\"item\", self.t.item(a.makes.0)), (\"n\", num(0))],",
+    "find": "(\"n\", num(self.s.have(a.makes.0))),",
+    "replace": "(\"n\", num(0)),",
     "test": "a_card_shows_how_many_of_what_it_makes_you_have"
   },
   {
     "name": "each trader rank opens a shelf",
     "file": "crates/core/src/game.rs",
-    "find": "trader && self.rank_in(c::Engine::Trader, 0) >= rank))",
-    "replace": "trader))",
+    "find": "trader && self.rank_in(c::Engine::Trader, 0) >= rank,",
+    "replace": "trader,",
     "test": "each_trader_rank_opens_a_shelf_of_the_shop"
   },
   {
@@ -765,8 +765,8 @@
   {
     "name": "one show at a time",
     "file": "crates/core/src/engines.rs",
-    "find": "if !self.fame_open() || self.show.is_some() || ",
-    "replace": "if !self.fame_open() || ",
+    "find": "        if !self.fame_open()\n            || self.show.is_some()\n",
+    "replace": "        if !self.fame_open()\n",
     "test": "a_booked_show_feeds_its_crowd_now_and_pays_at_the_end"
   },
   {
@@ -807,15 +807,15 @@
   {
     "name": "the encyclopedia lists what uses an item",
     "file": "crates/core/src/view.rs",
-    "find": "        for a in c::ACTIONS.iter().filter(|a| a.needs.iter().any(|(i, _)| *i == item)) {\n            push(&mut uses, self.skill_name(a.skill));\n        }\n",
-    "replace": "",
+    "find": "            push(&mut uses, self.skill_name(a.skill));\n",
+    "replace": "            let _ = a;\n",
     "test": "the_encyclopedia_says_what_makes_each_item_and_what_uses_it"
   },
   {
     "name": "sound off plays nothing",
     "file": "crates/core/src/api.rs",
-    "find": "sounds: if self.s.sound { std::mem::take(&mut self.sounds) } else { Vec::new() },",
-    "replace": "sounds: std::mem::take(&mut self.sounds),",
+    "find": "            } else {\n                Vec::new()\n            },\n        };",
+    "replace": "            } else {\n                std::mem::take(&mut self.sounds)\n            },\n        };",
     "test": "watched_work_names_its_sound_and_the_setting_turns_sound_off"
   },
   {
@@ -831,5 +831,19 @@
     "find": "                self.s.asked.push(k.to_string());\n",
     "replace": "",
     "test": "the_app_offers_the_purchase_once_at_the_coast_and_asks_for_a_rating_once_a_moment"
+  },
+  {
+    "name": "only a newer icloud save is offered",
+    "file": "crates/core/src/api.rs",
+    "find": "if other.last_wall > self.played + c::CLOUD_NEWER_MS {",
+    "replace": "if other.last_wall + 1 > 0 {",
+    "test": "the_app_offers_a_newer_icloud_save_and_reports_to_game_center"
+  },
+  {
+    "name": "game center hears the regions reached",
+    "file": "crates/core/src/api.rs",
+    "find": "(\"coast\", s.region_reached(1)),",
+    "replace": "(\"coast\", false),",
+    "test": "the_app_offers_a_newer_icloud_save_and_reports_to_game_center"
   }
 ]

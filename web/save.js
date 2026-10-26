@@ -1,9 +1,13 @@
 // The one file that names browser storage (change to D17, IG-6). It stores
 // the core's save text and reads it back; it never reads inside the text.
+// In the app (T17) the save is a file the phone keeps, not browser storage,
+// which a phone may clear.
 const KEY = "idle-game-save";
 const UNREADABLE = "idle-game-unreadable-save";
+const tauri = window.__TAURI__;
 
-export function load() {
+export async function load() {
+  if (tauri) return tauri.core.invoke("save_read").catch(() => "");
   try {
     return localStorage.getItem(KEY) || "";
   } catch (e) {
@@ -12,6 +16,10 @@ export function load() {
 }
 
 export function store(text) {
+  if (tauri) {
+    tauri.core.invoke("save_write", { text }).catch(() => {});
+    return;
+  }
   try {
     localStorage.setItem(KEY, text);
   } catch (e) {

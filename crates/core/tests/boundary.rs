@@ -692,9 +692,13 @@ fn core_source_has_no_io_and_no_nondeterminism() {
 
 #[test]
 fn shim_decides_nothing() {
-    let src_dir = repo_root().join("crates/shim/src");
-    let files = rust_files_under(&src_dir);
-    assert!(!files.is_empty(), "no shim source found");
+    // The web's shim, and the app's Rust (T17), which is a shim for the phone.
+    let mut files = Vec::new();
+    for dir in ["crates/shim/src", "app/src-tauri/src", "app/src-tauri/apple/src"] {
+        let found = rust_files_under(&repo_root().join(dir));
+        assert!(!found.is_empty(), "no shim source found in {dir}");
+        files.extend(found);
+    }
     let mut problems = Vec::new();
     for f in &files {
         let text = fs::read_to_string(f).expect("read shim source");

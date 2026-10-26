@@ -9,6 +9,7 @@
 import init, { Game } from "./pkg/tool_shim.js";
 import { load, store, stash, persist } from "./save.js";
 import { loadSounds, unlock, play } from "./sound.js";
+import * as phone from "./device.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const el = (id) => document.getElementById(id);
@@ -49,6 +50,8 @@ const device = {
   "page.export": exportSave,
   "page.import": () => el("importer").click(),
   "page.playtest": sendPlaytest,
+  "page.buy": async () => draw(game.act(await phone.buy(), "1", now())),
+  "page.restore": async () => draw(game.act(await phone.restore(), "1", now())),
 };
 
 function press(b) {
@@ -417,6 +420,7 @@ function draw(json) {
   drawSheet(ui.sheet);
   drawToasts(ui.toasts);
   play(ui.sounds || []);
+  if (ui.review) phone.review();
   hint(document.querySelectorAll(".head h1, .tab .full, .sheet h2"), ui.hints);
   schedule();
   return ui;
@@ -435,7 +439,7 @@ function keep() {
 
 // ---------- the device's jobs ----------
 
-function deviceInfo() {
+function deviceInfo(facts) {
   const standalone =
     navigator.standalone === true ||
     matchMedia("(display-mode: standalone)").matches ||
@@ -447,6 +451,9 @@ function deviceInfo() {
     ua: navigator.userAgent,
     w: screen.width,
     h: screen.height,
+    app: phone.inApp,
+    owned: !!facts.owned,
+    price: facts.price || "",
   });
 }
 
@@ -515,9 +522,13 @@ el("shade").addEventListener("click", (e) => {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     clearTimeout(timer);
-    game.act("seen.hide", "", now());
+    const away = JSON.parse(game.act("seen.hide", "", now()));
     keep();
+    phone.alerts(away.alerts);
+    phone.report(away.game_center);
+    phone.cloudWrite(game.save());
   } else {
+    phone.clearAlerts();
     draw(game.act("seen.show", "", now()));
   }
 });
@@ -529,9 +540,10 @@ async function main() {
   document.addEventListener("pointerdown", unlock);
   const strings = await (await fetch("data/strings.json")).text();
   const glossary = await (await fetch("data/glossary.md")).text();
-  saved = load();
+  saved = await load();
+  const facts = await phone.storeFacts();
   try {
-    game = new Game(strings, glossary, saved, deviceInfo(), now());
+    game = new Game(strings, glossary, saved, deviceInfo(facts), now());
   } catch (e) {
     el("message").textContent = String(e);
     return;
@@ -539,6 +551,9 @@ async function main() {
   draw(game.tick(now()));
   keep();
   persist();
+  phone.gameCenter();
+  const cloud = await phone.cloudRead();
+  if (cloud) draw(game.act("cloud.found", cloud, now()));
   setInterval(keep, ui.autosave_ms);
   document.body.dataset.ready = "true";
 }

@@ -1,0 +1,14 @@
+[package]
+name = "tauri-plugin-apple"
+version = "0.1.0"
+edition = "2021"
+description = "Idlewright's bridge to the App Store, Game Center and iCloud: one call, forwarded to Swift. Decides nothing."
+publish = false
+links = "tauri-plugin-apple"
+
+[build-dependencies]
+tauri-plugin = { version = "=2.7.1", features = ["build"] }
+
+[dependencies]
+tauri = "=2.12.2"
+serde_json = "1"
