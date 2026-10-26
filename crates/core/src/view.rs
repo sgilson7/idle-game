@@ -595,7 +595,12 @@ impl View<'_> {
         }
     }
 
-    /// How the figure works at an action or a fight (T18, IG-Q51 A).
+    /// How the figure works at an action or a fight (T18, IG-Q51 A); also
+    /// the name of the work's sound.
+    pub(crate) fn pose(&self, id: &str) -> &'static str {
+        self.pose_of(id)
+    }
+
     fn pose_of(&self, id: &str) -> &'static str {
         if c::enemy_index(id).is_some() || c::dungeon_index(id).is_some() {
             return match c::STYLES[self.s.style].skill {
@@ -2621,6 +2626,18 @@ impl View<'_> {
                 ..Row::default()
             });
         }
+        rows.push(Row {
+            icon: "performance".into(),
+            title: self.t.s("sound_title"),
+            sub: self.t.s("sound_sub"),
+            buttons: vec![button(
+                self.t.s(if self.s.sound { "sound_on" } else { "sound_off" }),
+                "sound.toggle",
+                "",
+            )
+            .pressed(self.s.sound)],
+            ..Row::default()
+        });
         rows.push(Row {
             icon: "reset".into(),
             title: self.t.s("reset_title"),

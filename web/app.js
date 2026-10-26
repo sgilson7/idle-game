@@ -8,6 +8,7 @@
 // fullscreen, and handing files to the player.
 import init, { Game } from "./pkg/tool_shim.js";
 import { load, store, stash, persist } from "./save.js";
+import { loadSounds, unlock, play } from "./sound.js";
 
 const SVG = "http://www.w3.org/2000/svg";
 const el = (id) => document.getElementById(id);
@@ -415,6 +416,7 @@ function draw(json) {
   document.body.dataset.screen = ui.screen;
   drawSheet(ui.sheet);
   drawToasts(ui.toasts);
+  play(ui.sounds || []);
   hint(document.querySelectorAll(".head h1, .tab .full, .sheet h2"), ui.hints);
   schedule();
   return ui;
@@ -523,6 +525,8 @@ addEventListener("pagehide", keep);
 
 async function main() {
   await init();
+  await loadSounds();
+  document.addEventListener("pointerdown", unlock);
   const strings = await (await fetch("data/strings.json")).text();
   const glossary = await (await fetch("data/glossary.md")).text();
   saved = load();

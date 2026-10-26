@@ -36,5 +36,10 @@ fn every_thing_the_core_names_has_an_icon() {
     }
     missing.sort();
     missing.dedup();
-    assert!(missing.is_empty(), "{} with no icon: {:?}", missing.len(), missing);
+    assert!(
+        missing.is_empty(),
+        "{} with no icon: {:?}",
+        missing.len(),
+        missing
+    );
 }

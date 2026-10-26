@@ -2174,6 +2174,10 @@
   "book_sells": "sells for {n} gold",
   "book_none": "nothing",
   "book_use_food": "Combat (food)",
-  "book_use_armour": "Combat (armour)"
+  "book_use_armour": "Combat (armour)",
+  "sound_title": "Sound",
+  "sound_sub": "A short sound for each action, a tune for each song, and a buzz on a level where the phone can.",
+  "sound_on": "On",
+  "sound_off": "Off"
  }
 }

@@ -37,6 +37,9 @@ pub struct Ui {
     /// The saved text could not be read: the page keeps a copy of it.
     pub stash: bool,
     pub hints: Vec<Hint>,
+    /// Sounds to play now, by name (T18): the page looks each up in
+    /// data/sounds.json. Empty when sound is off.
+    pub sounds: Vec<String>,
     /// What the app tells the player while it is closed (T17): the device
     /// schedules these when the page hides and drops them when it shows.
     /// Empty on the web.
@@ -72,6 +75,8 @@ pub struct Game {
     /// The encyclopedia's search box and open group (T19); not saved.
     book_search: String,
     book_group: String,
+    /// Sounds waiting for the next screen (T18).
+    sounds: Vec<String>,
 }
 
 /// A save as it is written to a file: a little about where it came from, then
@@ -156,6 +161,7 @@ impl Game {
             editing: None,
             book_search: String::new(),
             book_group: String::new(),
+            sounds: Vec::new(),
         };
         g.seal();
         if saved.trim().is_empty() {
@@ -343,6 +349,7 @@ impl Game {
             }
         } else {
             self.s.count("seen_ms", elapsed);
+            self.sounds.extend(self.sounds_for(&r));
             self.toasts = self.toasts_for(&r);
             for crop in &ripe {
                 self.toasts
@@ -406,6 +413,33 @@ impl Game {
         self.log_report(&r, now, false);
         let more = self.toasts_for(&r);
         self.toasts.extend(more);
+        if done && name.starts_with("rise.") {
+            self.sounds.push("fanfare".into());
+        }
+        let cues = self.sounds_for(&r);
+        self.sounds.extend(cues);
+    }
+
+    /// What a stretch of watched time sounds like (T18): the work's own
+    /// sound, a song's tune, a level, gold coming in.
+    fn sounds_for(&self, r: &Report) -> Vec<String> {
+        let mut out = Vec::new();
+        if r.actions > 0 {
+            if let Some(id) = self.s.active.as_deref().or(r.steps.last().map(|s| s.as_str())) {
+                if c::SONG_INSTRUMENTS.iter().any(|(s, _)| *s == id) {
+                    out.push(format!("song_{id}"));
+                } else {
+                    out.push(self.view().pose(id).to_string());
+                }
+            }
+        }
+        if !r.levels.is_empty() {
+            out.push("level".into());
+        }
+        if !r.caravans.is_empty() || !r.shows.is_empty() || !r.chests.is_empty() {
+            out.push("coin".into());
+        }
+        out
     }
 
     /// A farming act: plant or harvest, with its levels logged like any action's.
@@ -732,6 +766,7 @@ impl Game {
                 };
             }
             "list.all" => self.all = !self.all,
+            "sound.toggle" => self.s.sound = !self.s.sound,
             "sheet.close" => {
                 self.sheet = None;
                 self.editing = None;
@@ -805,6 +840,7 @@ impl Game {
                 self.s.note(now, "store_owned", value, 0);
                 if was && !self.s.sealed {
                     self.toasts = vec![self.text.s("toast_store_owned")];
+                    self.sounds.push("fanfare".into());
                 }
             }
             "store.price" => {
@@ -975,7 +1011,13 @@ impl Game {
             stash: self.stash,
             hints: self.hints.clone(),
             alerts: self.alerts(),
+            sounds: if self.s.sound {
+                std::mem::take(&mut self.sounds)
+            } else {
+                Vec::new()
+            },
         };
+        self.sounds.clear();
         self.stash = false;
         ui
     }
@@ -1845,5 +1887,38 @@ mod tests {
             .any(|r| r["title"] == "Logs"));
         let v = ui(&g.act("book.group", "woodcutting", 0));
         assert!(v["blocks"].as_array().unwrap().last().unwrap()["title"] != "Woodcutting");
+    }
+
+    // ---------- sound (T18) ----------
+
+    #[test]
+    fn watched_work_names_its_sound_and_the_setting_turns_sound_off() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        g.act("do", "tree", 0);
+        // one tree, 3 s: the chop's sound; level 2 (83 XP) at the ninth tree, 27 s
+        let v = ui(&g.tick(3_000));
+        assert_eq!(v["sounds"], serde_json::json!(["chop"]));
+        let v = ui(&g.tick(27_000));
+        assert_eq!(v["sounds"], serde_json::json!(["chop", "level"]));
+        assert_eq!(ui(&g.tick(27_000))["sounds"], serde_json::json!([]));
+        g.act("sound.toggle", "", 27_000);
+        let v = ui(&g.tick(30_000));
+        assert_eq!(v["sounds"], serde_json::json!([]));
+        // every sound the core can name is in data/sounds.json
+        let data: serde_json::Value =
+            serde_json::from_str(include_str!("../../../data/sounds.json")).unwrap();
+        for a in c::ACTIONS {
+            let v = g.view();
+            let name = if c::SONG_INSTRUMENTS.iter().any(|(s, _)| *s == a.id) {
+                format!("song_{}", a.id)
+            } else {
+                v.pose(a.id).to_string()
+            };
+            assert!(data["sounds"].get(&name).is_some(), "{name}");
+        }
+        for name in ["level", "coin", "fanfare", "slash", "shoot", "cast"] {
+            assert!(data["sounds"].get(name).is_some(), "{name}");
+        }
     }
 }

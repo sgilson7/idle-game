@@ -810,5 +810,12 @@
     "find": "        for a in c::ACTIONS.iter().filter(|a| a.needs.iter().any(|(i, _)| *i == item)) {\n            push(&mut uses, self.skill_name(a.skill));\n        }\n",
     "replace": "",
     "test": "the_encyclopedia_says_what_makes_each_item_and_what_uses_it"
+  },
+  {
+    "name": "sound off plays nothing",
+    "file": "crates/core/src/api.rs",
+    "find": "sounds: if self.s.sound { std::mem::take(&mut self.sounds) } else { Vec::new() },",
+    "replace": "sounds: std::mem::take(&mut self.sounds),",
+    "test": "watched_work_names_its_sound_and_the_setting_turns_sound_off"
   }
 ]

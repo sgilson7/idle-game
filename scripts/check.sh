@@ -23,6 +23,7 @@ cargo clippy --workspace --all-targets --quiet -- -D warnings
 
 step "3/9 core and boundary tests (cargo test), and the region content is current"
 "$PY" tools/content/regions.py --check
+"$PY" tools/sounds/sounds.py --check
 cargo test --workspace --quiet
 
 step "4/9 release WebAssembly build (scripts/build.sh)"

@@ -253,6 +253,13 @@ pub struct State {
     /// The newest lines of the combat log, oldest first (T19).
     #[serde(default)]
     pub blows: Vec<Blow>,
+    /// Sounds and the phone's buzz (T18, IG-Q50 B); on unless turned off.
+    #[serde(default = "on")]
+    pub sound: bool,
+}
+
+fn on() -> bool {
+    true
 }
 
 /// Why an action could not go on.
@@ -362,6 +369,7 @@ impl State {
             followers: Vec::new(),
             buffs: BTreeMap::new(),
             blows: Vec::new(),
+            sound: true,
         };
         s.hp = s.max_hp();
         s.note(now, "new", "", 0);
