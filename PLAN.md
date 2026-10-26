@@ -54,3 +54,19 @@ Stage 2 for T15: four times the length and content of every skill and engine. Th
 | P30 | A balance pass over all four regions from playtest files. | R7.6 | readout tool; triage rows |
 
 The person answered on 2026-10-25: "the answers are in the log, build the full game". The tapped answers were all defaults, and the three left untapped (IG-Q36 to IG-Q38) take theirs (R9.1). All three regions were built at once (R9.2).
+
+## Plan 4: before the app (2026-10-25; answered in the journal and built the same day)
+
+Stage 2 for T18 and T19. The design is on the journal's Next tab (IG-Q50 to IG-Q57). The person answered: "the answers are in the log, build it, deploy it."
+
+| # | Decision | Reason | Held by |
+| --- | --- | --- | --- |
+| P31 | Advanced plans: up to twelve steps; a step can stop at an amount, a level or gold; repeat and if steps jump; a plan that goes round doing nothing stops. Picking by hand stops a plan and keeps its steps (changes P3). | IG-Q53 A | plan tests and break rows |
+| P32 | The Trader opens a shelf of the shop at each Vale rank, each later region's goods at its first rank there, and two more tool tiers at the second rank. | IG-Q55 A | shop tests |
+| P33 | Performance, a nineteenth skill, and the Fame engine at total level 50: songs need an instrument held; shows at venues; three songs strengthen other work for an hour; Fame raises orders and estate income. Regions and prestige keep their total levels. | IG-Q56 A, IG-Q57 A | bard tests |
+| P34 | Followers: three at most ever, from the first three Vale Fame ranks, gathering free at a quarter of your speed rising to all of it, kept through prestige. | IG-Q54 A | bard tests |
+| P35 | Art drawn as code: enemies by family, a figure with a tool and a loop for each kind of work, a backdrop per region, an app icon. | IG-Q51 A | `tests/icons.rs`; browser check |
+| P36 | Sound from data/sounds.json, named by the core, with a setting; the app offers the purchase at the Coast and asks for a rating at three moments. | IG-Q50 B | sound and app tests |
+| P37 | A combat log, what each combat level does, an encyclopedia of every item, counts on action cards, and a live panel on the Plan tab. | T18, T19 | API tests and break rows |
+| P38 | One WebAssembly engine for the web and the app: the app ships the web's files. | IG-Q52 A (changes IG-Q48 B) | T17, a checksum check in the app build |
+

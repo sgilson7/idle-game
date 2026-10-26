@@ -23,8 +23,8 @@ GROUPS = {
     "gather": ["woodcutting", "mining", "fishing", "farming"],
     "make": ["firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction"],
     "fight": ["combat", "recipes"],
-    "engines": ["trader", "estate", "workshop", "observatory"],
-    "more": ["bank", "shop", "regions", "plan", "prestige", "settings"],
+    "engines": ["performance", "stage", "trader", "estate", "workshop", "observatory"],
+    "more": ["bank", "shop", "book", "regions", "plan", "prestige", "settings"],
 }
 
 
@@ -43,13 +43,13 @@ def icons_on(page):
 
 def run(page, check, engine):
     phone = engine.endswith("iphone")
-    check(page.locator("#tabs .tab").count() == 23, "twenty-three tabs drawn: skills, combat, recipes, four engines and six screens")
+    check(page.locator("#tabs .tab").count() == 26, "twenty-six tabs drawn: skills, combat, recipes, the stage and four engines, and seven screens")
     check(page.locator("#groups .tab").count() == 5, "five groups drawn")
     if phone:
         check(page.locator("#tabs .tab:visible").count() == 4, "iPhone: the strip shows the Gather group's four tabs")
         check(page.locator("#groups").is_visible(), "iPhone: the groups sit along the bottom")
     else:
-        check(page.locator("#tabs .tab:visible").count() in (4, 23), "the rail or the strip shows its tabs")
+        check(page.locator("#tabs .tab:visible").count() in (4, 26), "the rail or the strip shows its tabs")
     check(page.inner_text(".sheet h2") == UI["welcome_title"], "a new game opens with the welcome")
     page.locator(".sheet .btn.primary").click()
     check(page.locator("#shade").is_hidden(), "Start closes the welcome")
@@ -112,7 +112,7 @@ def run(page, check, engine):
         with page.expect_download() as d:
             page.locator('button[data-act="page.export"]').click()
         saved = json.loads(pathlib.Path(d.value.path()).read_text())
-        check(saved["game"] == "idle-game" and len(saved["state"]["xp"]) == 18, "Export downloads a save with eighteen skills")
+        check(saved["game"] == "idle-game" and len(saved["state"]["xp"]) == 19, "Export downloads a save with nineteen skills")
         with page.expect_download() as d:
             page.locator('button[data-act="page.playtest"]').click()
         report = json.loads(pathlib.Path(d.value.path()).read_text())
