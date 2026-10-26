@@ -1745,4 +1745,57 @@ mod tests {
         assert_eq!(loaded.state().xp[c::PERFORMANCE], 0);
         assert_eq!(loaded.state().v, 5);
     }
+
+    // ---------- combat: the log and what levels do (T19) ----------
+
+    #[test]
+    fn combat_shows_what_each_level_does_and_keeps_a_log_of_the_newest_twelve_lines() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        let s = g.state_mut();
+        s.xp[c::MELEE] = crate::xp::at(40);
+        s.xp[c::HITPOINTS] = crate::xp::at(40);
+        s.bank.insert("bronze_sword".into(), 1);
+        s.bank.insert("shrimp".into(), 100);
+        let v = ui(&g.act("tab", "combat", 0));
+        let levels = v["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["title"] == "What your combat levels do")
+            .unwrap()
+            .clone();
+        // Melee 40: 20 + 3 × 40 = 140; level 41 is 143.
+        assert_eq!(levels["rows"][0]["title"], "Melee 40");
+        assert!(levels["rows"][0]["sub"]
+            .as_str()
+            .unwrap()
+            .starts_with("Max hit 140 from your level, 3 more each level"));
+        assert_eq!(levels["rows"][0]["chip"], "Level 41: 143");
+        // Hitpoints 40: 400 health; level 41 is 410.
+        assert_eq!(levels["rows"][3]["title"], "Hitpoints 40");
+        assert_eq!(levels["rows"][3]["chip"], "Level 41: 410 health");
+        assert!(v["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|b| b["title"] != "Combat log"));
+        g.act("do", "chicken", 0);
+        let v = ui(&g.tick(10 * 60_000));
+        assert_eq!(g.state().blows.len(), 12);
+        let log = v["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["title"] == "Combat log")
+            .unwrap()
+            .clone();
+        assert_eq!(log["rows"].as_array().unwrap().len(), 12);
+        let mut t = Vec::new();
+        all_text(&log, &mut t);
+        assert!(
+            t.iter().any(|x| x.starts_with("You hit the Chicken for ")),
+            "{t:?}"
+        );
+    }
 }

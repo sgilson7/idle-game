@@ -95,6 +95,16 @@ pub struct Follower {
     pub progress: u64,
 }
 
+/// One line of the combat log (T19): what happened in a swing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct Blow {
+    /// "hit", "miss", "hurt", "eat", "kill" or "drop".
+    pub kind: String,
+    /// The enemy, food or item it names.
+    pub what: String,
+    pub n: u64,
+}
+
 /// A caravan on the road (T12).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Caravan {
@@ -240,6 +250,9 @@ pub struct State {
     /// Game time each song's strength lasts until: "fight", "farm", "gather".
     #[serde(default)]
     pub buffs: BTreeMap<String, u64>,
+    /// The newest lines of the combat log, oldest first (T19).
+    #[serde(default)]
+    pub blows: Vec<Blow>,
 }
 
 /// Why an action could not go on.
@@ -348,6 +361,7 @@ impl State {
             show: None,
             followers: Vec::new(),
             buffs: BTreeMap::new(),
+            blows: Vec::new(),
         };
         s.hp = s.max_hp();
         s.note(now, "new", "", 0);
@@ -553,6 +567,29 @@ impl State {
             .find(|(i, _)| self.have(i) > 0)
             .map(|(i, t)| (i.to_string(), *t))
             .unwrap_or_default()
+    }
+
+    /// Adds a line to the combat log, keeping the newest `COMBAT_LOG`.
+    fn blow(&mut self, kind: &str, what: &str, n: u64) {
+        if self.blows.len() >= c::COMBAT_LOG {
+            self.blows.remove(0);
+        }
+        self.blows.push(Blow {
+            kind: kind.into(),
+            what: what.into(),
+            n,
+        });
+    }
+
+    /// A style's max hit from its level alone (T19): what each level adds.
+    pub fn level_hit(&self, skill: usize) -> u64 {
+        c::MAX_HIT_BASE + self.level(skill) as u64 * c::MAX_HIT_PER_LEVEL
+    }
+
+    /// What a style's best weapon and ammunition add to its max hit.
+    pub fn gear_hit(&self, style: usize) -> u64 {
+        let s = &c::STYLES[style];
+        (self.tier(s.held).1 + self.tier(s.spent).1) * c::MAX_HIT_PER_TIER
     }
 
     pub fn max_hit(&self, enemy: &c::Enemy) -> u64 {
@@ -1222,10 +1259,14 @@ impl State {
             let m = self.mult_bp();
             self.gain(style.skill, dmg * c::STYLE_XP_TENTHS * m / 100_000, r);
             self.gain(c::HITPOINTS, dmg * c::HP_XP_THOUSANDTHS * m / 10_000_000, r);
+            self.blow("hit", enemy.id, dmg);
+        } else {
+            self.blow("miss", enemy.id, 0);
         }
         if self.rng.percent(c::ENEMY_HIT_PCT) {
             let hit = self.rng.below(enemy.hit + 1) * (100 - self.armour().1 * c::ARMOUR_PCT_PER_TIER) / 100;
             self.hp = self.hp.saturating_sub(hit);
+            self.blow("hurt", enemy.id, hit);
         }
         let max_hp = self.max_hp();
         if self.hp * 100 < max_hp * c::EAT_BELOW_PCT {
@@ -1240,6 +1281,7 @@ impl State {
                     self.hot_pot_until = self.sim_ms + c::HOT_POT_MS;
                 }
                 self.hp = (self.hp + heal).min(max_hp);
+                self.blow("eat", food, heal);
             }
         }
         if self.foe_hp == 0 {
@@ -1253,9 +1295,11 @@ impl State {
             gold = gold * (100 + self.trinket(c::Trinket::Wealth)) / 100;
             self.gold += gold;
             r.gold += gold;
+            self.blow("kill", enemy.id, gold);
             for (item, n, one_in) in enemy.drops {
                 if self.rng.one_in(*one_in) {
                     self.put(item, *n, r, *one_in > 1);
+                    self.blow("drop", item, *n);
                 }
             }
             for rc in c::RECIPES.iter().filter(|rc| rc.enemy == enemy.id) {

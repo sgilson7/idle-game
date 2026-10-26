@@ -789,5 +789,19 @@
     "find": "    if state.v == 4 {\n        state.xp.resize(c::SKILLS.len(), 0);",
     "replace": "    if state.v == 4 {",
     "test": "a_version_four_save_gains_performance"
+  },
+  {
+    "name": "the combat log keeps twelve lines",
+    "file": "crates/core/src/game.rs",
+    "find": "        if self.blows.len() >= c::COMBAT_LOG {\n            self.blows.remove(0);\n        }\n",
+    "replace": "",
+    "test": "combat_shows_what_each_level_does_and_keeps_a_log_of_the_newest_twelve_lines"
+  },
+  {
+    "name": "combat levels say what the next level adds",
+    "file": "crates/core/src/view.rs",
+    "find": "(\"hit\", num(c::MAX_HIT_BASE + next as u64 * c::MAX_HIT_PER_LEVEL)),",
+    "replace": "(\"hit\", num(c::MAX_HIT_BASE + l as u64 * c::MAX_HIT_PER_LEVEL)),",
+    "test": "combat_shows_what_each_level_does_and_keeps_a_log_of_the_newest_twelve_lines"
   }
 ]

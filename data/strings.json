@@ -2148,6 +2148,20 @@
   "toast_follower_set": "A follower took the job",
   "toast_show": "Show at {venue}: {n} gold, {renown} renown",
   "show_ended": "A show ended at {venue}",
-  "tab_stage_short": "Stage"
+  "tab_stage_short": "Stage",
+  "lvl_of": "{skill} {n}",
+  "style_level_does": "Max hit {hit} from your level, {per} more each level · {gear} more from your weapon and ammunition · {strong} more against an enemy weak to it",
+  "next_level_hit": "Level {n}: {hit}",
+  "hp_level_does": "{hp} health from your level, {per} more each level · {gear} more from armour and jewellery",
+  "next_level_hp": "Level {n}: {hp} health",
+  "levels_do_title": "What your combat levels do",
+  "levels_do_text": "A swing lands {hit}% of the time, or {strong}% against an enemy weak to your style, and hits for 1 up to your max hit.",
+  "combat_log_title": "Combat log",
+  "blow_hit": "You hit the {what} for {n}",
+  "blow_miss": "You missed the {what}",
+  "blow_hurt": "The {what} hit you for {n}",
+  "blow_eat": "You ate {what}: +{n} health",
+  "blow_kill": "{what} defeated: +{n} gold",
+  "blow_drop": "Found {n} {what}"
  }
 }

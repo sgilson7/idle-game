@@ -937,6 +937,7 @@ impl View<'_> {
             bar: Some(self.xp_bar(st.skill)),
             ..block("bar")
         });
+        out.push(self.combat_levels());
         let (ins, outs) = io_of("combat");
         out.push(self.links("combat", &ins, &outs));
         out.push(self.scene(
@@ -1066,6 +1067,9 @@ impl View<'_> {
                 ..block("forecast")
             });
         }
+        if !self.s.blows.is_empty() {
+            out.push(self.combat_log());
+        }
         let mut dungeons: Vec<Card> = c::DUNGEONS
             .iter()
             .enumerate()
@@ -1092,6 +1096,124 @@ impl View<'_> {
             ..block("cards")
         });
         out
+    }
+
+    /// What each combat level does (T19): the max hit a style's level gives
+    /// and what the next level adds; the health Hitpoints gives.
+    fn combat_levels(&self) -> Block {
+        let mut rows: Vec<Row> = c::STYLES
+            .iter()
+            .enumerate()
+            .map(|(k, s)| {
+                let l = self.s.level(s.skill);
+                let next = (l + 1).min(xp::MAX_LEVEL);
+                Row {
+                    icon: c::SKILLS[s.skill].id.into(),
+                    title: self.t.t(
+                        "lvl_of",
+                        &[("skill", self.skill_name(s.skill)), ("n", l.to_string())],
+                    ),
+                    sub: self.t.t(
+                        "style_level_does",
+                        &[
+                            ("hit", num(self.s.level_hit(s.skill))),
+                            ("per", c::MAX_HIT_PER_LEVEL.to_string()),
+                            ("gear", num(self.s.gear_hit(k))),
+                            ("strong", c::MAX_HIT_STRONG.to_string()),
+                        ],
+                    ),
+                    chip: self.t.t(
+                        "next_level_hit",
+                        &[
+                            ("n", next.to_string()),
+                            ("hit", num(c::MAX_HIT_BASE + next as u64 * c::MAX_HIT_PER_LEVEL)),
+                        ],
+                    ),
+                    tone: if k == self.s.style {
+                        "up".into()
+                    } else {
+                        String::new()
+                    },
+                    ..Row::default()
+                }
+            })
+            .collect();
+        let l = self.s.level(c::HITPOINTS);
+        let next = (l + 1).min(xp::MAX_LEVEL);
+        let from_level = l as u64 * c::HP_PER_LEVEL;
+        rows.push(Row {
+            icon: "hitpoints".into(),
+            title: self.t.t(
+                "lvl_of",
+                &[("skill", self.skill_name(c::HITPOINTS)), ("n", l.to_string())],
+            ),
+            sub: self.t.t(
+                "hp_level_does",
+                &[
+                    ("hp", num(from_level)),
+                    ("per", c::HP_PER_LEVEL.to_string()),
+                    ("gear", num(self.s.max_hp() - from_level)),
+                ],
+            ),
+            chip: self.t.t(
+                "next_level_hp",
+                &[
+                    ("n", next.to_string()),
+                    ("hp", num(next as u64 * c::HP_PER_LEVEL)),
+                ],
+            ),
+            ..Row::default()
+        });
+        Block {
+            title: self.t.s("levels_do_title"),
+            text: self.t.t(
+                "levels_do_text",
+                &[
+                    ("hit", c::HIT_PCT.to_string()),
+                    ("strong", c::HIT_PCT_STRONG.to_string()),
+                ],
+            ),
+            rows,
+            ..block("rows")
+        }
+    }
+
+    /// The combat log (T19): the newest lines first.
+    fn combat_log(&self) -> Block {
+        let rows = self
+            .s
+            .blows
+            .iter()
+            .rev()
+            .map(|b| {
+                let name = match b.kind.as_str() {
+                    "eat" | "drop" => self.t.item(&b.what),
+                    _ => self.t.enemy(&b.what),
+                };
+                Row {
+                    icon: match b.kind.as_str() {
+                        "eat" | "drop" => b.what.clone(),
+                        "hurt" => "hitpoints".into(),
+                        _ => b.what.clone(),
+                    },
+                    title: self
+                        .t
+                        .t(&format!("blow_{}", b.kind), &[("what", name), ("n", num(b.n))]),
+                    tone: match b.kind.as_str() {
+                        "hit" | "kill" => "up".into(),
+                        "hurt" => "bad".into(),
+                        "drop" => "rare".into(),
+                        _ => String::new(),
+                    },
+                    ..Row::default()
+                }
+            })
+            .collect();
+        Block {
+            title: self.t.s("combat_log_title"),
+            rows,
+            ..block("rows")
+        }
     }
 
     fn dungeon_card(&self, d: &c::Dungeon, on: bool) -> Card {
