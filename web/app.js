@@ -410,7 +410,13 @@ function tabButton(t, cls) {
 // The strip or rail of tabs. It keeps where it was scrolled across a
 // redraw, and brings the current tab into view only when the screen changes
 // (R21.1): an action finishing must not pull the rail back under the pointer.
+let lastTabs = "";
 function drawTabs(tabs, groups, moved) {
+  // Unchanged tabs are left as they are, so a tab does not move or vanish
+  // under a pointer while an action ticks (R21.1).
+  const sig = JSON.stringify([tabs, groups]);
+  if (sig === lastTabs) return;
+  lastTabs = sig;
   const box = el("tabs");
   const top = box.scrollTop;
   const left = box.scrollLeft;
