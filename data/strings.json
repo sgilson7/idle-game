@@ -2247,6 +2247,20 @@
   "fold_show": "Show {what}",
   "fold_hide": "Hide {what}",
   "fold_levels": "what your combat levels do",
-  "fold_log": "the combat log"
+  "fold_log": "the combat log",
+  "pool_bar": "Mastery pool {pct}% ({have} of {most})",
+  "pool_next": "next at {at}%: {what}",
+  "pool_all": "every bonus open",
+  "pool_b1": "+{n}% XP",
+  "pool_b2": "{n}% faster",
+  "pool_b3": "+{n}% double or keep",
+  "pool_b4": "+{n}% more XP",
+  "pool_b5": "one more of each item",
+  "pool_step": "{at}%: {what}",
+  "pool_title": "Mastery pool",
+  "fold_pool": "the mastery pool",
+  "pool_about": "Every action's mastery level adds to its skill's pool, so mastering older actions makes every action in the skill better. Each step below is for every action here.",
+  "pool_top": "Your highest mastery here: {n}",
+  "pool_top_sub": "Every action in this skill gains mastery that many percent faster."
  }
 }

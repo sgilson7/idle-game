@@ -971,5 +971,26 @@
     "find": "        if self.s.plan.len() < self.s.plan_max() {",
     "replace": "        if self.s.plan.len() < c::PLAN_STEPS {",
     "test": "the_plus_plan_button_follows_the_modes_limit"
+  },
+  {
+    "name": "the pool opens bonuses",
+    "file": "crates/core/src/game.rs",
+    "find": "        c::POOL_STEPS.iter().filter(|&&s| pct >= s).count()",
+    "replace": "        c::POOL_STEPS.iter().filter(|&&s| pct >= s + 100).count()",
+    "test": "a_skills_mastery_pool_opens_bonuses_for_every_action_in_it"
+  },
+  {
+    "name": "the pool makes actions faster",
+    "file": "crates/core/src/game.rs",
+    "find": "            ms = ms * (100 - c::POOL_FASTER_PCT) / 100;",
+    "replace": "            ms = ms * 100 / 100;",
+    "test": "a_skills_mastery_pool_opens_bonuses_for_every_action_in_it"
+  },
+  {
+    "name": "the highest mastery speeds every action's mastery",
+    "file": "crates/core/src/game.rs",
+    "find": "let m = a.xp * (100 + self.top_mastery(a.skill) as u64) / 100;",
+    "replace": "let m = a.xp;",
+    "test": "your_highest_mastery_in_a_skill_speeds_every_actions_mastery"
   }
 ]

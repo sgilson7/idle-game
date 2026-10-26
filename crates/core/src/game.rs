@@ -414,6 +414,41 @@ impl State {
         xp::mastery_level(self.mxp.get(id).copied().unwrap_or(0))
     }
 
+    /// A skill's mastery pool (T27): its actions' mastery levels added up,
+    /// and the most they can add up to (every one at 99).
+    pub fn pool(&self, skill: usize) -> (u64, u64) {
+        let ids = c::skill_actions(skill);
+        let have = ids.iter().map(|&i| self.mastery(c::ACTIONS[i].id) as u64).sum();
+        (have, ids.len() as u64 * xp::MAX_LEVEL as u64)
+    }
+
+    /// The pool as a percentage, rounded down.
+    pub fn pool_pct(&self, skill: usize) -> u64 {
+        let (have, most) = self.pool(skill);
+        have * 100 / most.max(1)
+    }
+
+    /// How many of the pool's five steps a skill has reached.
+    pub fn pool_steps(&self, skill: usize) -> usize {
+        let pct = self.pool_pct(skill);
+        c::POOL_STEPS.iter().filter(|&&s| pct >= s).count()
+    }
+
+    /// Your highest mastery level among a skill's actions (T27).
+    pub fn top_mastery(&self, skill: usize) -> u32 {
+        c::skill_actions(skill)
+            .iter()
+            .map(|&i| self.mastery(c::ACTIONS[i].id))
+            .max()
+            .unwrap_or(1)
+    }
+
+    fn pool_luck(&self, id: &str) -> u64 {
+        c::action_index(id)
+            .filter(|&i| self.pool_steps(c::ACTIONS[i].skill) >= 3)
+            .map_or(0, |_| c::POOL_LUCK_PCT)
+    }
+
     pub fn have(&self, item: &str) -> u64 {
         self.bank.get(item).copied().unwrap_or(0)
     }
@@ -473,6 +508,9 @@ impl State {
         if matches!(a.skill, c::WOODCUTTING | c::MINING | c::FISHING) {
             ms = self.buffed("gather", ms);
         }
+        if self.pool_steps(a.skill) >= 2 {
+            ms = ms * (100 - c::POOL_FASTER_PCT) / 100;
+        }
         ms
     }
 
@@ -499,18 +537,20 @@ impl State {
         } else {
             0
         };
-        base + m / 10
+        base + m / 10 + self.pool_luck(id)
     }
 
     pub fn keep_pct(&self, id: &str) -> u64 {
         let m = self.mastery(id);
-        if m >= 99 {
+        let base = if m >= 99 {
             c::KEEP_AT_99
         } else if m >= 50 {
             c::KEEP_AT_50
         } else {
             0
-        }
+        };
+        let needs = c::action_index(id).is_some_and(|i| !c::ACTIONS[i].needs.is_empty());
+        base + if needs { self.pool_luck(id) } else { 0 }
     }
 
     /// Experience one action gives its skill, after prestige and the
@@ -520,6 +560,13 @@ impl State {
         let mut pct = 100;
         if kind == Kind::Make && self.mastery(a.id) >= c::CHECKPOINTS[0] {
             pct += c::MAKE_XP_AT_10;
+        }
+        let steps = self.pool_steps(a.skill);
+        if steps >= 1 {
+            pct += c::POOL_XP_PCT;
+        }
+        if steps >= 4 {
+            pct += c::POOL_XP_MORE_PCT;
         }
         a.xp * self.mult_bp() * pct / 1_000_000
     }
@@ -1263,7 +1310,9 @@ impl State {
         }
         let before = self.mastery(a.id);
         if yours {
-            add(&mut self.mxp, a.id, a.xp);
+            // Your highest mastery in the skill speeds every action's (T27).
+            let m = a.xp * (100 + self.top_mastery(a.skill) as u64) / 100;
+            add(&mut self.mxp, a.id, m);
         }
         let after = self.mastery(a.id);
         for cp in c::CHECKPOINTS {
@@ -1293,6 +1342,9 @@ impl State {
             if after >= 99 {
                 n += 1;
             }
+        }
+        if self.pool_steps(a.skill) >= 5 {
+            n += 1;
         }
         self.put(made, n, r, false);
         if a.skill == c::WOODCUTTING && self.rng.one_in(c::NEST_ONE_IN) {
@@ -2313,5 +2365,45 @@ mod tests {
         }
         assert_eq!(s.log.len(), c::LOG_CAP);
         assert_eq!(s.log.last().unwrap().n, c::LOG_CAP as u64 + 9);
+    }
+
+    // ---------- the mastery pool (T27) ----------
+
+    #[test]
+    fn a_skills_mastery_pool_opens_bonuses_for_every_action_in_it() {
+        let mut s = State::new(3);
+        let n = c::skill_actions(c::RUNECRAFTING).len() as u64;
+        // A new game: every action at mastery 1.
+        assert_eq!(s.pool(c::RUNECRAFTING), (n, n * 99));
+        assert_eq!(s.pool_steps(c::RUNECRAFTING), 0);
+        // death runes give 10 XP, enough to show +10%; on a 5 XP rune it rounds away (R18.2)
+        let air = &c::ACTIONS[c::action_index("death_runes").unwrap()];
+        let xp0 = s.xp_for(air);
+        let ms0 = s.duration("air_runes");
+        let xp_mastered = |s: &State| s.xp_for(air);
+        // Master every Runecrafting action to 50: the pool is 50 × n of 99 × n, 50%.
+        for &i in c::skill_actions(c::RUNECRAFTING) {
+            s.mxp.insert(c::ACTIONS[i].id.to_string(), xp::mastery_at(50));
+        }
+        assert_eq!(s.pool_pct(c::RUNECRAFTING), 50);
+        assert_eq!(s.pool_steps(c::RUNECRAFTING), 3);
+        // +5% XP (on top of mastery 10's +5%), 5% faster, +5% keep
+        assert_eq!(s.duration("air_runes"), (ms0 - c::MASTERY_FASTER_MS) * 95 / 100);
+        assert!(xp_mastered(&s) > xp0);
+        assert_eq!(s.keep_pct("air_runes"), c::KEEP_AT_50 + 5);
+        // another skill is untouched
+        assert_eq!(s.pool_steps(c::MINING), 0);
+    }
+
+    #[test]
+    fn your_highest_mastery_in_a_skill_speeds_every_actions_mastery() {
+        let mut s = State::new(3);
+        s.mxp.insert("oak".into(), xp::mastery_at(60));
+        assert_eq!(s.top_mastery(c::WOODCUTTING), 60);
+        s.start("tree", 0);
+        let mut r = Report::begin(&s, 3_000, 0);
+        s.advance(3_000, &mut r);
+        // a tree gives 10 mastery XP, 60% more: 16
+        assert_eq!(s.mxp["tree"], 16);
     }
 }

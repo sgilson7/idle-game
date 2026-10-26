@@ -837,7 +837,7 @@ impl Game {
                     }
                 }
             }
-            "fold" if matches!(value, "levels" | "log") => {
+            "fold" if matches!(value, "levels" | "log" | "pool") => {
                 match self.unfolded.iter().position(|k| k == value) {
                     Some(i) => {
                         self.unfolded.remove(i);

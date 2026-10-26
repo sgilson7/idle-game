@@ -1129,6 +1129,29 @@ pub const WEAPON_LAND_EVERY: u64 = 10;
 pub const WEAPON_GATE_PER_TIER: u64 = 20;
 pub const WEAPON_GATE_EACH: u64 = 50;
 pub const WEAPON_RATE_MIN: u64 = 10;
+
+/// The mastery pool (T27, IG-Q62 A, IG-Q63 A): a skill's actions' mastery
+/// levels added up, as a share of all of them at 99, opens a bonus for every
+/// action in the skill at each step: +5% XP, 5% faster, +5% double (gather)
+/// or keep (make), +10% more XP, and one more of each item.
+pub const POOL_STEPS: [u64; 5] = [10, 25, 50, 75, 95];
+pub const POOL_XP_PCT: u64 = 5;
+pub const POOL_FASTER_PCT: u64 = 5;
+pub const POOL_LUCK_PCT: u64 = 5;
+pub const POOL_XP_MORE_PCT: u64 = 10;
+
+/// Each skill's actions, by index into `ACTIONS`.
+pub fn skill_actions(skill: usize) -> &'static [usize] {
+    static BY_SKILL: OnceLock<Vec<Vec<usize>>> = OnceLock::new();
+    BY_SKILL.get_or_init(|| {
+        let mut by = vec![Vec::new(); SKILLS.len()];
+        for (i, a) in ACTIONS.iter().enumerate() {
+            by[a.skill].push(i);
+        }
+        by
+    })[skill]
+        .as_slice()
+}
 /// Experience per point of damage, in tenths (style) and thousandths (Hitpoints).
 pub const STYLE_XP_TENTHS: u64 = 4;
 pub const HP_XP_THOUSANDTHS: u64 = 133;

@@ -796,6 +796,9 @@ impl View<'_> {
             bar: Some(self.xp_bar(i)),
             ..block("bar")
         });
+        if !c::skill_actions(i).is_empty() {
+            out.extend(self.pool_blocks(i));
+        }
         let (ins, outs) = io_of(sk.id);
         out.push(self.links(sk.id, &ins, &outs));
         let shown = active
@@ -1329,6 +1332,73 @@ impl View<'_> {
             cards,
             ..block("cards")
         });
+        out
+    }
+
+    /// The skill's mastery pool (T27): a bar with the next bonus, and,
+    /// opened, each step and the highest-mastery bonus.
+    fn pool_blocks(&self, i: usize) -> Vec<Block> {
+        let (have, most) = self.s.pool(i);
+        let pct = self.s.pool_pct(i);
+        let steps = self.s.pool_steps(i);
+        let names = [
+            self.t.t("pool_b1", &[("n", c::POOL_XP_PCT.to_string())]),
+            self.t.t("pool_b2", &[("n", c::POOL_FASTER_PCT.to_string())]),
+            self.t.t("pool_b3", &[("n", c::POOL_LUCK_PCT.to_string())]),
+            self.t.t("pool_b4", &[("n", c::POOL_XP_MORE_PCT.to_string())]),
+            self.t.s("pool_b5"),
+        ];
+        let next = c::POOL_STEPS.get(steps).map_or(self.t.s("pool_all"), |&at| {
+            self.t.t(
+                "pool_next",
+                &[("at", at.to_string()), ("what", names[steps].clone())],
+            )
+        });
+        let mut out = vec![
+            Block {
+                bar: Some(Bar {
+                    tone: "mast".into(),
+                    width: width(have * 10_000 / most.max(1)),
+                    left: self.t.t(
+                        "pool_bar",
+                        &[("pct", pct.to_string()), ("have", num(have)), ("most", num(most))],
+                    ),
+                    right: next,
+                }),
+                ..block("bar")
+            },
+            self.fold("pool", "fold_pool"),
+        ];
+        if self.unfolded.iter().any(|k| k == "pool") {
+            let mut rows: Vec<Row> = c::POOL_STEPS
+                .iter()
+                .zip(names)
+                .enumerate()
+                .map(|(k, (at, what))| Row {
+                    icon: if k < steps {
+                        "rank".into()
+                    } else {
+                        "rank_locked".into()
+                    },
+                    title: self.t.t("pool_step", &[("at", at.to_string()), ("what", what)]),
+                    tone: if k < steps { "up".into() } else { "used".into() },
+                    ..Row::default()
+                })
+                .collect();
+            let top = self.s.top_mastery(i);
+            rows.push(Row {
+                icon: "prestige".into(),
+                title: self.t.t("pool_top", &[("n", top.to_string())]),
+                sub: self.t.s("pool_top_sub"),
+                ..Row::default()
+            });
+            out.push(Block {
+                title: self.t.s("pool_title"),
+                text: self.t.s("pool_about"),
+                rows,
+                ..block("rows")
+            });
+        }
         out
     }
 
