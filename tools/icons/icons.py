@@ -131,8 +131,9 @@ INSTRUMENT = {
     "war_drum": '<ellipse cx="20" cy="14" rx="13" ry="5" fill="#e8d8b8" stroke="#222"/><path d="M7 14v15c0 3 6 5 13 5s13-2 13-5V14" fill="#a8402a" stroke="#222"/><path d="M8 18l24 10M32 18L8 28" stroke="#f0c040"/><path d="M28 4l8 6M30 2l6 5" stroke="#6b4a2a" stroke-width="2"/>',
 }
 CROP = {"potato": "#c8a060", "onion": "#e8d0b0", "cabbage": "#7ac85a", "tomato": "#e04a3a", "sweetcorn": "#f0c830",
-        "strawberry": "#e83a5a", "watermelon": "#3a9a4a", "flax": "#6a8ae0"}
+        "strawberry": "#e83a5a", "watermelon": "#3a9a4a", "flax": "#6a8ae0", "cattle": "#d8cbb8"}
 def produce(c, name):
+    if name == "cattle": return '<path d="M8 20c0-5 4-8 10-8h8c5 0 8 3 8 8v4h-4v8h-4v-6H16v6h-4v-8H8z" fill="#d8cbb8" stroke="#222"/><circle cx="14" cy="18" r="3" fill="#5a4a3a"/><circle cx="25" cy="22" r="2.5" fill="#5a4a3a"/><path d="M30 12l3-4M26 12l-1-4" stroke="#cfc0a0" stroke-width="2"/>'
     if name == "flax": return '<path d="M14 36V14M20 36V8M26 36V14" stroke="#5a9a3a" stroke-width="2.5"/>' + f'<circle cx="14" cy="12" r="4" fill="{c}"/><circle cx="20" cy="7" r="4" fill="{c}"/><circle cx="26" cy="12" r="4" fill="{c}"/>'
     if name == "watermelon": return f'<ellipse cx="20" cy="22" rx="15" ry="11" fill="{c}" stroke="#123"/><path d="M8 22q12-6 24 0" stroke="#9ad89a" fill="none"/>'
     if name == "sweetcorn": return f'<ellipse cx="20" cy="20" rx="7" ry="14" fill="{c}" stroke="#753"/><path d="M13 30q-6-8 2-20M27 30q6-8-2-20" stroke="#5a9a3a" stroke-width="3" fill="none"/>'
@@ -278,6 +279,7 @@ def stone(c): return f'<path d="M5 30l6-14 10-6 12 6 3 14z" fill="{c}" stroke="#
 
 def item_icon(i):
     if i in GENERIC: return GENERIC[i]
+    if i == "calf": return produce("#d8cbb8", "cattle")
     if i in INSTRUMENT: return INSTRUMENT[i]
     if i == "renown": return UI["renown"]
     if i.endswith("_seed"): return seeds(CROP.get(i[:-5]) or hue(i[:-5]))

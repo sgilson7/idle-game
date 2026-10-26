@@ -810,7 +810,7 @@ pub struct Enemy {
 #[rustfmt::skip]
 pub const ENEMIES: &[Enemy] = &[
     Enemy { id: "chicken", level: 1, hp: 30, hit: 10, weak: MELEE, drops: &[("feathers", 5, 1), ("bones", 1, 1), ("potato_seed", 2, 3)], gold: 0, region: 0 },
-    Enemy { id: "cow", level: 1, hp: 80, hit: 10, weak: RANGED, drops: &[("cowhide", 1, 1), ("bones", 1, 1), ("sweetcorn_seed", 1, 6)], gold: 0, region: 0 },
+    Enemy { id: "cow", level: 1, hp: 80, hit: 10, weak: RANGED, drops: &[("cowhide", 1, 1), ("bones", 1, 1), ("sweetcorn_seed", 1, 6), ("calf", 1, 8)], gold: 0, region: 0 },
     Enemy { id: "goblin", level: 5, hp: 50, hit: 20, weak: MAGIC, drops: &[("bones", 1, 1), ("feathers", 10, 4), ("onion_seed", 2, 3), ("cabbage_seed", 1, 4), ("flax_seed", 2, 4)], gold: 12, region: 0 },
     Enemy { id: "spider", level: 20, hp: 220, hit: 40, weak: MELEE, drops: &[("spider_silk", 1, 4)], gold: 30, region: 0 },
     Enemy { id: "hill_giant", level: 30, hp: 350, hit: 60, weak: MAGIC, drops: &[("big_bones", 1, 1), ("iron_ore", 3, 3), ("coal", 2, 4), ("tomato_seed", 2, 4)], gold: 60, region: 0 },
@@ -1057,6 +1057,9 @@ pub const CROPS: &[Crop] = &[
     crop("watermelon", 55, 90, "watermelon_seed", 48, 55, 90),
     // Strings for the bard's lute and harp (T18).
     crop("flax", 3, 15, "flax_seed", 9, 10, 3),
+    // Cattle (T32): a calf raised in a patch gives cowhide, so leather does
+    // not have to come from fighting cows.
+    Crop { id: "cattle", level: 12, grow_ms: 60 * 60_000, seed: "calf", produce: "cowhide", xp_plant: 20, xp_each: 18, yield_min: 2, yield_max: 4, seed_cost: 15, region: 0 },
     // <gen:crops>
     region_crop(1, crop("kelp", 5, 20, "kelp_seed", 10, 12, 2)),
     region_crop(1, crop("sea_beet", 15, 30, "sea_beet_seed", 15, 19, 7)),
@@ -1215,7 +1218,7 @@ pub fn region_goods(r: usize) -> Vec<&'static str> {
 pub const VALUES: &[(&str, u64)] = &[
     // The bard (T18): instruments, flax; renown is the Fame engine's and does not sell.
     ("wooden_flute", 30), ("lute", 120), ("iron_horn", 90), ("golden_harp", 600), ("conch_horn", 300),
-    ("alpine_horn", 500), ("war_drum", 900), ("flax", 3), ("flax_seed", 2), ("renown", 0),
+    ("alpine_horn", 500), ("war_drum", 900), ("flax", 3), ("flax_seed", 2), ("renown", 0), ("calf", 8),
     ("logs", 1), ("oak_logs", 3), ("willow_logs", 6), ("teak_logs", 10), ("maple_logs", 15), ("mahogany_logs", 22),
     ("yew_logs", 40), ("magic_logs", 90), ("redwood_logs", 160),
     ("rune_essence", 1), ("copper_ore", 2), ("tin_ore", 2), ("iron_ore", 6), ("coal", 9), ("gold_ore", 28),

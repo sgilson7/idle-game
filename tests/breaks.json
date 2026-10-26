@@ -609,11 +609,11 @@
     "test": "the_bank_groups_items_by_the_tab_that_makes_them_and_searches_by_name"
   },
   {
-    "name": "a long skill shows its newest",
+    "name": "every row of a skill shows",
     "file": "crates/core/src/view.rs",
-    "find": "            if self.all || k >= older || on {",
-    "replace": "            if self.all || k >= older || on || true {",
-    "test": "a_long_skill_shows_its_newest_eight_until_you_ask_for_all"
+    "find": "        let cards: Vec<Card> = rows\n            .iter()\n            .map(|a| self.action_card(a, active == c::action_index(a.id)))\n            .collect();",
+    "replace": "        let cards: Vec<Card> = rows\n            .iter()\n            .take(8)\n            .map(|a| self.action_card(a, active == c::action_index(a.id)))\n            .collect();",
+    "test": "a_long_skill_shows_every_row_and_the_locked_ones_too"
   },
   {
     "name": "the app keeps the later regions shut until the purchase",
@@ -992,5 +992,12 @@
     "find": "let m = a.xp * (100 + self.top_mastery(a.skill) as u64) / 100;",
     "replace": "let m = a.xp;",
     "test": "your_highest_mastery_in_a_skill_speeds_every_actions_mastery"
+  },
+  {
+    "name": "cattle give cowhide",
+    "file": "crates/core/src/content.rs",
+    "find": "seed: \"calf\", produce: \"cowhide\",",
+    "replace": "seed: \"calf\", produce: \"bones\",",
+    "test": "cattle_raised_in_a_patch_give_cowhide"
   }
 ]

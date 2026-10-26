@@ -1646,7 +1646,7 @@ mod tests {
     }
 
     #[test]
-    fn a_long_skill_shows_its_newest_eight_until_you_ask_for_all() {
+    fn a_long_skill_shows_every_row_and_the_locked_ones_too() {
         // Woodcutting 99 with every region open: 36 trees, all unlocked.
         let mut g = game(0);
         g.act("sheet.close", "", 0);
@@ -1662,12 +1662,14 @@ mod tests {
                 .map(|b| b["cards"].as_array().unwrap().len())
                 .sum::<usize>()
         };
+        // Nothing is folded away (T31): all 36 trees show.
         let v = ui(&g.act("tab", "woodcutting", 0));
-        assert_eq!(cards(&v), crate::view::NEWEST);
-        let v = ui(&g.act("list.all", "", 0));
         assert_eq!(cards(&v), 36);
-        let v = ui(&g.act("tab", "mining", 0));
-        assert_eq!(cards(&v), crate::view::NEWEST, "a new tab shows the newest again");
+        // At level 1 with only the Vale open, its 9 trees show, 8 of them locked.
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        let v = ui(&g.act("tab", "woodcutting", 0));
+        assert_eq!(cards(&v), 9);
     }
 
     #[test]
@@ -2078,18 +2080,25 @@ mod tests {
         let sub = v["blocks"][3]["rows"][0]["sub"].as_str().unwrap().to_string();
         assert!(sub.starts_with("From Chicken, Goblin"), "{sub}");
         assert!(sub.contains("used by Fletching"), "{sub}");
-        // With no search, groups open one at a time.
-        g.act("book.search", "", 0);
-        let v = ui(&g.act("book.group", "woodcutting", 0));
-        let open = v["blocks"].as_array().unwrap().last().unwrap().clone();
-        assert_eq!(open["title"], "Woodcutting");
-        assert!(open["rows"]
+        // With no search, every group shows, one after another (T31).
+        let v = ui(&g.act("book.search", "", 0));
+        let woods = v["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["title"] == "Woodcutting")
+            .unwrap()
+            .clone();
+        assert!(woods["rows"]
             .as_array()
             .unwrap()
             .iter()
             .any(|r| r["title"] == "Logs"));
-        let v = ui(&g.act("book.group", "woodcutting", 0));
-        assert!(v["blocks"].as_array().unwrap().last().unwrap()["title"] != "Woodcutting");
+        assert!(v["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|b| b["title"] == "Smithing"));
     }
 
     // ---------- sound (T18) ----------

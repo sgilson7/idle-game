@@ -2406,4 +2406,19 @@ mod tests {
         // a tree gives 10 mastery XP, 60% more: 16
         assert_eq!(s.mxp["tree"], 16);
     }
+
+    #[test]
+    fn cattle_raised_in_a_patch_give_cowhide() {
+        // T32: Farming 12, a calf, an hour; 2 to 4 cowhide.
+        let mut s = State::new(3);
+        s.xp[c::FARMING] = xp::at(12);
+        s.bank.insert("calf".into(), 1);
+        let mut r = Report::begin(&s, 0, 0);
+        assert!(s.plant("cattle", &mut r));
+        assert_eq!(s.have("calf"), 0);
+        run(&mut s, 3_600_000);
+        let mut r = Report::begin(&s, 0, 0);
+        s.harvest(0, &mut r);
+        assert!((2..=4).contains(&s.have("cowhide")), "{}", s.have("cowhide"));
+    }
 }

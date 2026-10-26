@@ -849,51 +849,17 @@ impl View<'_> {
             .iter()
             .filter(|a| a.skill == i && !self.s.region_open(a.region))
             .count();
-        let lvl = self.s.level(i);
-        let open: Vec<&c::Action> = rows.iter().copied().filter(|a| a.level <= lvl).collect();
-        let locked: Vec<&c::Action> = rows.iter().copied().filter(|a| a.level > lvl).collect();
-        let older = open.len().saturating_sub(NEWEST);
-        let mut shown: Vec<&c::Action> = open
+        // Every row shows, the locked ones dimmed (T31): the region filter
+        // and the order keep a long list in hand, nothing is folded away.
+        self.order(&mut rows, |a| (a.level, a.region), |a| self.t.action(a.id));
+        let cards: Vec<Card> = rows
             .iter()
-            .enumerate()
-            .filter(|(k, a)| self.all || *k >= older || active == c::action_index(a.id))
-            .map(|(_, a)| *a)
-            .collect();
-        self.order(&mut shown, |a| (a.level, a.region), |a| self.t.action(a.id));
-        let mut cards: Vec<Card> = shown
-            .into_iter()
             .map(|a| self.action_card(a, active == c::action_index(a.id)))
             .collect();
-        // LR-2: the next two locked ones show; the rest wait out of sight.
-        for a in locked.iter().take(2) {
-            cards.push(self.action_card(a, false));
-        }
-        let mut out = Vec::new();
-        if older > 0 {
-            out.push(Block {
-                buttons: vec![button(
-                    if self.all {
-                        self.t.s("show_newest")
-                    } else {
-                        self.t.t("show_all", &[("n", open.len().to_string())])
-                    },
-                    "list.all",
-                    "",
-                )],
-                ..block("buttons")
-            });
-        }
-        out.push(Block {
+        let mut out = vec![Block {
             cards,
             ..block("cards")
-        });
-        let hidden = locked.len().saturating_sub(2);
-        if hidden > 0 {
-            out.push(Block {
-                text: self.t.t("more_later", &[("n", hidden.to_string())]),
-                ..block("note")
-            });
-        }
+        }];
         if closed > 0 {
             out.push(Block {
                 text: self.t.t("more_in_regions", &[("n", closed.to_string())]),
@@ -1575,9 +1541,8 @@ impl View<'_> {
         }
         let mut list: Vec<(&str, u64)> = st.held.to_vec();
         list.sort_by_key(|(i, t)| (*t, *i));
-        let (shown, hidden): (Vec<_>, Vec<_>) = list
-            .into_iter()
-            .partition(|(i, _)| self.s.have(i) > 0 || self.s.weapon_xp.contains_key(*i));
+        // every weapon of the style, the ones you have not had dimmed (T31)
+        let shown = list;
         let rows: Vec<Row> = shown
             .iter()
             .map(|&(i, tier)| {
@@ -1602,7 +1567,13 @@ impl View<'_> {
                         ],
                     ),
                     chip: if here { self.t.s("in_hand") } else { String::new() },
-                    tone: if here { "up".into() } else { String::new() },
+                    tone: if here {
+                        "up".into()
+                    } else if self.s.have(i) == 0 {
+                        "used".into()
+                    } else {
+                        String::new()
+                    },
                     buttons: vec![button(self.t.s("wield"), "wield", i)
                         .pressed(here)
                         .enabled(self.s.have(i) > 0)],
@@ -1619,12 +1590,6 @@ impl View<'_> {
                 title: self.t.t("weapons_of", &[("style", self.skill_name(st.skill))]),
                 rows,
                 ..block("rows")
-            });
-        }
-        if !hidden.is_empty() {
-            out.push(Block {
-                text: self.t.t("weapons_more", &[("n", hidden.len().to_string())]),
-                ..block("note")
             });
         }
         out
@@ -1917,25 +1882,13 @@ impl View<'_> {
             }
         }
         groups.sort_by_key(|(t, _)| TABS.iter().position(|x| x == t).unwrap_or(TABS.len()));
+        // every group, one after another (T31): the region filter and the
+        // search narrow it, nothing is folded away
         out.push(Block {
             text: self.t.s("book_intro"),
-            buttons: groups
-                .iter()
-                .map(|(tab, list)| {
-                    let name = if *tab == "other" {
-                        self.t.s("bank_other")
-                    } else {
-                        self.tab_name(tab)
-                    };
-                    button(name, "book.group", tab)
-                        .icon(if *tab == "other" { "book" } else { tab })
-                        .below(list.len().to_string())
-                        .pressed(self.book_group == *tab)
-                })
-                .collect(),
-            ..block("buttons")
+            ..block("note")
         });
-        if let Some((tab, list)) = groups.iter().find(|(t, _)| *t == self.book_group) {
+        for (tab, list) in &groups {
             out.push(Block {
                 title: if *tab == "other" {
                     self.t.s("bank_other")

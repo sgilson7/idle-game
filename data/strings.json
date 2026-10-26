@@ -698,7 +698,8 @@
   "conch_horn": "Conch horn",
   "alpine_horn": "Alpine horn",
   "war_drum": "War drum",
-  "flax": "Flax"
+  "flax": "Flax",
+  "cattle": "Cattle"
  },
  "items": {
   "logs": "Logs",
@@ -1222,7 +1223,8 @@
   "golden_harp": "Golden harp",
   "conch_horn": "Conch horn",
   "alpine_horn": "Alpine horn",
-  "war_drum": "War drum"
+  "war_drum": "War drum",
+  "calf": "Calf"
  },
  "enemies": {
   "chicken": "Chicken",
