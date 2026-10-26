@@ -625,8 +625,8 @@
   {
     "name": "a loaded save is sealed in the app",
     "file": "crates/core/src/api.rs",
-    "find": "g.s = s;\n                g.seal();",
-    "replace": "g.s = s;",
+    "find": "g.played = g.s.last_wall;\n                g.seal();",
+    "replace": "g.played = g.s.last_wall;",
     "test": "a_save_loaded_or_imported_into_the_app_stays_shut_without_the_purchase"
   },
   {

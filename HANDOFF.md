@@ -81,6 +81,8 @@ By system, from `SECOND-ORDER.md`, with the rule each one produced.
 
 ## What passed
 
+2026-10-25 (T17 to T19): `./scripts/check.sh` BUILDER CHECK PASSED (browser check in chromium, firefox, webkit, webkit-iphone, webkit-ipad); `./scripts/count-tests.sh` 173 passed, 0 failed; breaks 121 of 121. The macOS app (`app/`, `cargo build`) compiles and runs: the game loaded in Tauri and saved to a file. The iPhone build needs Xcode, which this Mac lacks (R13.3).
+
 2026-10-25 (full game, T15): `./scripts/check.sh` BUILDER CHECK PASSED (browser check in chromium, firefox, webkit, webkit-iphone, webkit-ipad); `./scripts/count-tests.sh` 146 passed, 0 failed; breaks 88 of 88; a heavy 24-hour return takes 0.27 s in WebKit (R9.7).
 
 2026-10-25 (engines, T8 to T14): published from `eb4c567` with `scripts/publish.sh`; the browser check against https://sgilson7.github.io/idle-game passed in all five engines (one earlier publish attempt stopped on a page-load wait, R8.4). `./scripts/check.sh` BUILDER CHECK PASSED (browser check in chromium, firefox, webkit, webkit-iphone, webkit-ipad); `./scripts/count-tests.sh` 124 passed, 0 failed; breaks 60 of 60.
