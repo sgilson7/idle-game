@@ -407,16 +407,24 @@ function tabButton(t, cls) {
   return node;
 }
 
-function drawTabs(tabs, groups) {
+// The strip or rail of tabs. It keeps where it was scrolled across a
+// redraw, and brings the current tab into view only when the screen changes
+// (R21.1): an action finishing must not pull the rail back under the pointer.
+function drawTabs(tabs, groups, moved) {
+  const box = el("tabs");
+  const top = box.scrollTop;
+  const left = box.scrollLeft;
   const rail = [];
   tabs.forEach((t) => {
     if (t.heading) rail.push(h("span", "rail-h", t.heading));
     rail.push(tabButton(t, "tab"));
   });
-  el("tabs").replaceChildren(...rail);
+  box.replaceChildren(...rail);
   el("groups").replaceChildren(...groups.map((g) => tabButton(g, "tab group")));
-  const here = el("tabs").querySelector('[aria-current="page"]');
-  if (here && here.scrollIntoView) here.scrollIntoView({ block: "nearest", inline: "nearest" });
+  box.scrollTop = top;
+  box.scrollLeft = left;
+  const here = box.querySelector('[aria-current="page"]');
+  if (moved && here && here.scrollIntoView) here.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
 let lastSheet = "";
@@ -549,7 +557,7 @@ function draw(json) {
   if (ui.stash) stash(saved);
   document.title = ui.title;
   drawTop(ui.top);
-  drawTabs(ui.tabs, ui.groups);
+  drawTabs(ui.tabs, ui.groups, lastScreen !== ui.screen);
   const main = el("main");
   const keep = lastScreen === ui.screen ? main.scrollTop : 0;
   // A redraw from the action timer must not take the keyboard away from a
