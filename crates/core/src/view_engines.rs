@@ -400,21 +400,27 @@ impl View<'_> {
                 ..Row::default()
             });
         }
-        out.push(Block {
-            title: self.t.t(
-                "followers_title",
-                &[
-                    ("n", self.s.followers.len().to_string()),
-                    ("max", c::FOLLOWER_RANKS.len().to_string()),
-                ],
-            ),
-            text: if rows.is_empty() {
-                self.t.s("followers_none")
-            } else {
-                String::new()
-            },
-            rows,
-            ..block("rows")
+        let title = self.t.t(
+            "followers_title",
+            &[
+                ("n", self.s.followers.len().to_string()),
+                ("max", c::FOLLOWER_RANKS.len().to_string()),
+            ],
+        );
+        // A rows block with no rows is one the page cannot draw: with no
+        // followers yet, say how to get one instead.
+        out.push(if rows.is_empty() {
+            Block {
+                title,
+                text: self.t.s("followers_none"),
+                ..block("card")
+            }
+        } else {
+            Block {
+                title,
+                rows,
+                ..block("rows")
+            }
         });
         // The ladders.
         for r in self.open_regions() {

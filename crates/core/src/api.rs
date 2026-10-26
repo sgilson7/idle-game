@@ -2108,4 +2108,24 @@ mod tests {
         assert_eq!(gc["achieved"], serde_json::json!(["coast"]));
         assert!(ui(&game(1).tick(1)).get("game_center").is_none());
     }
+
+    #[test]
+    fn no_screen_sends_a_list_block_with_nothing_in_it() {
+        // The page draws a rows block's rows; an empty one stopped the Stage
+        // screen drawing for a player past total level 50 with no followers.
+        let mut g = game(1);
+        g.act("sheet.close", "", 1);
+        for (tab, level) in TABS.iter().flat_map(|t| [(t, 5), (t, 20), (t, 40)]) {
+            all_at(&mut g, level);
+            let v = ui(&g.act("tab", tab, 2));
+            for b in v["blocks"].as_array().unwrap() {
+                if b["kind"] == "rows" {
+                    assert!(
+                        b["rows"].as_array().is_some_and(|r| !r.is_empty()),
+                        "{tab}: an empty rows block {b}"
+                    );
+                }
+            }
+        }
+    }
 }
