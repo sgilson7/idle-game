@@ -1041,5 +1041,12 @@
     "find": "        s.armour_xp = keep.armour_xp;\n",
     "replace": "",
     "test": "armour_learns_from_every_swing_and_its_level_guards_and_adds_health"
+  },
+  {
+    "name": "the encyclopedia lists only what you have come across",
+    "file": "crates/core/src/view.rs",
+    "find": "            .filter(|i| self.discovered(i))\n",
+    "replace": "",
+    "test": "the_encyclopedia_lists_what_you_have_come_across"
   }
 ]

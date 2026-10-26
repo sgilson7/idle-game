@@ -1919,10 +1919,33 @@ impl View<'_> {
 
     /// The encyclopedia (T19): every item, its picture, what makes it and
     /// what uses it. A search, or one group at a time.
+    /// Whether you have come across an item (T36): had it, or can make,
+    /// grow or win it now. The encyclopedia lists only these, like a skill
+    /// shows only what is in reach (T35).
+    pub(crate) fn discovered(&self, item: &str) -> bool {
+        self.s.bank.contains_key(item)
+            || c::ACTIONS
+                .iter()
+                .any(|a| a.makes.0 == item && self.s.unlocked(a.id))
+            || c::CROPS.iter().any(|cr| {
+                (cr.produce == item || cr.seed == item)
+                    && self.s.level(c::FARMING) >= cr.level
+                    && self.s.region_open(cr.region)
+            })
+            || c::ENEMIES
+                .iter()
+                .any(|e| self.s.unlocked(e.id) && e.drops.iter().any(|d| d.0 == item))
+    }
+
     fn book(&self) -> Vec<Block> {
-        let mut all: Vec<&'static str> = c::VALUES
+        let known: Vec<&'static str> = c::VALUES
             .iter()
             .map(|(i, _)| *i)
+            .filter(|i| self.discovered(i))
+            .collect();
+        let found = known.len();
+        let mut all: Vec<&'static str> = known
+            .into_iter()
             .filter(|i| self.region_shown(self.item_region(i)))
             .collect();
         all.sort_by_key(|i| self.t.item(i).to_lowercase());
@@ -1934,7 +1957,10 @@ impl View<'_> {
         let mut out = vec![self.head(
             "book",
             self.t.s("tab_book"),
-            self.t.t("kinds", &[("n", all.len().to_string())]),
+            self.t.t(
+                "found_of",
+                &[("n", found.to_string()), ("max", c::VALUES.len().to_string())],
+            ),
             "xp",
         )];
         out.push(Block {

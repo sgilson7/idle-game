@@ -2169,7 +2169,7 @@
   "tab_book_short": "Book",
   "book_search": "Find an item",
   "book_search_hint": "Type part of a name",
-  "book_intro": "Every item in the game, grouped by what makes it. Open a group, or search.",
+  "book_intro": "Every item you have come across: what makes it and what uses it, grouped by what makes it. More appear as you open new actions, crops and enemies.",
   "book_more": "{n} more: type more of the name.",
   "book_from": "From {list}",
   "book_uses": "used by {list}",

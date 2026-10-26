@@ -2098,6 +2098,8 @@ mod tests {
     fn the_encyclopedia_says_what_makes_each_item_and_what_uses_it() {
         let mut g = game(0);
         g.act("sheet.close", "", 0);
+        // late enough that every item is discovered (T36)
+        all_at(&mut g, 99);
         g.act("tab", "book", 0);
         let v = ui(&g.act("book.search", "flute", 0));
         let rows = v["blocks"][3]["rows"].as_array().unwrap();
@@ -2304,6 +2306,8 @@ mod tests {
     fn the_encyclopedia_gives_each_items_exact_effect() {
         let mut g = game(0);
         g.act("sheet.close", "", 0);
+        // late enough that every item is discovered (T36)
+        all_at(&mut g, 99);
         g.act("tab", "book", 0);
         // the row whose name is the search, so "shrimp" is Shrimp, not Raw shrimp
         let sub = |g: &mut Game, q: &str| {
@@ -2477,5 +2481,24 @@ mod tests {
         }
         assert_eq!(g.state().plan.len(), 15);
         assert!(!has_add(&mut g, "woodcutting", "tree"), "advanced: full at 15");
+    }
+
+    #[test]
+    fn the_encyclopedia_lists_what_you_have_come_across() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        let titles = |g: &mut Game| {
+            let mut t = Vec::new();
+            all_text(&ui(&g.act("tab", "book", 0))["blocks"], &mut t);
+            t
+        };
+        let t = titles(&mut g);
+        assert!(t.iter().any(|x| x == "Logs"), "a tree you can chop");
+        assert!(!t.iter().any(|x| x == "Wooden flute"), "Fletching 3 not reached");
+        g.state_mut().xp[c::FLETCHING] = crate::xp::at(3);
+        assert!(titles(&mut g).iter().any(|x| x == "Wooden flute"));
+        // something you have had stays, at any level
+        g.state_mut().bank.insert("dragon_scale".into(), 0);
+        assert!(titles(&mut g).iter().any(|x| x == "Dragon scale"));
     }
 }
