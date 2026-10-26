@@ -804,6 +804,11 @@ impl Game {
             }
             "list.all" => self.all = !self.all,
             "sound.toggle" => self.s.sound = !self.s.sound,
+            "wield" => {
+                if self.s.wield_weapon(value) {
+                    self.toasts = vec![self.text.t("toast_wield", &[("item", self.text.item(value))])];
+                }
+            }
             "sheet.close" => {
                 self.sheet = None;
                 self.editing = None;
@@ -1327,7 +1332,7 @@ mod tests {
         let v = ui(&g.tick(1_000));
         assert_eq!(v["screen"], "woodcutting");
         assert_eq!(v["sheet"]["kind"], "notice");
-        assert_eq!(v["tabs"].as_array().unwrap().len(), 26);
+        assert_eq!(v["tabs"].as_array().unwrap().len(), 27);
         assert_eq!(v["groups"].as_array().unwrap().len(), 5);
         assert_eq!(v["next_ms"], 0);
     }
@@ -2152,8 +2157,8 @@ mod tests {
         let mut t = Vec::new();
         all_text(&ui(&g.act("tab", "combat", 0))["blocks"], &mut t);
         assert!(
-            t.iter().any(|s| s.starts_with("Bronze sword held: +")
-                && s.ends_with("Only your best weapon counts, and it is not used up; you have 20")),
+            t.iter().any(|s| s.starts_with("Bronze sword in hand: +")
+                && s.ends_with("Only the weapon in hand counts, and it is not used up; you have 20")),
             "{t:?}"
         );
         // a sword's card in Smithing says so too; a bar's does not
@@ -2161,7 +2166,7 @@ mod tests {
         all_text(&ui(&g.act("tab", "smithing", 0))["blocks"], &mut t);
         assert_eq!(
             t.iter()
-                .filter(|s| *s == "In combat only your best one counts, and it is not used up")
+                .filter(|s| *s == "In a fight only the weapon in hand counts, and it is not used up")
                 .count(),
             t.iter().filter(|s| s.contains("sword")).count().min(1)
         );
@@ -2244,6 +2249,37 @@ mod tests {
         );
         // A bronze sword is tier 1: 10 max hit.
         assert!(sub(&mut g, "bronze sword")
-            .starts_with("Melee: held, +10 max hit; only your best weapon counts, and it is not used up"));
+            .starts_with("Melee: in hand, +10 max hit; only the weapon in hand counts"));
+    }
+
+    #[test]
+    fn the_weapons_tab_lists_your_weapons_and_graphs_the_one_in_hand() {
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        g.state_mut().bank.insert("bronze_sword".into(), 1);
+        g.state_mut().bank.insert("iron_sword".into(), 1);
+        let v = ui(&g.act("tab", "weapons", 0));
+        let blocks = v["blocks"].as_array().unwrap();
+        let curve = blocks.iter().find(|b| b["kind"] == "curve").unwrap();
+        assert_eq!(curve["title"], "How fast your Iron sword learns");
+        assert_eq!(
+            curve["text"],
+            "Its weaker weapons add up to 1 of the 40 levels it needs: it learns at 10% speed."
+        );
+        // the gate at 40 levels, the axis to 50; the floor until 4, full from 40
+        assert_eq!(curve["curve"]["line"], "M0 450 L80 450 L800 0 L1000 0");
+        assert_eq!(curve["curve"]["x"], "2%");
+        assert_eq!(curve["curve"]["y"], "90%");
+        let v = ui(&g.act("wield", "bronze_sword", 0));
+        assert_eq!(v["toasts"][0], "Fighting with Bronze sword");
+        let rows = v["blocks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["kind"] == "rows")
+            .unwrap()["rows"]
+            .clone();
+        assert_eq!(rows[0]["title"], "Bronze sword · level 1");
+        assert_eq!(rows[0]["chip"], "in hand");
     }
 }

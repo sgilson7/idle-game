@@ -262,6 +262,12 @@ pub struct State {
     /// The moments the app has asked for a rating at, once each (T18).
     #[serde(default)]
     pub asked: Vec<String>,
+    /// Weapon mastery (T23): each weapon's XP, by name, kept through prestige.
+    #[serde(default)]
+    pub weapon_xp: BTreeMap<String, u64>,
+    /// The weapon chosen for each style, by the style's skill id.
+    #[serde(default)]
+    pub wield: BTreeMap<String, String>,
 }
 
 fn on() -> bool {
@@ -378,6 +384,8 @@ impl State {
             sound: true,
             offered: false,
             asked: Vec::new(),
+            weapon_xp: BTreeMap::new(),
+            wield: BTreeMap::new(),
         };
         s.hp = s.max_hp();
         s.note(now, "new", "", 0);
@@ -602,15 +610,96 @@ impl State {
         c::MAX_HIT_BASE + self.level(skill) as u64 * c::MAX_HIT_PER_LEVEL
     }
 
-    /// What a style's best weapon and ammunition add to its max hit.
+    /// What a style's weapon in hand and its ammunition add to its max hit:
+    /// their tiers, and the weapon's own level (T23).
     pub fn gear_hit(&self, style: usize) -> u64 {
         let s = &c::STYLES[style];
-        (self.tier(s.held).1 + self.tier(s.spent).1) * c::MAX_HIT_PER_TIER
+        let (weapon, tier) = self.weapon_of(style);
+        (tier + self.tier(s.spent).1) * c::MAX_HIT_PER_TIER + self.weapon_hit(&weapon)
+    }
+
+    // ---------- weapon mastery (T23, IG-Q58 to IG-Q61, all A) ----------
+
+    /// The weapon a style fights with: the one chosen, while you have it,
+    /// or else your best. Empty when you hold none.
+    pub fn weapon_of(&self, style: usize) -> (String, u64) {
+        let s = &c::STYLES[style];
+        self.wield
+            .get(c::SKILLS[s.skill].id)
+            .and_then(|w| s.held.iter().find(|(i, _)| *i == w.as_str() && self.have(i) > 0))
+            .map(|(i, t)| (i.to_string(), *t))
+            .unwrap_or_else(|| self.tier(s.held))
+    }
+
+    pub fn weapon_level(&self, item: &str) -> u32 {
+        xp::level(self.weapon_xp.get(item).copied().unwrap_or(0))
+    }
+
+    /// Max hit a weapon's level adds: one every `WEAPON_HIT_EVERY` levels.
+    pub fn weapon_hit(&self, item: &str) -> u64 {
+        if item.is_empty() {
+            return 0;
+        }
+        self.weapon_level(item) as u64 / c::WEAPON_HIT_EVERY
+    }
+
+    /// Chance to land a weapon's level adds, in percent.
+    pub fn weapon_land(&self, item: &str) -> u64 {
+        if item.is_empty() {
+            return 0;
+        }
+        self.weapon_level(item) as u64 / c::WEAPON_LAND_EVERY
+    }
+
+    /// The gate (IG-Q60 A): how many levels a weapon's weaker weapons (the
+    /// same style, a lower tier) must add up to for it to learn at full
+    /// speed, and how many they add up to now. A style with few weapons
+    /// (Magic has four staves) asks at most `WEAPON_GATE_EACH` per weaker
+    /// kind, so its top staff can still reach full speed.
+    pub fn weapon_gate(&self, style: usize, item: &str) -> (u64, u64) {
+        let s = &c::STYLES[style];
+        let tier = s.held.iter().find(|(i, _)| *i == item).map_or(0, |(_, t)| *t);
+        let weaker: Vec<&str> = s
+            .held
+            .iter()
+            .filter(|(_, t)| *t < tier)
+            .map(|(i, _)| *i)
+            .collect();
+        let need = (tier * c::WEAPON_GATE_PER_TIER).min(weaker.len() as u64 * c::WEAPON_GATE_EACH);
+        let have = weaker.iter().map(|i| self.weapon_level(i) as u64).sum();
+        (need, have)
+    }
+
+    /// A weapon's XP speed in percent: full once the gate is met, never
+    /// below `WEAPON_RATE_MIN`; full for a style's weakest weapons.
+    pub fn weapon_rate(&self, style: usize, item: &str) -> u64 {
+        let (need, have) = self.weapon_gate(style, item);
+        if need == 0 {
+            return 100;
+        }
+        (have * 100 / need).clamp(c::WEAPON_RATE_MIN, 100)
+    }
+
+    /// Chooses the weapon a style fights with (IG-Q58 A).
+    pub fn wield_weapon(&mut self, item: &str) -> bool {
+        let Some(k) = c::STYLES
+            .iter()
+            .position(|s| s.held.iter().any(|(i, _)| *i == item))
+        else {
+            return false;
+        };
+        if self.have(item) == 0 {
+            return false;
+        }
+        self.wield
+            .insert(c::SKILLS[c::STYLES[k].skill].id.to_string(), item.to_string());
+        true
     }
 
     pub fn max_hit(&self, enemy: &c::Enemy) -> u64 {
         let s = &c::STYLES[self.style];
-        let tiers = self.tier(s.held).1 + self.tier(s.spent).1;
+        let (weapon, tier) = self.weapon_of(self.style);
+        let tiers = tier + self.tier(s.spent).1;
         let strong = if enemy.weak == s.skill {
             c::MAX_HIT_STRONG
         } else {
@@ -619,6 +708,7 @@ impl State {
         let hit = c::MAX_HIT_BASE
             + self.level(s.skill) as u64 * c::MAX_HIT_PER_LEVEL
             + tiers * c::MAX_HIT_PER_TIER
+            + self.weapon_hit(&weapon)
             + strong;
         hit * (100 + self.trinket(c::Trinket::Power)) / 100
     }
@@ -1267,13 +1357,26 @@ impl State {
             self.foe_hp = enemy.hp;
         }
         let strong = enemy.weak == style.skill;
-        let hit_pct = if strong { c::HIT_PCT_STRONG } else { c::HIT_PCT };
+        let (weapon, _) = self.weapon_of(self.style);
+        let base_pct = if strong { c::HIT_PCT_STRONG } else { c::HIT_PCT };
+        let hit_pct = (base_pct + self.weapon_land(&weapon)).min(100);
         let max = self.max_hit(enemy);
         if self.rng.percent(hit_pct) {
             let dmg = (1 + self.rng.below(max)).min(self.foe_hp);
             self.foe_hp -= dmg;
             let m = self.mult_bp();
-            self.gain(style.skill, dmg * c::STYLE_XP_TENTHS * m / 100_000, r);
+            let xp = dmg * c::STYLE_XP_TENTHS * m / 100_000;
+            if weapon.is_empty() {
+                // Magic without a staff: the style learns directly.
+                self.gain(style.skill, xp, r);
+            } else {
+                // The weapon learns twice the hit's XP at its gated speed,
+                // and the style gets half of it (IG-Q61 A): at full speed,
+                // the style learns as it did before T23.
+                let w = 2 * xp * self.weapon_rate(self.style, &weapon) / 100;
+                add(&mut self.weapon_xp, &weapon, w);
+                self.gain(style.skill, w / 2, r);
+            }
             self.gain(c::HITPOINTS, dmg * c::HP_XP_THOUSANDTHS * m / 10_000_000, r);
             self.blow("hit", enemy.id, dmg);
         } else {
@@ -1654,6 +1757,8 @@ impl State {
         s.recipes = keep.recipes;
         s.followers = keep.followers;
         s.offered = keep.offered;
+        s.weapon_xp = keep.weapon_xp;
+        s.wield = keep.wield;
         s.asked = keep.asked;
         s.sound = keep.sound;
         s.plan = keep.plan;

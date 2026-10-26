@@ -174,6 +174,29 @@ const blocks = {
     return box;
   },
   scene,
+  // A graph the core shapes (T23): its path, a marker and four labels.
+  curve: (b) => {
+    const box = h("div", "panel curve");
+    if (b.title) box.append(h("h3", "", b.title));
+    const plot = h("div", "plot");
+    const svg = document.createElementNS(SVG, "svg");
+    svg.setAttribute("viewBox", b.curve.view);
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("aria-hidden", "true");
+    const line = document.createElementNS(SVG, "path");
+    line.setAttribute("d", b.curve.line);
+    line.setAttribute("vector-effect", "non-scaling-stroke");
+    svg.append(line);
+    const mark = h("i", "mark");
+    mark.style.setProperty("--x", b.curve.x);
+    mark.style.setProperty("--y", b.curve.y);
+    plot.append(svg, mark, h("span", "top", b.curve.top), h("span", "low", b.curve.low));
+    const axis = h("div", "axis");
+    axis.append(h("span", "", b.curve.left), h("span", "", b.curve.right));
+    box.append(plot, axis);
+    if (b.text) box.append(h("p", "note", b.text));
+    return box;
+  },
   progress: (b) => progress(b.dur, b.delay, "now"),
   chips: (b) => chips(b.chips),
   forecast: (b) => {

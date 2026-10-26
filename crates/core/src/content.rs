@@ -1119,6 +1119,16 @@ pub const BOOK_ROWS: usize = 40;
 pub const REVIEW_LEVEL: u32 = 25;
 /// A save in iCloud is offered when it was played this much later (T17).
 pub const CLOUD_NEWER_MS: u64 = 60_000;
+
+/// Weapon mastery (T23, IG-Q59 A, IG-Q60 A): a weapon's level adds one max
+/// hit every 5 levels and 1% to land every 10. A weapon learns at full
+/// speed once its style's weaker weapons add up to its tier × 20 levels
+/// (at most 50 for each weaker kind), and never slower than 10%.
+pub const WEAPON_HIT_EVERY: u64 = 5;
+pub const WEAPON_LAND_EVERY: u64 = 10;
+pub const WEAPON_GATE_PER_TIER: u64 = 20;
+pub const WEAPON_GATE_EACH: u64 = 50;
+pub const WEAPON_RATE_MIN: u64 = 10;
 /// Experience per point of damage, in tenths (style) and thousandths (Hitpoints).
 pub const STYLE_XP_TENTHS: u64 = 4;
 pub const HP_XP_THOUSANDTHS: u64 = 133;

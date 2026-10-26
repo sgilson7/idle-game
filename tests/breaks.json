@@ -880,5 +880,47 @@
     "find": "(\"below\", c::EAT_BELOW_PCT.to_string())",
     "replace": "(\"below\", c::HIT_PCT.to_string())",
     "test": "the_encyclopedia_gives_each_items_exact_effect"
+  },
+  {
+    "name": "weaker weapons gate a stronger one",
+    "file": "crates/core/src/game.rs",
+    "find": "(have * 100 / need).clamp(c::WEAPON_RATE_MIN, 100)",
+    "replace": "100",
+    "test": "a_stronger_weapon_learns_faster_as_its_weaker_weapons_level"
+  },
+  {
+    "name": "few weapons ask at most 50 each",
+    "file": "crates/core/src/game.rs",
+    "find": ".min(weaker.len() as u64 * c::WEAPON_GATE_EACH)",
+    "replace": "",
+    "test": "a_stronger_weapon_learns_faster_as_its_weaker_weapons_level"
+  },
+  {
+    "name": "the style gets half of the weapon's XP",
+    "file": "crates/core/src/game.rs",
+    "find": "self.gain(style.skill, w / 2, r);",
+    "replace": "self.gain(style.skill, w, r);",
+    "test": "the_weapon_in_hand_learns_and_its_style_gets_half"
+  },
+  {
+    "name": "the chosen weapon is in hand",
+    "file": "crates/core/src/game.rs",
+    "find": ".and_then(|w| s.held.iter().find(|(i, _)| *i == w.as_str() && self.have(i) > 0))",
+    "replace": ".and_then(|w| s.held.iter().find(|(i, _)| *i == w.as_str() && self.have(i) > 999))",
+    "test": "you_choose_the_weapon_in_hand_and_its_level_adds_to_the_hit"
+  },
+  {
+    "name": "a weapon's level adds to the hit",
+    "file": "crates/core/src/game.rs",
+    "find": "            + self.weapon_hit(&weapon)\n",
+    "replace": "",
+    "test": "you_choose_the_weapon_in_hand_and_its_level_adds_to_the_hit"
+  },
+  {
+    "name": "weapon levels stay through prestige",
+    "file": "crates/core/src/game.rs",
+    "find": "        s.weapon_xp = keep.weapon_xp;\n",
+    "replace": "",
+    "test": "you_choose_the_weapon_in_hand_and_its_level_adds_to_the_hit"
   }
 ]

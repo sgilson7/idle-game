@@ -213,6 +213,7 @@ UI = {
     "runecrafting": '<path d="M20 3l14 8v18l-14 8-14-8V11z" fill="#5b4ab8" stroke="#222"/><path d="M20 11v18M13 15l14 10M27 15l-14 10" stroke="#d8e2ee" stroke-width="2"/>',
     "combat": '<path d="M6 34L28 12l2-7-7 2L4 30" fill="#d8dee8" stroke="#222"/><path d="M34 34L12 12l-2-7 7 2 19 23" fill="#c8a070" stroke="#222"/>',
     "melee": sword("#d8dee8"),
+    "weapons": sword("#d8dee8") + bow("#c8a070").replace('M13 4', 'M25 4', 1).replace('M13 4v32', 'M25 4v32'),
     "ranged": bow("#c8a070") + '<path d="M4 20h30" stroke="#b8c2d6" stroke-width="2"/>',
     "magic": '<path d="M8 35L25 12" stroke="#8a6a4a" stroke-width="3.5" stroke-linecap="round"/><circle cx="27" cy="10" r="7" fill="#7aa8ff"/><circle cx="27" cy="10" r="3" fill="#e8f0ff"/>',
     "hitpoints": '<path d="M20 35C8 26 4 21 4 14a8 8 0 0 1 16-2 8 8 0 0 1 16 2c0 7-4 12-16 21z" fill="#d9534f" stroke="#611"/>',

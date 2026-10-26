@@ -2145,3 +2145,69 @@ mod bard_tests {
         assert_eq!(s.follower_pct(0), 100);
     }
 }
+
+#[cfg(test)]
+mod weapon_tests {
+    use crate::content as c;
+    use crate::game::{Report, State};
+    use crate::xp;
+
+    fn at(level: u32) -> State {
+        let mut s = State::new(3);
+        for i in 0..c::SKILLS.len() {
+            s.xp[i] = xp::at(level);
+        }
+        s
+    }
+
+    #[test]
+    fn a_stronger_weapon_learns_faster_as_its_weaker_weapons_level() {
+        let mut s = at(30);
+        // Iron (tier 2): one weaker kind, Bronze; it needs min(2 × 20, 50) = 40 levels.
+        assert_eq!(s.weapon_gate(0, "iron_sword"), (40, 1));
+        assert_eq!(s.weapon_rate(0, "iron_sword"), 10, "never below 10%");
+        s.weapon_xp.insert("bronze_sword".into(), xp::at(20));
+        assert_eq!(s.weapon_rate(0, "iron_sword"), 50);
+        s.weapon_xp.insert("bronze_sword".into(), xp::at(40));
+        assert_eq!(s.weapon_rate(0, "iron_sword"), 100);
+        assert_eq!(s.weapon_rate(0, "bronze_sword"), 100, "nothing weaker");
+        // Mithril (tier 4): Bronze, Iron and Steel are weaker (Brass is tier 4 too).
+        assert_eq!(s.weapon_gate(0, "mithril_sword").0, 80);
+        // Magic's coral staff (tier 14) has one weaker staff: at most 50.
+        assert_eq!(s.weapon_gate(2, "coral_staff").0, 50);
+    }
+
+    #[test]
+    fn the_weapon_in_hand_learns_and_its_style_gets_half() {
+        let mut s = at(10);
+        s.bank.insert("bronze_sword".into(), 1);
+        s.bank.insert("shrimp".into(), 100);
+        let melee = s.xp[c::MELEE];
+        s.start("chicken", 0);
+        let mut r = Report::begin(&s, 600_000, 0);
+        s.advance(600_000, &mut r);
+        let weapon = s.weapon_xp["bronze_sword"];
+        assert!(weapon > 0);
+        // Bronze learns at full speed: twice each hit's XP, half to Melee.
+        assert_eq!(weapon, 2 * (s.xp[c::MELEE] - melee));
+    }
+
+    #[test]
+    fn you_choose_the_weapon_in_hand_and_its_level_adds_to_the_hit() {
+        let mut s = at(30);
+        s.bank.insert("iron_sword".into(), 1);
+        s.bank.insert("bronze_sword".into(), 1);
+        assert_eq!(s.weapon_of(0).0, "iron_sword", "your best by default");
+        assert!(!s.wield_weapon("steel_sword"), "one you do not have");
+        assert!(s.wield_weapon("bronze_sword"));
+        assert_eq!(s.weapon_of(0), ("bronze_sword".to_string(), 1));
+        let goblin = &c::ENEMIES[c::enemy_index("goblin").unwrap()];
+        let before = s.max_hit(goblin);
+        // level 25: 25 ÷ 5 = 5 more max hit, 25 ÷ 10 = 2% more to land
+        s.weapon_xp.insert("bronze_sword".into(), xp::at(25));
+        assert_eq!(s.max_hit(goblin), before + 5);
+        assert_eq!(s.weapon_land("bronze_sword"), 2);
+        s.do_prestige(1);
+        assert_eq!(s.weapon_level("bronze_sword"), 25, "kept through prestige");
+    }
+}

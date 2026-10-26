@@ -178,6 +178,23 @@ pub struct Block {
     pub act: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub value: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub curve: Option<Curve>,
+}
+
+/// A line graph the page draws as given (T23): an SVG path in the `view`
+/// box, a marker placed by percentages, and four labels.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct Curve {
+    pub view: String,
+    pub line: String,
+    /// The marker's place, as CSS percentages of the box from left and top.
+    pub x: String,
+    pub y: String,
+    pub top: String,
+    pub low: String,
+    pub left: String,
+    pub right: String,
 }
 
 pub(crate) fn block(kind: &str) -> Block {
@@ -270,16 +287,16 @@ pub struct Device {
 pub const GROUPS: [(&str, &[&str]); 5] = [
     ("gather", &["woodcutting", "mining", "fishing", "farming"]),
     ("make", &["firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction"]),
-    ("fight", &["combat", "recipes"]),
+    ("fight", &["combat", "weapons", "recipes"]),
     ("engines", &["performance", "stage", "trader", "estate", "workshop", "observatory"]),
     ("more", &["bank", "shop", "book", "regions", "plan", "prestige", "settings"]),
 ];
 
 #[rustfmt::skip]
-pub const TABS: [&str; 26] = [
+pub const TABS: [&str; 27] = [
     "woodcutting", "mining", "fishing", "farming",
     "firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction",
-    "combat", "recipes",
+    "combat", "weapons", "recipes",
     "performance", "stage", "trader", "estate", "workshop", "observatory",
     "bank", "shop", "book", "regions", "plan", "prestige", "settings",
 ];
@@ -528,6 +545,7 @@ impl View<'_> {
             "observatory" => self.observatory(),
             "stage" => self.stage(),
             "combat" => self.combat(),
+            "weapons" => self.weapons(),
             "bank" => self.bank(),
             "shop" => self.shop(),
             "book" => self.book(),
@@ -1066,7 +1084,16 @@ impl View<'_> {
             if list.is_empty() {
                 continue;
             }
-            let (best, tier) = self.s.tier(list);
+            let (best, tier) = if key == "supply_held" {
+                self.s.weapon_of(self.s.style)
+            } else {
+                self.s.tier(list)
+            };
+            let extra = if key == "supply_held" {
+                self.s.weapon_hit(&best)
+            } else {
+                0
+            };
             chips.push(match best.as_str() {
                 "" => chip(
                     "bad",
@@ -1080,7 +1107,7 @@ impl View<'_> {
                         &[
                             ("item", self.t.item(b)),
                             ("n", num(self.s.have(b))),
-                            ("hit", num(tier * c::MAX_HIT_PER_TIER)),
+                            ("hit", num(tier * c::MAX_HIT_PER_TIER + extra)),
                         ],
                     ),
                 ),
@@ -1273,6 +1300,152 @@ impl View<'_> {
             title: self.t.s("combat_log_title"),
             rows,
             ..block("rows")
+        }
+    }
+
+    /// Weapon mastery (T23): the style's weapons, each with its level, its
+    /// XP speed against the gate and what its level adds; the weapon in
+    /// hand with a graph of its gate; a button to fight with each.
+    fn weapons(&self) -> Vec<Block> {
+        let k = self.s.style;
+        let st = &c::STYLES[k];
+        let (in_hand, _) = self.s.weapon_of(k);
+        let mut out = vec![self.head(
+            "weapons",
+            self.t.s("tab_weapons"),
+            self.t.t("weapons_tag", &[("style", self.skill_name(st.skill))]),
+            "xp",
+        )];
+        out.push(Block {
+            text: self.t.t(
+                "weapons_intro",
+                &[
+                    ("hit", c::WEAPON_HIT_EVERY.to_string()),
+                    ("land", c::WEAPON_LAND_EVERY.to_string()),
+                    ("per", c::WEAPON_GATE_PER_TIER.to_string()),
+                    ("min", c::WEAPON_RATE_MIN.to_string()),
+                ],
+            ),
+            ..block("note")
+        });
+        out.push(Block {
+            buttons: c::STYLES
+                .iter()
+                .enumerate()
+                .map(|(j, s)| {
+                    button(self.skill_name(s.skill), "style", &j.to_string())
+                        .icon(c::SKILLS[s.skill].id)
+                        .pressed(j == k)
+                })
+                .collect(),
+            ..block("buttons")
+        });
+        if !in_hand.is_empty() {
+            out.push(self.gate_block(k, &in_hand));
+        }
+        let mut list: Vec<(&str, u64)> = st.held.to_vec();
+        list.sort_by_key(|(i, t)| (*t, *i));
+        let (shown, hidden): (Vec<_>, Vec<_>) = list
+            .into_iter()
+            .partition(|(i, _)| self.s.have(i) > 0 || self.s.weapon_xp.contains_key(*i));
+        let rows: Vec<Row> = shown
+            .iter()
+            .map(|&(i, tier)| {
+                let here = i == in_hand;
+                Row {
+                    icon: i.into(),
+                    title: self.t.t(
+                        "weapon_title",
+                        &[
+                            ("item", self.t.item(i)),
+                            ("n", self.s.weapon_level(i).to_string()),
+                        ],
+                    ),
+                    sub: self.t.t(
+                        "weapon_sub",
+                        &[
+                            ("tier", tier.to_string()),
+                            ("rate", self.s.weapon_rate(k, i).to_string()),
+                            ("hit", self.s.weapon_hit(i).to_string()),
+                            ("land", self.s.weapon_land(i).to_string()),
+                            ("have", num(self.s.have(i))),
+                        ],
+                    ),
+                    chip: if here { self.t.s("in_hand") } else { String::new() },
+                    tone: if here { "up".into() } else { String::new() },
+                    buttons: vec![button(self.t.s("wield"), "wield", i)
+                        .pressed(here)
+                        .enabled(self.s.have(i) > 0)],
+                }
+            })
+            .collect();
+        if rows.is_empty() {
+            out.push(Block {
+                text: self.t.s("weapons_none"),
+                ..block("note")
+            });
+        } else {
+            out.push(Block {
+                title: self.t.t("weapons_of", &[("style", self.skill_name(st.skill))]),
+                rows,
+                ..block("rows")
+            });
+        }
+        if !hidden.is_empty() {
+            out.push(Block {
+                text: self.t.t("weapons_more", &[("n", hidden.len().to_string())]),
+                ..block("note")
+            });
+        }
+        out
+    }
+
+    /// The graph of a weapon's XP speed against its weaker weapons' levels,
+    /// with a mark where you stand (IG-Q60 A).
+    fn gate_block(&self, style: usize, item: &str) -> Block {
+        let (need, have) = self.s.weapon_gate(style, item);
+        let rate = self.s.weapon_rate(style, item);
+        // x: 0 to a quarter past the gate; y: 0% at the bottom, 100% at the top.
+        let xmax = (need + need / 4).max(have).max(1);
+        let x = |v: u64| v * 1_000 / xmax;
+        let y = |pct: u64| 500 - pct * 5;
+        let floor_at = need * c::WEAPON_RATE_MIN / 100;
+        let line = if need == 0 {
+            format!("M0 {} L1000 {}", y(100), y(100))
+        } else {
+            format!(
+                "M0 {low} L{a} {low} L{b} {top} L1000 {top}",
+                low = y(c::WEAPON_RATE_MIN),
+                a = x(floor_at),
+                b = x(need),
+                top = y(100),
+            )
+        };
+        Block {
+            title: self.t.t("gate_title", &[("item", self.t.item(item))]),
+            text: if need == 0 {
+                self.t.s("gate_free")
+            } else {
+                self.t.t(
+                    "gate_text",
+                    &[
+                        ("have", have.to_string()),
+                        ("need", need.to_string()),
+                        ("rate", rate.to_string()),
+                    ],
+                )
+            },
+            curve: Some(Curve {
+                view: "0 0 1000 500".into(),
+                line,
+                x: format!("{}%", have.min(xmax) * 100 / xmax),
+                y: format!("{}%", 100 - rate),
+                top: self.t.s("gate_top"),
+                low: self.t.t("gate_low", &[("n", c::WEAPON_RATE_MIN.to_string())]),
+                left: "0".into(),
+                right: self.t.t("gate_right", &[("n", xmax.to_string())]),
+            }),
+            ..block("curve")
         }
     }
 
