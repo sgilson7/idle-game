@@ -3004,6 +3004,13 @@ fn kind_key(k: Kind) -> &'static str {
 }
 
 /// The tab whose skill or engine makes an item, for grouping the bank.
+/// A weapon a style holds, or armour: combat uses the best one you have and
+/// never spends it, so a second one adds nothing in a fight (T21).
+pub fn is_held(item: &str) -> bool {
+    c::STYLES.iter().any(|s| s.held.iter().any(|(i, _)| *i == item))
+        || c::ARMOUR.iter().any(|(a, _, _)| *a == item)
+}
+
 pub fn maker_tab(item: &str) -> &'static str {
     if let Some(a) = c::ACTIONS.iter().find(|a| a.makes.0 == item) {
         return tab_of_skill(a.skill);
@@ -3138,11 +3145,4 @@ mod tests {
         }
         assert!(outs.contains(&"feathers"));
     }
-}
-
-/// A weapon a style holds, or armour: combat uses the best one you have and
-/// never spends it, so a second one adds nothing in a fight (T21).
-pub fn is_held(item: &str) -> bool {
-    c::STYLES.iter().any(|s| s.held.iter().any(|(i, _)| *i == item))
-        || c::ARMOUR.iter().any(|(a, _, _)| *a == item)
 }
