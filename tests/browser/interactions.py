@@ -100,6 +100,9 @@ def run(page, check, engine):
     page.locator('.stack .blk[data-k="0"] button[data-act="plan.count"][data-value="0:100"]').click()
     first = lambda: page.inner_text('.stack .blk[data-k="0"] small')
     before = first()
+    # Centre the blocks: near an edge the plan scrolls while dragging (T24).
+    page.evaluate("document.querySelector('.stack').scrollIntoView({block: 'center'})")
+    page.wait_for_timeout(200)
     grip = page.locator('.stack .blk[data-k="1"] .grip').bounding_box()
     top = page.locator('.stack .blk[data-k="0"]').bounding_box()
     page.mouse.move(grip["x"] + grip["width"] / 2, grip["y"] + grip["height"] / 2)
