@@ -2262,6 +2262,14 @@
   "fold_pool": "the mastery pool",
   "pool_about": "Every action's mastery level adds to its skill's pool, so mastering older actions makes every action in the skill better. Each step below is for every action here.",
   "pool_top": "Your highest mastery here: {n}",
-  "pool_top_sub": "Every action in this skill gains mastery that many percent faster."
+  "pool_top_sub": "Every action in this skill gains mastery that many percent faster.",
+  "tab_armour": "Armour",
+  "tab_armour_short": "Armour",
+  "armour_intro": "Each armour piece has its own level, shared by every piece of that name. The piece you wear learns from every swing of a fight, and Hitpoints gets half of what it learns. Every {guard} levels it takes 1% more off each hit, and every {every} add {hp} health. A piece learns at full speed once the weaker pieces add up to {per} levels each.",
+  "armour_sub": "−{pct}% damage, +{hp} health · learns at {rate}% · −{guard}% more from its level · you have {have}",
+  "worn": "worn",
+  "wear": "Wear it",
+  "armour_list": "Armour",
+  "toast_wear": "Wearing {item}"
  }
 }

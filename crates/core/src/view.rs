@@ -287,16 +287,16 @@ pub struct Device {
 pub const GROUPS: [(&str, &[&str]); 5] = [
     ("gather", &["woodcutting", "mining", "fishing", "farming"]),
     ("make", &["firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction"]),
-    ("fight", &["combat", "weapons", "recipes"]),
+    ("fight", &["combat", "weapons", "armour", "recipes"]),
     ("engines", &["performance", "stage", "trader", "estate", "workshop", "observatory"]),
     ("more", &["bank", "shop", "book", "regions", "plan", "prestige", "settings"]),
 ];
 
 #[rustfmt::skip]
-pub const TABS: [&str; 27] = [
+pub const TABS: [&str; 28] = [
     "woodcutting", "mining", "fishing", "farming",
     "firemaking", "fletching", "smithing", "cooking", "crafting", "runecrafting", "construction",
-    "combat", "weapons", "recipes",
+    "combat", "weapons", "armour", "recipes",
     "performance", "stage", "trader", "estate", "workshop", "observatory",
     "bank", "shop", "book", "regions", "plan", "prestige", "settings",
 ];
@@ -551,7 +551,7 @@ impl View<'_> {
     /// Screens whose lists sort; the region filter shows wherever regions do.
     fn sorts(&self) -> bool {
         let s = self.s.screen.as_str();
-        c::skill_index(s).is_some() || matches!(s, "combat" | "bank" | "book" | "weapons")
+        c::skill_index(s).is_some() || matches!(s, "combat" | "bank" | "book" | "weapons" | "armour")
     }
 
     fn filters_regions(&self) -> bool {
@@ -672,6 +672,7 @@ impl View<'_> {
             "stage" => self.stage(),
             "combat" => self.combat(),
             "weapons" => self.weapons(),
+            "armour" => self.armour_tab(),
             "bank" => self.bank(),
             "shop" => self.shop(),
             "book" => self.book(),
@@ -1189,7 +1190,12 @@ impl View<'_> {
                     "armour_have",
                     &[
                         ("item", self.t.item(item)),
-                        ("pct", (tier * c::ARMOUR_PCT_PER_TIER).to_string()),
+                        (
+                            "pct",
+                            (tier * c::ARMOUR_PCT_PER_TIER + self.s.armour_guard(item))
+                                .min(c::ARMOUR_GUARD_MOST)
+                                .to_string(),
+                        ),
                     ],
                 ),
             ),
@@ -1608,11 +1614,90 @@ impl View<'_> {
         out
     }
 
+    /// Armour mastery (T34): every piece, its level, its learning speed
+    /// against the gate and what its level adds; the piece worn with its
+    /// gate's graph; a button to wear each.
+    fn armour_tab(&self) -> Vec<Block> {
+        let (worn, _, _) = self.s.armour();
+        let mut out = vec![self.head("armour", self.t.s("tab_armour"), String::new(), "hp")];
+        out.push(Block {
+            text: self.t.t(
+                "armour_intro",
+                &[
+                    ("guard", c::ARMOUR_GUARD_EVERY.to_string()),
+                    ("hp", c::ARMOUR_HP_EACH.to_string()),
+                    ("every", c::ARMOUR_HP_EVERY.to_string()),
+                    ("per", c::ARMOUR_GATE_EACH.to_string()),
+                ],
+            ),
+            ..block("note")
+        });
+        if !worn.is_empty() {
+            let (need, have) = self.s.armour_gate(worn);
+            out.push(self.curve_block(worn, need, have, self.s.armour_rate(worn)));
+        }
+        let mut list: Vec<(&str, u64, u64)> = c::ARMOUR.to_vec();
+        list.sort_by_key(|(a, t, hp)| (*t, *hp, *a));
+        let rows: Vec<Row> = list
+            .iter()
+            .filter(|(a, _, _)| {
+                self.region_shown(self.item_region(a)) && self.s.region_open(self.item_region(a))
+            })
+            .map(|&(a, tier, hp)| {
+                let here = a == worn;
+                Row {
+                    icon: a.into(),
+                    title: self.t.t(
+                        "weapon_title",
+                        &[
+                            ("item", self.t.item(a)),
+                            ("n", self.s.armour_level(a).to_string()),
+                        ],
+                    ),
+                    sub: self.t.t(
+                        "armour_sub",
+                        &[
+                            ("pct", (tier * c::ARMOUR_PCT_PER_TIER).to_string()),
+                            ("hp", (hp + self.s.armour_health(a)).to_string()),
+                            ("rate", self.s.armour_rate(a).to_string()),
+                            ("guard", self.s.armour_guard(a).to_string()),
+                            ("have", num(self.s.have(a))),
+                        ],
+                    ),
+                    chip: if here { self.t.s("worn") } else { String::new() },
+                    tone: if here {
+                        "up".into()
+                    } else if self.s.have(a) == 0 {
+                        "used".into()
+                    } else {
+                        String::new()
+                    },
+                    buttons: vec![button(self.t.s("wear"), "wear", a)
+                        .pressed(here)
+                        .enabled(self.s.have(a) > 0)],
+                }
+            })
+            .collect();
+        if !rows.is_empty() {
+            out.push(Block {
+                title: self.t.s("armour_list"),
+                rows,
+                ..block("rows")
+            });
+        }
+        out
+    }
+
     /// The graph of a weapon's XP speed against its weaker weapons' levels,
     /// with a mark where you stand (IG-Q60 A).
     fn gate_block(&self, style: usize, item: &str) -> Block {
         let (need, have) = self.s.weapon_gate(style, item);
         let rate = self.s.weapon_rate(style, item);
+        self.curve_block(item, need, have, rate)
+    }
+
+    /// The gate's graph for a weapon or an armour piece (T23, T34).
+    fn curve_block(&self, item: &str, need: u64, have: u64, rate: u64) -> Block {
         // x: 0 to a quarter past the gate; y: 0% at the bottom, 100% at the top.
         let xmax = (need + need / 4).max(have).max(1);
         let x = |v: u64| v * 1_000 / xmax;

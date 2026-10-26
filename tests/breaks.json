@@ -1013,5 +1013,33 @@
     "find": ".map_or(a.level, |e| a.level.min(ENEMIES[e].level))",
     "replace": ".map_or(a.level, |_| a.level)",
     "test": "a_found_recipe_shows_and_needs_no_more_than_its_enemys_level"
+  },
+  {
+    "name": "armour learns every swing",
+    "file": "crates/core/src/game.rs",
+    "find": "            add(&mut self.armour_xp, worn, w);",
+    "replace": "            add(&mut self.armour_xp, worn, 0);",
+    "test": "armour_learns_from_every_swing_and_its_level_guards_and_adds_health"
+  },
+  {
+    "name": "armour's level adds health",
+    "file": "crates/core/src/game.rs",
+    "find": "self.armour_level(item) as u64 / c::ARMOUR_HP_EVERY * c::ARMOUR_HP_EACH",
+    "replace": "0",
+    "test": "armour_learns_from_every_swing_and_its_level_guards_and_adds_health"
+  },
+  {
+    "name": "the chosen armour is worn",
+    "file": "crates/core/src/game.rs",
+    "find": ".find(|(i, _, _)| *i == self.wear && self.have(i) > 0);",
+    "replace": ".find(|(i, _, _)| *i == self.wear && self.have(i) > 999);",
+    "test": "armour_learns_from_every_swing_and_its_level_guards_and_adds_health"
+  },
+  {
+    "name": "armour levels stay through prestige",
+    "file": "crates/core/src/game.rs",
+    "find": "        s.armour_xp = keep.armour_xp;\n",
+    "replace": "",
+    "test": "armour_learns_from_every_swing_and_its_level_guards_and_adds_health"
   }
 ]

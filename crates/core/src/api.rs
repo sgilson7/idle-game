@@ -846,6 +846,11 @@ impl Game {
                 }
             }
             "view.sort" if matches!(value, "" | "high" | "name") => self.s.view_sort = value.into(),
+            "wear" => {
+                if self.s.wear_armour(value) {
+                    self.toasts = vec![self.text.t("toast_wear", &[("item", self.text.item(value))])];
+                }
+            }
             "wield" => {
                 if self.s.wield_weapon(value) {
                     self.toasts = vec![self.text.t("toast_wield", &[("item", self.text.item(value))])];
@@ -1375,7 +1380,7 @@ mod tests {
         let v = ui(&g.tick(1_000));
         assert_eq!(v["screen"], "woodcutting");
         assert_eq!(v["sheet"]["kind"], "notice");
-        assert_eq!(v["tabs"].as_array().unwrap().len(), 27);
+        assert_eq!(v["tabs"].as_array().unwrap().len(), 28);
         assert_eq!(v["groups"].as_array().unwrap().len(), 5);
         assert_eq!(v["next_ms"], 0);
     }

@@ -1133,6 +1133,18 @@ pub const WEAPON_GATE_PER_TIER: u64 = 20;
 pub const WEAPON_GATE_EACH: u64 = 50;
 pub const WEAPON_RATE_MIN: u64 = 10;
 
+/// Armour mastery (T34): a piece learns from every swing of a fight, its
+/// base XP 2 plus one for every 4 levels of the enemy; its level adds 1%
+/// less damage every 10 levels and 2 health every 5; each weaker piece asks
+/// 20 levels of the gate. Damage taken is never cut by more than 60%.
+pub const ARMOUR_SWING_XP: u64 = 2;
+pub const ARMOUR_SWING_PER: u64 = 4;
+pub const ARMOUR_GUARD_EVERY: u64 = 10;
+pub const ARMOUR_HP_EVERY: u64 = 5;
+pub const ARMOUR_HP_EACH: u64 = 2;
+pub const ARMOUR_GATE_EACH: u64 = 20;
+pub const ARMOUR_GUARD_MOST: u64 = 60;
+
 /// The mastery pool (T27, IG-Q62 A, IG-Q63 A): a skill's actions' mastery
 /// levels added up, as a share of all of them at 99, opens a bonus for every
 /// action in the skill at each step: +5% XP, 5% faster, +5% double (gather)

@@ -272,6 +272,12 @@ pub struct State {
     /// region r; the order is "" (level, lowest first), "high" or "name".
     #[serde(default)]
     pub view_region: usize,
+    /// Armour mastery (T34): each piece's XP by name, and the piece chosen
+    /// to wear; kept through prestige.
+    #[serde(default)]
+    pub armour_xp: BTreeMap<String, u64>,
+    #[serde(default)]
+    pub wear: String,
     #[serde(default)]
     pub view_sort: String,
 }
@@ -394,6 +400,8 @@ impl State {
             wield: BTreeMap::new(),
             view_region: 0,
             view_sort: String::new(),
+            armour_xp: BTreeMap::new(),
+            wear: String::new(),
         };
         s.hp = s.max_hp();
         s.note(now, "new", "", 0);
@@ -769,12 +777,73 @@ impl State {
     }
 
     /// The best armour in the bank: its tier, and the hitpoints the regions' armour adds (T5, T15).
+    /// The armour you wear: the piece chosen while you have it, or your
+    /// best (T34). Its tier, and the health it adds with its level's.
     pub fn armour(&self) -> (&'static str, u64, u64) {
-        c::ARMOUR
+        let chosen = c::ARMOUR
             .iter()
             .copied()
-            .find(|(i, _, _)| self.have(i) > 0)
+            .find(|(i, _, _)| *i == self.wear && self.have(i) > 0);
+        chosen
+            .or_else(|| c::ARMOUR.iter().copied().find(|(i, _, _)| self.have(i) > 0))
+            .map(|(i, t, hp)| (i, t, hp + self.armour_health(i)))
             .unwrap_or(("", 0, 0))
+    }
+
+    // ---------- armour mastery (T34, IG-Q65 B, IG-Q66 A, IG-Q67 A) ----------
+
+    pub fn armour_level(&self, item: &str) -> u32 {
+        xp::level(self.armour_xp.get(item).copied().unwrap_or(0))
+    }
+
+    /// Health an armour piece's level adds: 2 every 5 levels.
+    pub fn armour_health(&self, item: &str) -> u64 {
+        self.armour_level(item) as u64 / c::ARMOUR_HP_EVERY * c::ARMOUR_HP_EACH
+    }
+
+    /// Less damage an armour piece's level gives, in percent: 1 every 10 levels.
+    pub fn armour_guard(&self, item: &str) -> u64 {
+        if item.is_empty() {
+            return 0;
+        }
+        self.armour_level(item) as u64 / c::ARMOUR_GUARD_EVERY
+    }
+
+    /// The gate: armour has four tiers, so every piece weaker than this one
+    /// (by tier, then by the health it adds) asks for 20 levels.
+    pub fn armour_gate(&self, item: &str) -> (u64, u64) {
+        let key = |i: &str| {
+            c::ARMOUR
+                .iter()
+                .find(|(a, _, _)| *a == i)
+                .map(|(_, t, hp)| (*t, *hp))
+        };
+        let Some(me) = key(item) else {
+            return (0, 0);
+        };
+        let weaker: Vec<&str> = c::ARMOUR
+            .iter()
+            .filter(|(_, t, hp)| (*t, *hp) < me)
+            .map(|(a, _, _)| *a)
+            .collect();
+        let have = weaker.iter().map(|a| self.armour_level(a) as u64).sum();
+        (weaker.len() as u64 * c::ARMOUR_GATE_EACH, have)
+    }
+
+    pub fn armour_rate(&self, item: &str) -> u64 {
+        let (need, have) = self.armour_gate(item);
+        if need == 0 {
+            return 100;
+        }
+        (have * 100 / need).clamp(c::WEAPON_RATE_MIN, 100)
+    }
+
+    pub fn wear_armour(&mut self, item: &str) -> bool {
+        if !c::ARMOUR.iter().any(|(a, _, _)| *a == item) || self.have(item) == 0 {
+            return false;
+        }
+        self.wear = item.to_string();
+        true
     }
 
     /// The enemy you face now: the one picked, or the dungeon's current stage.
@@ -1417,6 +1486,16 @@ impl State {
             self.foe_hp = enemy.hp;
         }
         let strong = enemy.weak == style.skill;
+        // The armour worn learns from every swing of a fight, hit or not
+        // (IG-Q65 B), at its gated speed; Hitpoints gets half (IG-Q67 A).
+        let (worn, _, _) = self.armour();
+        if !worn.is_empty() {
+            let base =
+                (c::ARMOUR_SWING_XP + enemy.level as u64 / c::ARMOUR_SWING_PER) * self.mult_bp() / 10_000;
+            let w = 2 * base * self.armour_rate(worn) / 100;
+            add(&mut self.armour_xp, worn, w);
+            self.gain(c::HITPOINTS, w / 2, r);
+        }
         let (weapon, _) = self.weapon_of(self.style);
         let base_pct = if strong { c::HIT_PCT_STRONG } else { c::HIT_PCT };
         let hit_pct = (base_pct + self.weapon_land(&weapon)).min(100);
@@ -1443,7 +1522,9 @@ impl State {
             self.blow("miss", enemy.id, 0);
         }
         if self.rng.percent(c::ENEMY_HIT_PCT) {
-            let hit = self.rng.below(enemy.hit + 1) * (100 - self.armour().1 * c::ARMOUR_PCT_PER_TIER) / 100;
+            let (worn, tier, _) = self.armour();
+            let guard = (tier * c::ARMOUR_PCT_PER_TIER + self.armour_guard(worn)).min(c::ARMOUR_GUARD_MOST);
+            let hit = self.rng.below(enemy.hit + 1) * (100 - guard) / 100;
             self.hp = self.hp.saturating_sub(hit);
             self.blow("hurt", enemy.id, hit);
         }
@@ -1871,6 +1952,8 @@ impl State {
         s.offered = keep.offered;
         s.weapon_xp = keep.weapon_xp;
         s.view_sort = keep.view_sort;
+        s.armour_xp = keep.armour_xp;
+        s.wear = keep.wear;
         s.wield = keep.wield;
         s.asked = keep.asked;
         s.sound = keep.sound;
@@ -2420,5 +2503,45 @@ mod tests {
         let mut r = Report::begin(&s, 0, 0);
         s.harvest(0, &mut r);
         assert!((2..=4).contains(&s.have("cowhide")), "{}", s.have("cowhide"));
+    }
+
+    #[test]
+    fn armour_learns_from_every_swing_and_its_level_guards_and_adds_health() {
+        // T34: IG-Q65 B, IG-Q66 A, IG-Q67 A.
+        let mut s = State::new(3);
+        for i in 0..c::SKILLS.len() {
+            s.xp[i] = xp::at(30);
+        }
+        s.bank.insert("bronze_sword".into(), 1);
+        s.bank.insert("leather_body".into(), 1);
+        s.bank.insert("shrimp".into(), 500);
+        assert_eq!(s.armour().0, "leather_body");
+        let hp0 = s.xp[c::HITPOINTS];
+        s.start("chicken", 0);
+        let mut r = Report::begin(&s, 24_000, 0);
+        s.advance(24_000, &mut r);
+        // ten swings at a chicken (level 1): 2 base XP each, twice that at full
+        // speed (the weakest piece learns at full speed)
+        let w = s.armour_xp.get("leather_body").copied().unwrap_or(0);
+        assert_eq!(s.armour_rate("leather_body"), 100);
+        assert_eq!(w, 10 * 4);
+        assert!(
+            s.xp[c::HITPOINTS] - hp0 >= w / 2,
+            "Hitpoints gets half, and more from hits"
+        );
+        // level 30: 3% less damage, 12 health more (2 every 5 levels)
+        s.armour_xp.insert("leather_body".into(), xp::at(30));
+        assert_eq!(s.armour_guard("leather_body"), 3);
+        assert_eq!(s.armour_health("leather_body"), 12);
+        // the gate: the hard leather body is stronger; the leather body is weaker
+        let (need, have) = s.armour_gate("hard_leather_body");
+        assert!(need >= c::ARMOUR_GATE_EACH && have >= 30);
+        // choose what to wear; kept through prestige
+        s.bank.insert("hard_leather_body".into(), 1);
+        assert!(s.wear_armour("leather_body"));
+        assert_eq!(s.armour().0, "leather_body");
+        assert!(!s.wear_armour("dragonhide_body"), "not had");
+        s.do_prestige(1);
+        assert_eq!(s.armour_level("leather_body"), 30);
     }
 }
