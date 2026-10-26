@@ -113,6 +113,7 @@ pub const WOODCUTTING: usize = 0;
 pub const MINING: usize = 1;
 pub const FISHING: usize = 2;
 pub const FIREMAKING: usize = 3;
+pub const FLETCHING: usize = 4;
 pub const SMITHING: usize = 5;
 pub const COOKING: usize = 6;
 pub const RUNECRAFTING: usize = 7;
