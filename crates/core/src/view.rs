@@ -1526,7 +1526,7 @@ impl View<'_> {
     /// One item's encyclopedia row: what makes it, what uses it, what it sells for.
     fn entry(&self, item: &str) -> Row {
         let mut from: Vec<String> = Vec::new();
-        let mut push = |list: &mut Vec<String>, s: String| {
+        let push = |list: &mut Vec<String>, s: String| {
             if !list.contains(&s) {
                 list.push(s);
             }
