@@ -485,7 +485,10 @@ impl View<'_> {
                                 "{} · {}",
                                 self.t.t(
                                     "needs_level",
-                                    &[("skill", self.skill_name(a.skill)), ("n", a.level.to_string())]
+                                    &[
+                                        ("skill", self.skill_name(a.skill)),
+                                        ("n", c::need_level(a).to_string())
+                                    ]
                                 ),
                                 self.t.s(&format!("does_{}", rc.id))
                             )

@@ -1646,7 +1646,7 @@ mod tests {
     }
 
     #[test]
-    fn a_long_skill_shows_every_row_and_the_locked_ones_too() {
+    fn a_skill_shows_what_you_can_do_and_the_next_ten_levels() {
         // Woodcutting 99 with every region open: 36 trees, all unlocked.
         let mut g = game(0);
         g.act("sheet.close", "", 0);
@@ -1665,11 +1665,40 @@ mod tests {
         // Nothing is folded away (T31): all 36 trees show.
         let v = ui(&g.act("tab", "woodcutting", 0));
         assert_eq!(cards(&v), 36);
-        // At level 1 with only the Vale open, its 9 trees show, 8 of them locked.
+        // At level 1 only the tree (1); oak (15) is more than ten levels on.
         let mut g = game(0);
         g.act("sheet.close", "", 0);
         let v = ui(&g.act("tab", "woodcutting", 0));
-        assert_eq!(cards(&v), 9);
+        assert_eq!(cards(&v), 1);
+        // At level 5, oak shows greyed: 15 is within 5 + 10.
+        g.state_mut().xp[c::WOODCUTTING] = crate::xp::at(5);
+        let v = ui(&g.act("tab", "woodcutting", 0));
+        assert_eq!(cards(&v), 2);
+    }
+
+    #[test]
+    fn a_found_recipe_shows_and_needs_no_more_than_its_enemys_level() {
+        // The Silkweave vest (Crafting 40) drops from giant spiders, level 20.
+        let a = &c::ACTIONS[c::action_index("silkweave_vest").unwrap()];
+        assert_eq!(a.level, 40);
+        assert_eq!(c::need_level(a), 20);
+        let mut g = game(0);
+        g.act("sheet.close", "", 0);
+        g.state_mut().xp[c::CRAFTING] = crate::xp::at(15);
+        let shown = |g: &mut Game| {
+            let mut t = Vec::new();
+            all_text(&ui(&g.act("tab", "crafting", 0))["blocks"], &mut t);
+            t.iter().any(|x| x == "Silkweave vest")
+        };
+        assert!(!shown(&mut g), "not found yet");
+        g.state_mut().recipes.push("silkweave_vest".into());
+        assert!(shown(&mut g), "found: it shows, greyed, at any level");
+        assert!(
+            !g.state().unlocked("silkweave_vest"),
+            "Crafting 15 is short of 20"
+        );
+        g.state_mut().xp[c::CRAFTING] = crate::xp::at(20);
+        assert!(g.state().unlocked("silkweave_vest"));
     }
 
     #[test]

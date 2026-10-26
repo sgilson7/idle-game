@@ -613,7 +613,7 @@
     "file": "crates/core/src/view.rs",
     "find": "        let cards: Vec<Card> = rows\n            .iter()\n            .map(|a| self.action_card(a, active == c::action_index(a.id)))\n            .collect();",
     "replace": "        let cards: Vec<Card> = rows\n            .iter()\n            .take(8)\n            .map(|a| self.action_card(a, active == c::action_index(a.id)))\n            .collect();",
-    "test": "a_long_skill_shows_every_row_and_the_locked_ones_too"
+    "test": "a_skill_shows_what_you_can_do_and_the_next_ten_levels"
   },
   {
     "name": "the app keeps the later regions shut until the purchase",
@@ -999,5 +999,19 @@
     "find": "seed: \"calf\", produce: \"cowhide\",",
     "replace": "seed: \"calf\", produce: \"bones\",",
     "test": "cattle_raised_in_a_patch_give_cowhide"
+  },
+  {
+    "name": "the main path shows ten levels ahead",
+    "file": "crates/core/src/view.rs",
+    "find": "c::need_level(a) <= self.s.level(i) + c::SHOW_AHEAD)",
+    "replace": "c::need_level(a) <= self.s.level(i) + 99)",
+    "test": "a_skill_shows_what_you_can_do_and_the_next_ten_levels"
+  },
+  {
+    "name": "a recipe needs no more than its enemy's level",
+    "file": "crates/core/src/content.rs",
+    "find": ".map_or(a.level, |e| a.level.min(ENEMIES[e].level))",
+    "replace": ".map_or(a.level, |_| a.level)",
+    "test": "a_found_recipe_shows_and_needs_no_more_than_its_enemys_level"
   }
 ]

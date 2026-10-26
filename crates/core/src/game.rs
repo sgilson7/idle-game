@@ -601,7 +601,7 @@ impl State {
         match c::action_index(id) {
             Some(i) => {
                 let a = &c::ACTIONS[i];
-                self.level(a.skill) >= a.level
+                self.level(a.skill) >= c::need_level(a)
                     && self.skill_open(a.skill)
                     && self.region_open(a.region)
                     && self.gate_open(a.id)

@@ -352,7 +352,7 @@ impl State {
         }
         let a = &c::ACTIONS[c::action_index(&sv.job)?];
         let skill_open = c::engine_of_skill(a.skill).is_none_or(|e| open.engines[engine_slot(e)]);
-        if self.level(a.skill) < a.level
+        if self.level(a.skill) < c::need_level(a)
             || a.region >= open.regions
             || !skill_open
             || !self.gate_open(a.id)
@@ -1128,7 +1128,7 @@ impl State {
         let a = &c::ACTIONS[ai];
         if !matches!(a.skill, c::WOODCUTTING | c::MINING | c::FISHING)
             || a.region >= open.regions
-            || self.level(a.skill) < a.level
+            || self.level(a.skill) < c::need_level(a)
         {
             return None;
         }

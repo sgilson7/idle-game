@@ -843,15 +843,21 @@ impl View<'_> {
                     && self.s.region_open(a.region)
                     && self.region_shown(a.region)
             })
+            // The main path shows what you can do and the next ten levels;
+            // a recipe, blueprint or rank row shows once found, at any level (T35).
+            .filter(|a| self.gated(a.id) || c::need_level(a) <= self.s.level(i) + c::SHOW_AHEAD)
             .collect();
-        rows.sort_by_key(|a| (a.level, a.region));
+        rows.sort_by_key(|a| (c::need_level(a), a.region));
         let closed = c::ACTIONS
             .iter()
             .filter(|a| a.skill == i && !self.s.region_open(a.region))
             .count();
-        // Every row shows, the locked ones dimmed (T31): the region filter
-        // and the order keep a long list in hand, nothing is folded away.
-        self.order(&mut rows, |a| (a.level, a.region), |a| self.t.action(a.id));
+        // Every row in reach shows, the locked ones greyed (T31, T35).
+        self.order(
+            &mut rows,
+            |a| (c::need_level(a), a.region),
+            |a| self.t.action(a.id),
+        );
         let cards: Vec<Card> = rows
             .iter()
             .map(|a| self.action_card(a, active == c::action_index(a.id)))
@@ -867,6 +873,12 @@ impl View<'_> {
             });
         }
         out
+    }
+
+    /// Whether an action is found rather than reached by level: a recipe,
+    /// a blueprint's build, or a rank's (T35).
+    pub(crate) fn gated(&self, id: &str) -> bool {
+        c::recipe_index(id).is_some() || c::BLUEPRINTS.iter().any(|b| b.build == id) || id == "astral_runes"
     }
 
     /// Recipe actions show once the recipe is found, and build actions once
@@ -931,7 +943,8 @@ impl View<'_> {
         let skill = &c::SKILLS[a.skill];
         let w = self.t.skill(skill.id);
         let gated = !self.s.gate_open(a.id);
-        let open = self.s.level(a.skill) >= a.level && !gated;
+        let need = c::need_level(a);
+        let open = self.s.level(a.skill) >= need && !gated;
         let ml = self.s.mastery(a.id);
         let missing = self.s.missing(a.id);
         let sub = if gated {
@@ -939,7 +952,7 @@ impl View<'_> {
         } else if !open {
             self.t.t(
                 "needs_level",
-                &[("skill", w.name.clone()), ("n", a.level.to_string())],
+                &[("skill", w.name.clone()), ("n", need.to_string())],
             )
         } else if a.needs.is_empty() {
             self.t.t("gives", &[("item", self.t.item(a.makes.0))])
@@ -1038,7 +1051,7 @@ impl View<'_> {
             } else if gated {
                 self.t.s("rank_tag")
             } else {
-                self.t.t("lock_tag", &[("n", a.level.to_string())])
+                self.t.t("lock_tag", &[("n", need.to_string())])
             },
             tone: if open { "mast".into() } else { "lock".into() },
             locked: !open,
@@ -2018,7 +2031,10 @@ impl View<'_> {
                 &mut from,
                 self.t.t(
                     "lvl_of",
-                    &[("skill", self.skill_name(a.skill)), ("n", a.level.to_string())],
+                    &[
+                        ("skill", self.skill_name(a.skill)),
+                        ("n", c::need_level(a).to_string()),
+                    ],
                 ),
             );
         }
@@ -3276,7 +3292,9 @@ impl View<'_> {
             });
             let new: Vec<&c::Action> = c::ACTIONS
                 .iter()
-                .filter(|a| a.skill == i && a.level > l0 && a.level <= l1 && self.s.unlocked(a.id))
+                .filter(|a| {
+                    a.skill == i && c::need_level(a) > l0 && c::need_level(a) <= l1 && self.s.unlocked(a.id)
+                })
                 .collect();
             if let Some(best) = new.last() {
                 ready.push(Row {

@@ -1645,6 +1645,19 @@ pub fn recipe_index(id: &str) -> Option<usize> {
         .copied()
 }
 
+/// The level an action needs (T35). A recipe needs no more than the level
+/// of the enemy that drops it, so a recipe found is soon in reach: the
+/// Silkweave vest drops from giant spiders (level 20), so it needs Crafting
+/// 20, not 40. Every other action needs its own level.
+pub fn need_level(a: &Action) -> u32 {
+    recipe_index(a.id)
+        .and_then(|r| enemy_index(RECIPES[r].enemy))
+        .map_or(a.level, |e| a.level.min(ENEMIES[e].level))
+}
+
+/// Main-path rows show this many levels ahead of yours, greyed (T35).
+pub const SHOW_AHEAD: u32 = 10;
+
 /// A second copy of a recipe you know sells for this much gold for each
 /// "one in" of its rarity.
 pub const RECIPE_COPY_GOLD_PER_ONE_IN: u64 = 10;
