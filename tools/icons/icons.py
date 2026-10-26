@@ -58,9 +58,82 @@ def arrow(c, shaft=False, head_only=False):
 def sword(c): return f'<path d="M9 31L30 10l3-5-5 3L7 29" fill="{c}" stroke="#222"/><path d="M6 24l10 10" stroke="#8a6a4a" stroke-width="3.5" stroke-linecap="round"/>'
 def rune(c): return f'<circle cx="20" cy="20" r="14" fill="#5a5f70" stroke="#222"/><circle cx="20" cy="20" r="7" fill="{c}"/>'
 def enemy(c): return f'<ellipse cx="20" cy="24" rx="14" ry="11" fill="{c}" stroke="#111"/><circle cx="15" cy="21" r="2.2" fill="#111"/><circle cx="25" cy="21" r="2.2" fill="#111"/><path d="M15 29q5 3 10 0" stroke="#111" fill="none"/>'
+
+# ---- enemies by family (T18, IG-Q51 A): each looks like what it is, so
+# colour is never the only difference; a boss wears a crown. ----
+EYES = '<circle cx="{x1}" cy="{y}" r="1.7" fill="#111"/><circle cx="{x2}" cy="{y}" r="1.7" fill="#111"/>'
+def eyes(x1, x2, y): return EYES.format(x1=x1, x2=x2, y=y)
+def e_bird(c): return (f'<path d="M8 26c0-9 6-15 14-15 6 0 10 4 10 9 0 8-7 13-14 13-6 0-10-3-10-7z" fill="{c}" stroke="#222"/>'
+                       f'<path d="M30 17l7 2-7 3z" fill="#f0a020" stroke="#222"/><path d="M12 22c4 0 9 3 10 8-6 0-10-3-10-8z" fill="#fff" opacity=".35"/>'
+                       '<circle cx="27" cy="17" r="1.8" fill="#111"/><path d="M16 33v4M22 33v4" stroke="#f0a020" stroke-width="2"/>')
+def e_beast(c): return (f'<path d="M5 22c0-5 5-8 12-8h10l6-5 2 6c2 1 3 3 3 5l-4 3H31v12h-4v-7H15v7h-4V24z" fill="{c}" stroke="#222"/>'
+                        '<circle cx="31" cy="15" r="1.6" fill="#111"/><path d="M33 9l1-5 3 4z" fill="' + c + '" stroke="#222"/>')
+def e_person(c, helm=False): return (f'<circle cx="20" cy="11" r="7" fill="{"#9aa4b8" if helm else "#e0b48a"}" stroke="#222"/>'
+                                     + ('<path d="M14 11h12" stroke="#222" stroke-width="2"/>' if helm else eyes(17.5, 22.5, 11))
+                                     + f'<path d="M9 37c0-12 4-18 11-18s11 6 11 18z" fill="{c}" stroke="#222"/>'
+                                     '<path d="M31 22l6-6" stroke="#cfd6e6" stroke-width="2.5"/>')
+def e_goblin(c): return (f'<path d="M12 12l-7-4 6 9M28 12l7-4-6 9" fill="{c}" stroke="#222"/><circle cx="20" cy="14" r="8" fill="{c}" stroke="#222"/>'
+                         + eyes(17, 23, 13) + '<path d="M17 18h6" stroke="#222"/>'
+                         f'<path d="M11 37c0-10 4-15 9-15s9 5 9 15z" fill="#7a5a3a" stroke="#222"/>')
+def e_giant(c): return (f'<path d="M6 38c0-16 5-24 14-24s14 8 14 24z" fill="{c}" stroke="#222"/><circle cx="20" cy="11" r="8" fill="{c}" stroke="#222"/>'
+                        + eyes(17, 23, 10) + '<path d="M16 15q4 2 8 0" stroke="#222" fill="none"/><path d="M33 20l4 14" stroke="#7a5a3a" stroke-width="4" stroke-linecap="round"/>')
+def e_golem(c): return (f'<path d="M10 14h20l3 10-3 13H10L7 24z" fill="{c}" stroke="#222"/><rect x="13" y="4" width="14" height="11" rx="2" fill="{c}" stroke="#222"/>'
+                        '<rect x="15" y="8" width="3" height="3" fill="#f5e6a8"/><rect x="22" y="8" width="3" height="3" fill="#f5e6a8"/><path d="M13 22l5 4 4-6 5 5" stroke="#222" fill="none"/>')
+def e_flame(c): return (f'<path d="M20 3c5 8 13 12 13 22a13 13 0 0 1-26 0c0-7 5-10 6-16 3 5 4 6 7 6-2-5-1-8 0-12z" fill="{c}" stroke="#222"/>'
+                        '<path d="M20 20c3 4 6 6 6 10a6 6 0 0 1-12 0c0-3 3-5 4-8z" fill="#ffd36a"/>' + eyes(17, 23, 24))
+def e_ghost(c): return (f'<path d="M8 37V18a12 12 0 0 1 24 0v19l-4-4-4 4-4-4-4 4-4-4z" fill="{c}" stroke="#222" opacity=".9"/>' + eyes(16, 24, 18))
+def e_dragon(c): return (f'<path d="M4 30c4-10 12-14 20-12l6-8 6 2-3 6c3 2 4 5 3 8l-6-2-4 10c-8 4-17 3-22-4z" fill="{c}" stroke="#222"/>'
+                         f'<path d="M14 18l-4-12 12 8z" fill="{c}" stroke="#222" opacity=".8"/><circle cx="31" cy="11" r="1.6" fill="#111"/><path d="M36 14l3 1" stroke="#f08a2a" stroke-width="2"/>')
+def e_serpent(c): return (f'<path d="M6 32c6 6 14-2 10-8s2-12 9-10 9 8 6 10" fill="none" stroke="#222" stroke-width="8" stroke-linecap="round"/>'
+                          f'<path d="M6 32c6 6 14-2 10-8s2-12 9-10 9 8 6 10" fill="none" stroke="{c}" stroke-width="6" stroke-linecap="round"/>'
+                          '<circle cx="33" cy="22" r="1.5" fill="#111"/><path d="M36 25l3 2" stroke="#d03a4a" stroke-width="1.5"/>')
+def e_crab(c): return (f'<ellipse cx="20" cy="24" rx="12" ry="8" fill="{c}" stroke="#222"/><path d="M8 22c-5-2-6-9-2-11 2 3 4 3 6 2M32 22c5-2 6-9 2-11-2 3-4 3-6 2" fill="{c}" stroke="#222"/>'
+                       '<path d="M10 30l-4 5M14 31l-2 5M30 30l4 5M26 31l2 5" stroke="#222" stroke-width="2"/>' + eyes(17, 23, 20))
+def e_spider(c): return (f'<path d="M6 12l8 8M6 30l8-6M34 12l-8 8M34 30l-8-6M4 21h10M36 21H26" stroke="#222" stroke-width="2.5"/>'
+                         f'<ellipse cx="20" cy="22" rx="8" ry="9" fill="{c}" stroke="#222"/><circle cx="20" cy="12" r="5" fill="{c}" stroke="#222"/>'
+                         '<circle cx="18" cy="11" r="1.2" fill="#e04a3a"/><circle cx="22" cy="11" r="1.2" fill="#e04a3a"/>')
+def e_scorpion(c): return (e_crab(c) + f'<path d="M20 16c0-8 8-12 12-8" fill="none" stroke="{c}" stroke-width="4" stroke-linecap="round"/><path d="M32 8l3-3" stroke="#222" stroke-width="2"/>')
+def e_kraken(c): return (f'<path d="M8 36c2-6 4-8 6-14M14 37c1-6 3-8 4-14M26 37c-1-6-3-8-4-14M32 36c-2-6-4-8-6-14" stroke="{c}" stroke-width="4" stroke-linecap="round" fill="none"/>'
+                         f'<ellipse cx="20" cy="15" rx="12" ry="11" fill="{c}" stroke="#222"/>' + eyes(16, 24, 16))
+def e_sphinx(c): return e_beast(c) + '<circle cx="31" cy="13" r="5" fill="#e0b48a" stroke="#222"/><path d="M26 10h10v-3h-10z" fill="#3d6be0"/>'
+def e_goat(c): return e_beast(c) + '<path d="M31 9c-3-4-6-4-7-1" stroke="#cfc0a0" stroke-width="2.5" fill="none"/>'
+def crown(): return '<path d="M12 6l3 4 5-6 5 6 3-4v6H12z" fill="#f0c040" stroke="#7a5a00"/>'
+FAMILY = [
+    (("chicken", "gull", "harpy", "griffin"), e_bird),
+    (("sphinx",), e_sphinx), (("goat",), e_goat), (("cow", "wolf"), e_beast),
+    (("goblin", "imp"), e_goblin),
+    (("knight",), lambda c: e_person(c, helm=True)),
+    (("smuggler", "pirate", "highwayman", "raider", "siren", "drowned_king"), e_person),
+    (("giant", "troll", "yeti", "titan"), e_giant),
+    (("golem", "colossus", "lava_king"), e_golem),
+    (("elemental",), e_flame), (("wraith",), e_ghost),
+    (("dragon", "drake", "wyrm"), e_dragon),
+    (("snake", "serpent", "salamander"), e_serpent),
+    (("kraken",), e_kraken), (("scorpion",), e_scorpion), (("spider", "broodmother"), e_spider), (("crab",), e_crab),
+]
+BOSS = ("warlord", "broodmother", "chieftain", "titan", "elder", "captain", "king", "queen", "chief", "lord", "colossus")
+def enemy_icon(e, c):
+    draw = next((f for keys, f in FAMILY if any(k in e for k in keys)), enemy)
+    out = draw(c)
+    if any(b in e for b in BOSS) and draw not in (e_dragon, e_kraken):
+        out += crown()
+    return out
+
+# ---- the bard (T18) ----
+def note(c): return f'<path d="M14 30V10l16-4v20" stroke="{c}" stroke-width="3" fill="none"/><ellipse cx="11" cy="30" rx="5" ry="4" fill="{c}"/><ellipse cx="27" cy="26" rx="5" ry="4" fill="{c}"/>'
+INSTRUMENT = {
+    "wooden_flute": '<path d="M7 33L33 7" stroke="#c8a070" stroke-width="6" stroke-linecap="round"/><path d="M7 33L33 7" stroke="#6b4a2a" stroke-width="1" stroke-dasharray="1 5"/>',
+    "lute": '<path d="M24 16L35 5" stroke="#8a5a2a" stroke-width="4"/><ellipse cx="17" cy="24" rx="11" ry="10" transform="rotate(-45 17 24)" fill="#c8843a" stroke="#3a2a1a"/><circle cx="17" cy="23" r="3" fill="#3a2a1a"/><path d="M12 29l21-21" stroke="#f2e6c8" stroke-width=".8"/>',
+    "iron_horn": '<path d="M6 30c10 0 18-6 22-18l6-4-2 8c-4 14-14 20-26 18z" fill="#9aa4b8" stroke="#222"/><ellipse cx="33" cy="10" rx="3" ry="5" transform="rotate(30 33 10)" fill="#5a6478"/>',
+    "golden_harp": '<path d="M9 35V8c8-4 16 0 22 8l-6 19z" fill="none" stroke="#e8b42a" stroke-width="3.5"/><path d="M13 12v22M17 11v23M21 13v21M25 17v17" stroke="#f2e6c8" stroke-width="1"/>',
+    "conch_horn": '<path d="M6 26c0-12 10-20 22-18 6 1 8 6 6 10l-8 14c-8 4-20 2-20-6z" fill="#f2c0a8" stroke="#6a3a2a"/><path d="M14 24c4-6 10-8 14-6M18 28c3-4 7-5 10-4" stroke="#c8705a" fill="none"/>',
+    "alpine_horn": '<path d="M4 36L30 10c3-3 6-2 6 2v6" stroke="#a0703a" stroke-width="4" fill="none" stroke-linecap="round"/><ellipse cx="35" cy="21" rx="4" ry="3" fill="#6b4a2a"/>',
+    "war_drum": '<ellipse cx="20" cy="14" rx="13" ry="5" fill="#e8d8b8" stroke="#222"/><path d="M7 14v15c0 3 6 5 13 5s13-2 13-5V14" fill="#a8402a" stroke="#222"/><path d="M8 18l24 10M32 18L8 28" stroke="#f0c040"/><path d="M28 4l8 6M30 2l6 5" stroke="#6b4a2a" stroke-width="2"/>',
+}
 CROP = {"potato": "#c8a060", "onion": "#e8d0b0", "cabbage": "#7ac85a", "tomato": "#e04a3a", "sweetcorn": "#f0c830",
-        "strawberry": "#e83a5a", "watermelon": "#3a9a4a"}
+        "strawberry": "#e83a5a", "watermelon": "#3a9a4a", "flax": "#6a8ae0"}
 def produce(c, name):
+    if name == "flax": return '<path d="M14 36V14M20 36V8M26 36V14" stroke="#5a9a3a" stroke-width="2.5"/>' + f'<circle cx="14" cy="12" r="4" fill="{c}"/><circle cx="20" cy="7" r="4" fill="{c}"/><circle cx="26" cy="12" r="4" fill="{c}"/>'
     if name == "watermelon": return f'<ellipse cx="20" cy="22" rx="15" ry="11" fill="{c}" stroke="#123"/><path d="M8 22q12-6 24 0" stroke="#9ad89a" fill="none"/>'
     if name == "sweetcorn": return f'<ellipse cx="20" cy="20" rx="7" ry="14" fill="{c}" stroke="#753"/><path d="M13 30q-6-8 2-20M27 30q6-8-2-20" stroke="#5a9a3a" stroke-width="3" fill="none"/>'
     if name == "strawberry": return f'<path d="M20 35C8 26 9 14 20 14s12 12 0 21z" fill="{c}" stroke="#611"/><path d="M14 12l6 4 6-4-6-6z" fill="#5a9a3a"/>'
@@ -179,6 +252,14 @@ UI = {
     "sign_sprout": sign('<path d="M20 30V18" stroke="#fff3b0" stroke-width="2.5"/><path d="M20 22c-7 0-9-6-9-9 6 0 9 3 9 9zM20 19c6 0 8-4 8-7-5 0-8 2-8 7z" fill="#fff3b0"/>'),
     "sign_blade": sign('<path d="M12 28L26 14l2-5-5 2-13 14" fill="#fff3b0"/>'),
     "sign_scroll": sign('<rect x="12" y="11" width="16" height="18" rx="2" fill="#fff3b0"/><path d="M15 16h10M15 20h10M15 24h6" stroke="#1d2440"/>'),
+    # the bard, the encyclopedia and advanced plans (T18, T19)
+    "performance": INSTRUMENT["lute"] + '<path d="M30 30v-8l6-2v7" stroke="#f5e6a8" stroke-width="2" fill="none"/>',
+    "stage": '<path d="M3 36V6h34v30" fill="#2a2050" stroke="#222"/><path d="M3 6c4 12 8 16 13 16V6zM37 6c-4 12-8 16-13 16V6z" fill="#b83a4a" stroke="#222"/><path d="M3 32h34v4H3z" fill="#8a5a2a"/>' + star("#f5e6a8", 5).replace('M20 15', 'M20 21', 1),
+    "book": '<path d="M20 9c-5-4-11-4-16-2v26c5-2 11-2 16 2 5-4 11-4 16-2V7c-5-2-11-2-16 2z" fill="#f2e6c8" stroke="#3a2a1a"/><path d="M20 9v26" stroke="#3a2a1a"/><path d="M8 14h8M8 19h8M24 14h8M24 19h8" stroke="#8a5a2a"/>',
+    "follower": '<circle cx="14" cy="12" r="5" fill="#e0b48a" stroke="#222"/><path d="M5 34c0-10 18-10 18 0z" fill="#5a9a3a" stroke="#222"/><circle cx="27" cy="15" r="4" fill="#e0b48a" stroke="#222"/><path d="M20 34c0-8 14-8 14 0z" fill="#c8843a" stroke="#222"/>',
+    "plan_repeat": '<path d="M30 14A12 12 0 1 0 32 24" stroke="#46c47a" stroke-width="3.5" fill="none"/><path d="M33 6v9h-9" stroke="#46c47a" stroke-width="3.5" fill="none"/>',
+    "plan_if": '<path d="M20 4l14 16-14 16L6 20z" fill="#3d5bb8" stroke="#123"/><path d="M16 16a4 4 0 1 1 6 3c-2 1-2 2-2 4M20 27v1" stroke="#fff" stroke-width="2.5" fill="none"/>',
+    "renown": '<path d="M9 32c-6-8-4-20 4-24M31 32c6-8 4-20-4-24" stroke="#5a9a3a" stroke-width="3" fill="none"/><path d="M9 14l-4-1M8 20l-4 1M10 26l-3 3M31 14l4-1M32 20l4 1M30 26l3 3" stroke="#5a9a3a" stroke-width="3"/>' + star("#f0c040", 8),
     "sign_moon": sign('<path d="M24 10a10 10 0 1 0 0 20 8 8 0 1 1 0-20z" fill="#fff3b0"/>'),
 }
 
@@ -196,6 +277,8 @@ def stone(c): return f'<path d="M5 30l6-14 10-6 12 6 3 14z" fill="{c}" stroke="#
 
 def item_icon(i):
     if i in GENERIC: return GENERIC[i]
+    if i in INSTRUMENT: return INSTRUMENT[i]
+    if i == "renown": return UI["renown"]
     if i.endswith("_seed"): return seeds(CROP.get(i[:-5]) or hue(i[:-5]))
     if i in CROP: return produce(CROP[i], i)
     if i in REGION_CROPS: return produce(hue(i), "")
@@ -241,10 +324,11 @@ MACHINE_IDS = set(re.findall(r'Machine \{ id: "([a-z_]+)"', (ROOT / "crates" / "
 ROOM_IDS = set(re.findall(r'Room \{ id: "([a-z_]+)"', (ROOT / "crates" / "core" / "src" / "content.rs").read_text()))
 
 def action_icon(a, made):
+    if made == "renown": return note(hue(a))
     if a.endswith("_tree"): return tree(hue(a))
     if a.endswith("_rock"): return rock(hue(a), dark=False)
     if a == "char_logs": return fire()
-    if a.startswith("meditate_"): return rune(RUNE[a[len("meditate_"):]]) + star("#fff3b0", 6).replace('M20 14', 'M30 4', 1)
+    if a.startswith("meditate_"): return rune(RUNE.get(a[len("meditate_"):]) or hue(a)) + star("#fff3b0", 6).replace('M20 14', 'M30 4', 1)
     if a in WOOD or a in ("magic_tree", "redwood", "mahogany", "teak"): return tree(first(a.replace("_tree", ""), WOOD))
     if a.endswith("_spot"): return water() + f'<g transform="translate(4 -6) scale(.8)">{fish(first(a, FISH))}</g>'
     if a in ("essence", "copper", "tin", "iron", "coal", "gold_rock", "mithril", "adamantite", "runite"):
@@ -257,7 +341,9 @@ sym.update(UI)
 src = (ROOT / "crates" / "core" / "src" / "content.rs").read_text()
 for a, made in re.findall(r'(?:gather|make)\("([a-z_]+)",.*?"([a-z_]+)"(?:\)|, \d+\)\),)', src):
     pass
-acts = re.findall(r'^\s*(gather|make)\("([a-z_]+)"(.*)$', src, re.M)
+# Vale rows start the line; a later region's are wrapped in region(N, ...),
+# which this missed until T18, so the regions' actions had no icons.
+acts = re.findall(r'^\s*(?:region\(\d, )?(gather|make)\("([a-z_]+)"(.*)$', src, re.M)
 for kind, a, rest in acts:
     made = re.findall(r'"([a-z_]+)"', rest)[-1]
     sym[a] = action_icon(a, made)
@@ -266,7 +352,7 @@ for i in STR["items"]:
 for crop in CROP:
     sym[crop] = produce(CROP[crop], crop)
 for e in STR["enemies"]:
-    sym[e] = enemy(ENEMY.get(e) or hue(e))
+    sym[e] = enemy_icon(e, ENEMY.get(e) or hue(e))
 for k in STR["ui"]:
     if k.startswith("sign_") and k not in sym:
         sym[k] = sign(f'<circle cx="20" cy="20" r="7" fill="{hue(k)}"/><circle cx="20" cy="20" r="3" fill="#fff3b0"/>')

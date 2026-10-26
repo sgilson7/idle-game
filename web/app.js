@@ -141,7 +141,7 @@ function rows(list) {
 }
 
 function scene(b) {
-  const box = h("div", "scene" + (b.running ? " running" : ""));
+  const box = h("div", "scene" + (b.running ? " running" : "") + " pose-" + (b.pose || "chop") + " place-" + (b.place || "vale"));
   const svg = el("scene-tpl").content.firstElementChild.cloneNode(true);
   svg.querySelector(".target").setAttribute("href", "icons.svg#" + b.icon);
   timing(box, b.dur, b.delay);

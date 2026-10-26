@@ -148,6 +148,12 @@ pub struct Block {
     pub delay: String,
     #[serde(skip_serializing_if = "is_false")]
     pub running: bool,
+    /// A scene's figure: what the work looks like ("chop", "fish", "play" ...).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub pose: String,
+    /// A scene's backdrop: the region it happens in.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub place: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bar: Option<Bar>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -581,10 +587,45 @@ impl View<'_> {
             icon: icon.into(),
             text: caption,
             running,
+            pose: self.pose_of(icon).into(),
+            place: c::REGIONS[self.region_of(icon)].0.into(),
             dur: format!("{ms}ms"),
             delay: format!("-{}ms", self.s.progress_ms),
             ..block("scene")
         }
+    }
+
+    /// How the figure works at an action or a fight (T18, IG-Q51 A).
+    fn pose_of(&self, id: &str) -> &'static str {
+        if c::enemy_index(id).is_some() || c::dungeon_index(id).is_some() {
+            return match c::STYLES[self.s.style].skill {
+                c::RANGED => "shoot",
+                c::MAGIC => "cast",
+                _ => "slash",
+            };
+        }
+        match c::action_index(id).map(|i| c::ACTIONS[i].skill) {
+            Some(c::WOODCUTTING) => "chop",
+            Some(c::MINING) => "mine",
+            Some(c::FISHING) => "fish",
+            Some(c::FIREMAKING) => "fire",
+            Some(c::SMITHING) => "smith",
+            Some(c::COOKING) => "stir",
+            Some(c::RUNECRAFTING) | Some(c::ATTUNEMENT) => "cast",
+            Some(c::FARMING) => "plant",
+            Some(c::CONSTRUCTION) | Some(c::INVENTION) => "build",
+            Some(c::PERFORMANCE) => "play",
+            _ => "whittle",
+        }
+    }
+
+    /// The region an action or enemy belongs to; the Vale for anything else.
+    fn region_of(&self, id: &str) -> usize {
+        c::action_index(id)
+            .map(|i| c::ACTIONS[i].region)
+            .or_else(|| c::enemy_index(id).map(|e| c::ENEMIES[e].region))
+            .or_else(|| c::dungeon_index(id).map(|d| c::DUNGEONS[d].region))
+            .unwrap_or(0)
     }
 
     pub(crate) fn skill(&self, i: usize) -> Vec<Block> {
