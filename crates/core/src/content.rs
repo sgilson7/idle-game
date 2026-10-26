@@ -1113,6 +1113,8 @@ pub const ENEMY_HIT_PCT: u64 = 50;
 pub const COMBAT_LOG: usize = 12;
 /// The encyclopedia shows this many search results at once (T19).
 pub const BOOK_ROWS: usize = 40;
+/// The app asks for a rating the first time a skill reaches this level.
+pub const REVIEW_LEVEL: u32 = 25;
 /// Experience per point of damage, in tenths (style) and thousandths (Hitpoints).
 pub const STYLE_XP_TENTHS: u64 = 4;
 pub const HP_XP_THOUSANDTHS: u64 = 133;

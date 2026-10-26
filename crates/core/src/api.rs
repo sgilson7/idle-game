@@ -37,6 +37,9 @@ pub struct Ui {
     /// The saved text could not be read: the page keeps a copy of it.
     pub stash: bool,
     pub hints: Vec<Hint>,
+    /// A good moment to ask for a rating (T18): the app asks the store,
+    /// which decides whether to show its prompt. Never on the web.
+    pub review: bool,
     /// Sounds to play now, by name (T18): the page looks each up in
     /// data/sounds.json. Empty when sound is off.
     pub sounds: Vec<String>,
@@ -188,6 +191,7 @@ impl Game {
     /// Credits the time since the page last asked, then draws.
     pub fn tick(&mut self, now: u64) -> String {
         self.credit(now);
+        self.offer();
         self.ui_json()
     }
 
@@ -1011,6 +1015,7 @@ impl Game {
             stash: self.stash,
             hints: self.hints.clone(),
             alerts: self.alerts(),
+            review: self.review_moment(),
             sounds: if self.s.sound {
                 std::mem::take(&mut self.sounds)
             } else {
@@ -1020,6 +1025,47 @@ impl Game {
         self.sounds.clear();
         self.stash = false;
         ui
+    }
+
+    /// In the app, the first good moments ask for a rating, once each: a
+    /// skill at 25, an engine's first rank, the first prestige. Apple shows
+    /// its prompt at most three times a year whatever is asked.
+    fn review_moment(&mut self) -> bool {
+        if !self.device.app {
+            return false;
+        }
+        let ranks = self.s.ranks.iter().sum::<usize>() + self.s.fame.iter().sum::<usize>();
+        let moment = [
+            (
+                "level_25",
+                (0..c::SKILLS.len()).any(|i| self.s.level(i) >= c::REVIEW_LEVEL),
+            ),
+            ("first_rank", ranks > 0),
+            ("first_prestige", self.s.prestige > 0),
+        ]
+        .into_iter()
+        .find(|(k, reached)| *reached && !self.s.asked.iter().any(|a| a == k));
+        match moment {
+            Some((k, _)) => {
+                self.s.asked.push(k.to_string());
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// In the app, reaching the Coast without the purchase shows once what
+    /// it opens.
+    fn offer(&mut self) {
+        if self.device.app
+            && self.s.sealed
+            && !self.s.offered
+            && self.s.region_reached(1)
+            && self.sheet.is_none()
+        {
+            self.s.offered = true;
+            self.sheet = Some(self.view().offer_sheet());
+        }
     }
 
     /// The regions past the Vale wait for the purchase in the app.
@@ -1920,5 +1966,29 @@ mod tests {
         for name in ["level", "coin", "fanfare", "slash", "shoot", "cast"] {
             assert!(data["sounds"].get(name).is_some(), "{name}");
         }
+    }
+
+    #[test]
+    fn the_app_offers_the_purchase_once_at_the_coast_and_asks_for_a_rating_once_a_moment() {
+        let mut g = app(false, 1);
+        g.act("sheet.close", "", 1);
+        // 19 skills at 16 is total level 304: the Coast is reached.
+        all_at(&mut g, 16);
+        let v = ui(&g.tick(2));
+        assert_eq!(v["sheet"]["title"], "You have reached the Coast");
+        g.act("sheet.close", "", 2);
+        assert!(ui(&g.tick(3)).get("sheet").is_none());
+        // the web never offers it
+        let mut web = game(1);
+        web.act("sheet.close", "", 1);
+        all_at(&mut web, 16);
+        assert!(ui(&web.tick(2)).get("sheet").is_none());
+        // a skill at 25 asks once
+        assert_eq!(ui(&g.tick(4))["review"], false);
+        g.state_mut().xp[0] = crate::xp::at(25);
+        assert_eq!(ui(&g.tick(5))["review"], true);
+        assert_eq!(ui(&g.tick(6))["review"], false);
+        web.state_mut().xp[0] = crate::xp::at(25);
+        assert_eq!(ui(&web.tick(5))["review"], false);
     }
 }

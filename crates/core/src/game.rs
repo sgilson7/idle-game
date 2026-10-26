@@ -256,6 +256,12 @@ pub struct State {
     /// Sounds and the phone's buzz (T18, IG-Q50 B); on unless turned off.
     #[serde(default = "on")]
     pub sound: bool,
+    /// The app's purchase sheet has been shown at the Coast (T18).
+    #[serde(default)]
+    pub offered: bool,
+    /// The moments the app has asked for a rating at, once each (T18).
+    #[serde(default)]
+    pub asked: Vec<String>,
 }
 
 fn on() -> bool {
@@ -370,6 +376,8 @@ impl State {
             buffs: BTreeMap::new(),
             blows: Vec::new(),
             sound: true,
+            offered: false,
+            asked: Vec::new(),
         };
         s.hp = s.max_hp();
         s.note(now, "new", "", 0);
@@ -1639,6 +1647,9 @@ impl State {
         s.rng = keep.rng;
         s.recipes = keep.recipes;
         s.followers = keep.followers;
+        s.offered = keep.offered;
+        s.asked = keep.asked;
+        s.sound = keep.sound;
         s.plan = keep.plan;
         s.plan_advanced = keep.plan_advanced;
         s.rooms = vec![0; c::ROOMS.len()];

@@ -226,6 +226,26 @@ impl View<'_> {
         out
     }
 
+    /// The sheet shown once in the app when the Coast is reached without the
+    /// purchase (T18, IG-Q50 B).
+    pub(crate) fn offer_sheet(&self) -> crate::view::Sheet {
+        let buy = if self.device.price.is_empty() {
+            self.t.s("store_buy_plain")
+        } else {
+            self.t.t("store_buy", &[("price", self.device.price.clone())])
+        };
+        crate::view::Sheet {
+            kind: "notice".into(),
+            title: self.t.s("offer_title"),
+            lines: vec![self.t.s("offer_text"), self.t.s("store_offer")],
+            buttons: vec![
+                button(self.t.s("not_yet"), "sheet.close", ""),
+                button(buy, "page.buy", "").tone("primary"),
+            ],
+            ..Default::default()
+        }
+    }
+
     /// The app's one purchase (IG-Q46 B): what it opens, a button to buy it
     /// and one to restore it. Nothing on the web, which is whole (IG-Q49 A).
     fn store(&self) -> Vec<Block> {

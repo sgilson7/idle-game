@@ -817,5 +817,19 @@
     "find": "sounds: if self.s.sound { std::mem::take(&mut self.sounds) } else { Vec::new() },",
     "replace": "sounds: std::mem::take(&mut self.sounds),",
     "test": "watched_work_names_its_sound_and_the_setting_turns_sound_off"
+  },
+  {
+    "name": "the purchase sheet shows once",
+    "file": "crates/core/src/api.rs",
+    "find": "            self.s.offered = true;\n",
+    "replace": "",
+    "test": "the_app_offers_the_purchase_once_at_the_coast_and_asks_for_a_rating_once_a_moment"
+  },
+  {
+    "name": "a rating is asked once a moment",
+    "file": "crates/core/src/api.rs",
+    "find": "                self.s.asked.push(k.to_string());\n",
+    "replace": "",
+    "test": "the_app_offers_the_purchase_once_at_the_coast_and_asks_for_a_rating_once_a_moment"
   }
 ]

@@ -2178,6 +2178,8 @@
   "sound_title": "Sound",
   "sound_sub": "A short sound for each action, a tune for each song, and a buzz on a level where the phone can.",
   "sound_on": "On",
-  "sound_off": "Off"
+  "sound_off": "Off",
+  "offer_title": "You have reached the Coast",
+  "offer_text": "Your total level is high enough for the Coast. It and the two regions past it open with the purchase; the Vale stays free to play in full."
  }
 }
