@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Reference default, plus manifest-src 'self' for the mobile kit (D4).
+       connect-src 'self' keeps fetches on this origin (ipc: is the app's bridge
+       to the phone, T17, and reaches nothing on the web); 'wasm-unsafe-eval' lets
+       the page compile its own WebAssembly module; form-action 'none' blocks
+       form posts. A meta policy cannot stop navigation, so the browser check
+       still watches requests. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' ipc:; style-src 'self'; img-src 'self' data: blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="theme-color" content="#10141c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Idle Game">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="data/icons/icon-180.png">
+  <title>Idle Game</title>
+  <link rel="stylesheet" href="style.css?v=bd6b3673965f">
+</head>
+<body data-ready="false">
+  <div class="app">
+    <header class="top" id="top"></header>
+    <nav class="tabs" id="tabs" aria-label="Skills and screens"></nav>
+    <main class="main" id="main" aria-live="polite"></main>
+    <nav class="groups" id="groups" aria-label="Groups"></nav>
+  </div>
+  <div class="shade" id="shade" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <p id="message" role="status"></p>
+  <input type="file" id="importer" accept="application/json,.json" hidden>
+  <template id="scene-tpl">
+    <!-- The scene (T18, IG-Q51 A): a backdrop for each region, a figure
+         with a face, and a tool and a loop for each kind of work. The core
+         names the pose and the place; CSS shows the matching parts. -->
+    <svg class="scene-svg" viewBox="0 0 320 120" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+      <circle cx="280" cy="22" r="10" class="moon"/>
+      <g class="land vale"><path d="M-160 90Q-120 74 -80 88T0 92Q40 72 80 88T160 84T240 80T320 88T400 82T480 90V120H-160z" class="hill"/><path d="M-160 100H480V120H-160z" class="ground"/></g>
+      <g class="land coast"><path d="M-160 90H480V104H-160z" class="sea"/><path d="M-110 96q10-4 20 0t20 0M10 95q10-4 20 0t20 0M120 97q10-4 20 0t20 0M230 94q10-4 20 0t20 0M350 96q10-4 20 0t20 0" class="wave"/><path d="M-160 104H480V120H-160z" class="ground"/></g>
+      <g class="land peaks"><path d="M-160 92L-110 58L-70 84L-30 48L0 92L40 52L70 78L110 34L150 86L200 44L240 84L280 56L320 90L370 50L420 82L480 60V120H-160z" class="hill"/><path d="M33 59L40 52L47 59L40 57zM103 41L110 34L117 41L110 39zM193 51L200 44L207 51L200 49zM273 63L280 56L287 63L280 61z" class="snow"/><path d="M-160 102H480V120H-160z" class="ground"/></g>
+      <g class="land wastes"><path d="M-160 96Q-100 80 -40 94T80 92Q120 82 160 94T280 88T400 96T480 92V120H-160z" class="hill"/><path d="M-160 104H480V120H-160z" class="ground"/></g>
+      <g class="prop water"><ellipse cx="200" cy="104" rx="70" ry="8" class="pool"/><path d="M164 24L184 98" class="line"/><circle cx="184" cy="98" r="3" class="bobber"/></g>
+      <g class="prop anvil"><path d="M128 92h26l-6 6h-14z" class="iron"/><rect x="134" y="98" width="12" height="6" class="iron"/></g>
+      <g class="prop campfire"><path d="M126 104l20-6M126 98l20 6" class="wood"/><path d="M136 100c-6-6-2-12 0-16 2 4 8 8 0 16z" class="flame"/></g>
+      <g class="prop pot"><path d="M124 88h24l-3 14h-18z" class="iron"/><path d="M130 84c0-3 3-3 3-6M140 84c0-3 3-3 3-6" class="steam"/></g>
+      <g class="prop notes"><path d="M128 60v-10l8-2v10" class="note"/><circle cx="126" cy="60" r="2.5" class="notehead"/><circle cx="134" cy="58" r="2.5" class="notehead"/><path d="M146 44v-8l6-2v8" class="note"/><circle cx="144" cy="44" r="2" class="notehead"/><circle cx="150" cy="42" r="2" class="notehead"/></g>
+      <g class="prop glow"><circle cx="118" cy="62" r="9" class="aura"/></g>
+      <use class="target" x="168" y="36" width="72" height="72"/>
+      <g class="figure">
+        <path d="M88 86L86 103M97 86L99 103" class="leg"/>
+        <path d="M82 104h7M96 104h7" class="boot"/>
+        <path d="M86 64L80 80" class="arm back"/>
+        <path d="M80 87L84 61Q92 56 100 61L104 87Z" class="tunic"/>
+        <path d="M82 78h21v4h-21z" class="belt"/>
+        <circle cx="92" cy="47" r="10" class="skin"/>
+        <path d="M82 46Q83 34 93 35Q102 36 102 44Q98 40 92 41Q87 41 82 46z" class="hair"/>
+        <circle cx="95" cy="47" r="1.4" class="eye"/><circle cx="100" cy="47" r="1.4" class="eye"/>
+        <path d="M96 52q2 1.5 4 0" class="mouth"/>
+        <g class="arm-g">
+          <path d="M98 64L112 72" class="arm"/>
+          <g class="tool t-chop"><path d="M108 78L128 52" class="haft"/><path d="M121 47q13-2 13 11l-10-3z" class="blade"/></g>
+          <g class="tool t-mine"><path d="M108 78L126 54" class="haft"/><path d="M114 52q11-9 22 3" class="pick"/></g>
+          <g class="tool t-smith t-build"><path d="M110 76L124 58" class="haft"/><path d="M117 50l12 7-4 6-12-7z" class="blade"/></g>
+          <g class="tool t-slash"><path d="M112 72L136 44" class="sword"/><path d="M107 67l10 10" class="haft"/></g>
+          <g class="tool t-fish"><path d="M112 72L164 24" class="rod"/></g>
+          <g class="tool t-shoot"><path d="M120 48q16 24 0 48" class="bow"/><path d="M120 48V96" class="string"/><path d="M104 72H132" class="arrow"/></g>
+          <g class="tool t-cast"><path d="M113 96L118 46" class="haft"/><circle cx="118" cy="44" r="5" class="orb"/></g>
+          <g class="tool t-play"><ellipse cx="111" cy="80" rx="9" ry="7" transform="rotate(-30 111 80)" class="lute"/><path d="M117 76L134 62" class="haft"/></g>
+          <g class="tool t-stir"><path d="M112 72L132 94" class="haft"/></g>
+          <g class="tool t-whittle"><path d="M113 72L123 63" class="sword"/><path d="M104 82L124 78" class="haft"/></g>
+          <g class="tool t-plant"><path d="M113 72L119 86" class="haft"/><path d="M116 85l6 6-4 3z" class="blade"/></g>
+          <g class="tool t-fire"><path d="M113 72l6 4" class="sword"/><circle cx="115" cy="73" r="3" class="flint"/></g>
+          <circle cx="113" cy="72" r="3" class="skin"/>
+        </g>
+      </g>
+    </svg>
+  </template>
+  <noscript><p>This page needs JavaScript and WebAssembly.</p></noscript>
+  <script type="module" src="app.js?v=bd6b3673965f"></script>
+</body>
+</html>
