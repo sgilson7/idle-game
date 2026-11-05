@@ -1,0 +1,13 @@
+{
+  "name": "Idle Game",
+  "short_name": "Idle Game",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "background_color": "#151923",
+  "theme_color": "#10141c",
+  "icons": [
+    { "src": "data/icons/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "data/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
